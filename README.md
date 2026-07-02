@@ -22,7 +22,7 @@ HK-INDIE-GO/
 ├── .gitignore
 ├── README.md
 ├── private/
-│   └── INDIE-GO-Unity/
+│   └── INDIE-GO-Unity/  (유니티 프로젝트 폴더)
 └── public/
     └── builds/
 ```
