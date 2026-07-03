@@ -1,16 +1,12 @@
 # =========================================================
-# Unity (.gitignore)
-# Repository Root : HK-INDIE-GO
-# Unity Project   : private/INDIE-GO-Unity
+# Unity
 # =========================================================
 
-# Unity generated folders
 .utmp/
+
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
-[Bb]uild/
-[Bb]uilds/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 
@@ -35,6 +31,7 @@
 
 # Visual Studio
 .vs/
+.vscode/
 .gradle/
 
 # Visual Studio / Mono
@@ -93,8 +90,9 @@ ServerData
 [Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
 # =========================================================
-# Repository specific
+# Repository
 # =========================================================
 
-# Ignore repository build outputs
-/public/builds/
+# Keep the builds folder, ignore everything inside it.
+/builds/*
+!/builds/.gitkeep

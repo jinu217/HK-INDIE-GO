@@ -21,14 +21,16 @@ HK-INDIE-GO/
 ├── .git/
 ├── .gitignore
 ├── README.md
-├── private/
-│   └── INDIE-GO-Unity/
-└── public/
-    └── builds/
+├── unity/
+│   └── INDIE-GO/
+├── builds/
+│   └── .gitkeep
+└── steam/
 ```
 
-- **private** : Unity 프로젝트 및 개발 파일
-- **public** : 빌드 결과물 및 배포 관련 파일
+- **unity** : Unity 프로젝트
+- **builds** : 빌드 결과물 저장 폴더 (Git에서는 폴더만 관리)
+- **steam** : Steam SDK 및 Steam 관련 파일
 
 ---
 
@@ -69,8 +71,8 @@ dev/bugfix
 Unity Hub에서는 아래 폴더를 프로젝트로 등록합니다.
 
 ```text
-private/
-└── INDIE-GO-Unity/
+unity/
+└── INDIE-GO/
 ```
 
 ---
@@ -83,6 +85,7 @@ private/
 Assets/
 Packages/
 ProjectSettings/
+steam/
 ```
 
 ### Git에서 제외되는 폴더
@@ -92,14 +95,17 @@ Library/
 Temp/
 Logs/
 UserSettings/
-public/builds/
+builds/
 ```
+
+> `builds` 폴더는 Git에서 관리하지만, **빌드 결과물은 관리하지 않습니다.**
+> (`.gitkeep` 파일만 포함됩니다.)
 
 ---
 
 # Scripts 폴더 안내
 
-`Assets/Scripts/` 내부 폴더는 프로젝트 진행에 따라 자유롭게 생성 및 수정해도 됩니다.
+`Assets/Scripts/` 내부 폴더는 프로젝트 진행에 따라 자유롭게 생성 및 수정할 수 있습니다.
 
 예시
 
@@ -112,7 +118,7 @@ Scripts/
 └── Utility/
 ```
 
-위 예시는 참고용이며, 프로젝트 규모에 따라 필요한 폴더를 추가하여 사용합니다.
+위 예시는 참고용이며, 프로젝트 규모에 따라 필요한 폴더를 자유롭게 추가하여 사용합니다.
 
 단, **역할이 명확하도록 폴더를 구성**해 주세요.
 
@@ -145,8 +151,9 @@ docs: README 수정
 # 기타
 
 - 프로젝트 폴더 구조는 팀원과 상의 없이 변경하지 않습니다.
-- `Assets` 내부 폴더 구조는 팀원과 상의 없이 변경하지 않습니다.
+- `Assets` 내부 폴더 구조는 프로젝트 진행에 따라 자유롭게 추가할 수 있지만, 기존 구조 변경은 팀원과 상의 후 진행합니다.
 - `.gitignore`는 임의로 수정하지 않습니다.
 - 새로운 Unity Package 또는 외부 라이브러리 추가 전에는 팀원과 먼저 공유합니다.
-- 빌드 결과물은 `public/builds/`에 저장하며 Git에는 포함하지 않습니다.
+- 빌드 결과물은 `builds/` 폴더에 저장하며 Git에는 포함하지 않습니다.
+- Steam 관련 파일은 `steam/` 폴더에서 관리합니다.
 - 개발 중 문제가 발생하거나 프로젝트 설정이 변경되는 경우 반드시 팀원에게 공유합니다.
