@@ -1,5 +1,7 @@
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace YutArena.UI
@@ -7,68 +9,92 @@ namespace YutArena.UI
     public class StartSceneUIController : MonoBehaviour
     {
         [Header("Main Buttons")]
-        [Tooltip("게임 시작 버튼입니다. 누르면 다른 패널을 끄고 로컬/온라인 플레이 선택 버튼을 보여줍니다.")]
+        [Tooltip("게임 시작 버튼")]
         [SerializeField] private Button startGameButton;
-        [Tooltip("도움말 버튼입니다. 누르면 다른 패널을 끄고 윷놀이 규칙, 캐릭터, 맵, 모드 설명 창을 엽니다.")]
+        [Tooltip("도움말 버튼")]
         [SerializeField] private Button helpButton;
-        [Tooltip("설정 버튼입니다. 누르면 다른 패널을 끄고 음향과 화면 설정 창을 엽니다.")]
+        [Tooltip("설정 버튼")]
         [SerializeField] private Button settingsButton;
-        [Tooltip("게임 종료 버튼입니다. 빌드에서는 게임을 종료하고, 에디터에서는 플레이 모드를 종료합니다.")]
+        [Tooltip("게임 종료 버튼")]
         [SerializeField] private Button quitButton;
 
         [Header("Play Mode Buttons")]
-        [Tooltip("로컬 플레이 버튼입니다. 누르면 팝업 창을 끄고 로컬 게임 만들기/참가하기 버튼을 보여줍니다.")]
+        [Tooltip("로컬 플레이 버튼")]
         [SerializeField] private Button localPlayButton;
-        [Tooltip("온라인 플레이 버튼입니다. 누르면 팝업 창을 끄고 온라인 게임 만들기/참가하기 버튼을 보여줍니다.")]
+        [Tooltip("온라인 플레이 버튼")]
         [SerializeField] private Button onlinePlayButton;
 
-        [Header("Local Buttons")]
-        [Tooltip("로컬 게임 만들기 버튼입니다. 누르면 로컬 대기실 씬으로 이동합니다.")]
-        [SerializeField] private Button localCreateGameButton;
-        [Tooltip("로컬 게임 참가하기 버튼입니다. 누르면 다른 패널을 끄고 참가 가능한 대기실 목록 UI 창을 엽니다. 실제 참가 기능은 추후 구현 예정입니다.")]
-        [SerializeField] private Button localJoinGameButton;
-
         [Header("Online Buttons")]
-        [Tooltip("온라인 게임 만들기 버튼입니다. 실제 기능은 추후 구현 예정입니다.")]
+        [Tooltip("온라인 게임 만들기 버튼")]
         [SerializeField] private Button onlineCreateGameButton;
-        [Tooltip("온라인 게임 참가하기 버튼입니다. 실제 기능은 추후 구현 예정입니다.")]
+        [Tooltip("온라인 게임 참가하기 버튼")]
         [SerializeField] private Button onlineJoinGameButton;
 
+        [Header("Help Buttons")]
+        [Tooltip("윷놀이 규칙 버튼")]
+        [SerializeField] private Button yutRuleHelpButton;
+        [Tooltip("캐릭터 설명 버튼")]
+        [SerializeField] private Button characterHelpButton;
+        [Tooltip("맵 설명 버튼")]
+        [SerializeField] private Button mapHelpButton;
+        [Tooltip("모드 설명 버튼")]
+        [SerializeField] private Button modeHelpButton;
+
         [Header("Panels")]
-        [Tooltip("게임 시작 버튼을 눌렀을 때 나타나는 로컬/온라인 플레이 선택 패널입니다.")]
-        [SerializeField] private GameObject playModePanel;
-        [Tooltip("로컬 플레이 버튼을 눌렀을 때 나타나는 로컬 게임 만들기/참가하기 패널입니다.")]
-        [SerializeField] private GameObject localGamePanel;
-        [Tooltip("온라인 플레이 버튼을 눌렀을 때 나타나는 온라인 게임 만들기/참가하기 패널입니다.")]
-        [SerializeField] private GameObject onlineGamePanel;
-        [Tooltip("도움말 창 패널입니다. 윷놀이 규칙, 캐릭터 설명, 맵 설명, 모드 설명 UI를 넣습니다.")]
+        [Tooltip("플레이 모드 버튼 묶음")]
+        [FormerlySerializedAs("playModePanel")]
+        [SerializeField] private GameObject playModeButtons;
+        [Tooltip("온라인 게임 버튼 묶음")]
+        [FormerlySerializedAs("onlineGamePanel")]
+        [SerializeField] private GameObject onlineGameButtons;
+        [Tooltip("온라인 참가 패널")]
+        [SerializeField] private GameObject onlineJoinPanel;
+        [Tooltip("도움말 패널")]
         [SerializeField] private GameObject helpPanel;
-        [Tooltip("설정 창 패널입니다. 음향, 해상도, 전체화면 설정 UI를 넣습니다.")]
+        [Tooltip("설정 패널")]
         [SerializeField] private GameObject settingsPanel;
-        [Tooltip("로컬 참가 창 패널입니다. 참가 가능한 대기실 목록 UI를 넣습니다. 목록 표시와 참가 기능은 추후 구현 예정입니다.")]
-        [SerializeField] private GameObject localJoinPanel;
+
+        [Header("Help Image")]
+        [Tooltip("도움말 표시 이미지")]
+        [SerializeField] private Image helpContentImage;
+        [Tooltip("윷놀이 규칙 이미지")]
+        [SerializeField] private Sprite yutRuleHelpSprite;
+        [Tooltip("캐릭터 설명 이미지")]
+        [SerializeField] private Sprite characterHelpSprite;
+        [Tooltip("맵 설명 이미지")]
+        [SerializeField] private Sprite mapHelpSprite;
+        [Tooltip("모드 설명 이미지")]
+        [SerializeField] private Sprite modeHelpSprite;
 
         [Header("Settings")]
-        [Tooltip("전체 음량을 조절하는 슬라이더입니다. 값은 AudioListener.volume에 적용됩니다.")]
+        [Tooltip("음향 슬라이더")]
         [SerializeField] private Slider masterVolumeSlider;
-        [Tooltip("창 크기를 선택하는 드롭다운입니다. 기본 해상도는 1280x720, 1600x900, 1920x1080입니다.")]
-        [SerializeField] private Dropdown resolutionDropdown;
-        [Tooltip("전체화면 여부를 조절하는 토글입니다.")]
+        [Tooltip("해상도 드롭다운")]
+        [SerializeField] private TMP_Dropdown resolutionDropdown;
+        [Tooltip("화면 모드 드롭다운")]
+        [SerializeField] private TMP_Dropdown screenModeDropdown;
+        [Tooltip("전체화면 토글")]
         [SerializeField] private Toggle fullScreenToggle;
 
         [Header("Scene")]
-        [Tooltip("로컬 게임 만들기 버튼을 눌렀을 때 이동할 대기실 씬 이름입니다. Build Settings에 등록되어 있어야 합니다.")]
-        [SerializeField] private string localLobbySceneName = "LobbyScene";
+        [Tooltip("로컬 대기실 씬 이름")]
+        [SerializeField] private string localLobbySceneName = "LocalLobbyScene";
 
         [Header("Debug")]
-        [Tooltip("필수 버튼이나 패널이 Inspector에 연결되지 않았을 때 Console에 경고를 출력할지 여부입니다.")]
+        [Tooltip("연결 누락 경고")]
         [SerializeField] private bool showMissingReferenceWarnings = true;
 
         private readonly ResolutionOption[] resolutionOptions =
         {
-            new ResolutionOption(1280, 720),
-            new ResolutionOption(1600, 900),
-            new ResolutionOption(1920, 1080)
+            new ResolutionOption(1024, 768, "4 : 3"),
+            new ResolutionOption(1280, 960, "4 : 3"),
+            new ResolutionOption(1600, 1200, "4 : 3"),
+            new ResolutionOption(1280, 720, "16 : 9"),
+            new ResolutionOption(1600, 900, "16 : 9"),
+            new ResolutionOption(1920, 1080, "16 : 9"),
+            new ResolutionOption(1280, 800, "16 : 10"),
+            new ResolutionOption(1680, 1050, "16 : 10"),
+            new ResolutionOption(1920, 1200, "16 : 10")
         };
 
         private void Awake()
@@ -76,6 +102,7 @@ namespace YutArena.UI
             ValidateRequiredReferences();
             BindButtons();
             SetupSettingsControls();
+            SetupHelpImage();
             HideAllPanels();
         }
 
@@ -86,14 +113,16 @@ namespace YutArena.UI
             AddClick(settingsButton, OpenSettings);
             AddClick(quitButton, QuitGame);
 
-            AddClick(localPlayButton, ShowLocalGamePanel);
+            AddClick(localPlayButton, MoveToLocalLobby);
             AddClick(onlinePlayButton, ShowOnlineGamePanel);
 
-            AddClick(localCreateGameButton, MoveToLocalLobby);
-            AddClick(localJoinGameButton, OpenLocalJoin);
-
             AddClick(onlineCreateGameButton, ShowOnlineFeaturePending);
-            AddClick(onlineJoinGameButton, ShowOnlineFeaturePending);
+            AddClick(onlineJoinGameButton, OpenOnlineJoin);
+
+            AddClick(yutRuleHelpButton, ShowYutRuleHelp);
+            AddClick(characterHelpButton, ShowCharacterHelp);
+            AddClick(mapHelpButton, ShowMapHelp);
+            AddClick(modeHelpButton, ShowModeHelp);
         }
 
         private void ValidateRequiredReferences()
@@ -109,34 +138,56 @@ namespace YutArena.UI
             WarnIfMissing(quitButton, nameof(quitButton));
             WarnIfMissing(localPlayButton, nameof(localPlayButton));
             WarnIfMissing(onlinePlayButton, nameof(onlinePlayButton));
-            WarnIfMissing(playModePanel, nameof(playModePanel));
-            WarnIfMissing(localGamePanel, nameof(localGamePanel));
-            WarnIfMissing(onlineGamePanel, nameof(onlineGamePanel));
+            WarnIfMissing(onlineCreateGameButton, nameof(onlineCreateGameButton));
+            WarnIfMissing(onlineJoinGameButton, nameof(onlineJoinGameButton));
+            WarnIfMissing(playModeButtons, nameof(playModeButtons));
+            WarnIfMissing(onlineGameButtons, nameof(onlineGameButtons));
+            WarnIfMissing(onlineJoinPanel, nameof(onlineJoinPanel));
             WarnIfMissing(helpPanel, nameof(helpPanel));
             WarnIfMissing(settingsPanel, nameof(settingsPanel));
-            WarnIfMissing(localJoinPanel, nameof(localJoinPanel));
         }
 
         private void SetupSettingsControls()
         {
+            SetupResolutionDropdown();
+            SetupScreenModeControls();
+
             if (masterVolumeSlider != null)
             {
                 masterVolumeSlider.value = AudioListener.volume;
                 masterVolumeSlider.onValueChanged.AddListener(SetMasterVolume);
             }
+        }
 
-            if (resolutionDropdown != null)
+        private void SetupResolutionDropdown()
+        {
+            if (resolutionDropdown == null)
             {
-                resolutionDropdown.ClearOptions();
+                return;
+            }
 
-                foreach (ResolutionOption option in resolutionOptions)
-                {
-                    resolutionDropdown.options.Add(new Dropdown.OptionData(option.Label));
-                }
+            resolutionDropdown.ClearOptions();
 
-                resolutionDropdown.value = GetCurrentResolutionIndex();
-                resolutionDropdown.RefreshShownValue();
-                resolutionDropdown.onValueChanged.AddListener(SetResolution);
+            foreach (ResolutionOption option in resolutionOptions)
+            {
+                resolutionDropdown.options.Add(new TMP_Dropdown.OptionData(option.Label));
+            }
+
+            resolutionDropdown.value = GetCurrentResolutionIndex();
+            resolutionDropdown.RefreshShownValue();
+            resolutionDropdown.onValueChanged.AddListener(SetResolution);
+        }
+
+        private void SetupScreenModeControls()
+        {
+            if (screenModeDropdown != null)
+            {
+                screenModeDropdown.ClearOptions();
+                screenModeDropdown.options.Add(new TMP_Dropdown.OptionData("Windowed Mode"));
+                screenModeDropdown.options.Add(new TMP_Dropdown.OptionData("Full Screen"));
+                screenModeDropdown.value = Screen.fullScreen ? 1 : 0;
+                screenModeDropdown.RefreshShownValue();
+                screenModeDropdown.onValueChanged.AddListener(SetScreenMode);
             }
 
             if (fullScreenToggle != null)
@@ -146,36 +197,46 @@ namespace YutArena.UI
             }
         }
 
+        private void SetupHelpImage()
+        {
+            if (helpContentImage != null && helpContentImage.sprite == null)
+            {
+                SetHelpImage(yutRuleHelpSprite);
+            }
+        }
+
         private void ShowPlayModePanel()
         {
-            if (IsActive(playModePanel) && !IsActive(localGamePanel) && !IsActive(onlineGamePanel))
+            if (IsActive(playModeButtons) && !IsActive(onlineGameButtons))
             {
                 return;
             }
 
             HideAllPanels();
-            SetActive(playModePanel, true);
-        }
-
-        private void ShowLocalGamePanel()
-        {
-            ClosePopups();
-            SetActive(playModePanel, true);
-            SetActive(localGamePanel, true);
-            SetActive(onlineGamePanel, false);
+            SetActive(playModeButtons, true);
         }
 
         private void ShowOnlineGamePanel()
         {
             ClosePopups();
-            SetActive(playModePanel, true);
-            SetActive(localGamePanel, false);
-            SetActive(onlineGamePanel, true);
+            SetActive(playModeButtons, true);
+            SetActive(onlineGameButtons, true);
+        }
+
+        private void OpenOnlineJoin()
+        {
+            if (IsActive(onlineJoinPanel))
+            {
+                return;
+            }
+
+            HideAllPanels();
+            SetActive(onlineJoinPanel, true);
         }
 
         private void ShowOnlineFeaturePending()
         {
-            Debug.Log("온라인 플레이 기능은 추후 구현 예정입니다.");
+            Debug.Log("온라인 게임 만들기 기능은 추후 구현 예정입니다.");
         }
 
         private void MoveToLocalLobby()
@@ -211,32 +272,52 @@ namespace YutArena.UI
             SetActive(settingsPanel, true);
         }
 
-        private void OpenLocalJoin()
-        {
-            if (IsActive(localJoinPanel))
-            {
-                return;
-            }
-
-            HideAllPanels();
-            SetActive(localJoinPanel, true);
-        }
-
         private void HideAllPanels()
         {
-            SetActive(playModePanel, false);
-            SetActive(localGamePanel, false);
-            SetActive(onlineGamePanel, false);
+            SetActive(playModeButtons, false);
+            SetActive(onlineGameButtons, false);
+            SetActive(onlineJoinPanel, false);
             SetActive(helpPanel, false);
             SetActive(settingsPanel, false);
-            SetActive(localJoinPanel, false);
         }
 
         private void ClosePopups()
         {
+            SetActive(onlineJoinPanel, false);
             SetActive(helpPanel, false);
             SetActive(settingsPanel, false);
-            SetActive(localJoinPanel, false);
+        }
+
+        private void ShowYutRuleHelp()
+        {
+            SetHelpImage(yutRuleHelpSprite);
+        }
+
+        private void ShowCharacterHelp()
+        {
+            SetHelpImage(characterHelpSprite);
+        }
+
+        private void ShowMapHelp()
+        {
+            SetHelpImage(mapHelpSprite);
+        }
+
+        private void ShowModeHelp()
+        {
+            SetHelpImage(modeHelpSprite);
+        }
+
+        private void SetHelpImage(Sprite sprite)
+        {
+            if (helpContentImage == null || sprite == null)
+            {
+                return;
+            }
+
+            helpContentImage.sprite = sprite;
+            helpContentImage.preserveAspect = true;
+            helpContentImage.enabled = true;
         }
 
         private void SetMasterVolume(float volume)
@@ -252,12 +333,37 @@ namespace YutArena.UI
             }
 
             ResolutionOption option = resolutionOptions[index];
-            Screen.SetResolution(option.Width, option.Height, Screen.fullScreen);
+            Screen.SetResolution(option.Width, option.Height, Screen.fullScreenMode);
+        }
+
+        private void SetScreenMode(int index)
+        {
+            bool isFullScreen = index == 1;
+            ApplyFullScreen(isFullScreen);
         }
 
         private void SetFullScreen(bool isFullScreen)
         {
+            ApplyFullScreen(isFullScreen);
+        }
+
+        private void ApplyFullScreen(bool isFullScreen)
+        {
+            Screen.fullScreenMode = isFullScreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
             Screen.fullScreen = isFullScreen;
+
+            if (screenModeDropdown != null && screenModeDropdown.value != (isFullScreen ? 1 : 0))
+            {
+                screenModeDropdown.value = isFullScreen ? 1 : 0;
+                screenModeDropdown.RefreshShownValue();
+            }
+
+            if (fullScreenToggle != null && fullScreenToggle.isOn != isFullScreen)
+            {
+                fullScreenToggle.isOn = isFullScreen;
+            }
+
+            SetResolution(resolutionDropdown != null ? resolutionDropdown.value : 0);
         }
 
         private int GetCurrentResolutionIndex()
@@ -270,7 +376,7 @@ namespace YutArena.UI
                 }
             }
 
-            return resolutionOptions.Length - 1;
+            return 5;
         }
 
         private void QuitGame()
@@ -313,19 +419,22 @@ namespace YutArena.UI
 
         private struct ResolutionOption
         {
-            public ResolutionOption(int width, int height)
+            public ResolutionOption(int width, int height, string aspectRatio)
             {
                 Width = width;
                 Height = height;
+                AspectRatio = aspectRatio;
             }
 
             public int Width { get; }
             public int Height { get; }
+            public string AspectRatio { get; }
 
             public string Label
             {
-                get { return Width + " x " + Height; }
+                get { return Width + " x " + Height + " (" + AspectRatio + ")"; }
             }
         }
     }
 }
+
