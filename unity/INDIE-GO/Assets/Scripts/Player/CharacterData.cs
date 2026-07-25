@@ -1,4 +1,6 @@
+using UnityEditor.Build.Reporting;
 using UnityEngine;
+using YutArena.Common;
 [CreateAssetMenu(fileName = "Character", menuName = "ScriptableObject/CharacterData")]
 public class CharacterData : ScriptableObject
 {
@@ -6,6 +8,10 @@ public class CharacterData : ScriptableObject
     public string char_Name;
     [TextArea]
     public string char_Desc;
+    [SerializeField]
+    private bool currentTurn = false;
+    [SerializeField]
+    private YutResult currentYut = YutResult.None;
     
     public Sprite char_Icon;
     [Header("# Skills")]
