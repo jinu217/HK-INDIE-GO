@@ -4,7 +4,7 @@ using UnityEngine;
 //namespace YutArena.Managers{
     public class test : MonoBehaviour
     {
-        YutResult yutResult = YutResult.Gae;
+        YutResult yutResult = YutResult.Nak;
         private void Start()
         {
             Debug.Log((int)yutResult);
