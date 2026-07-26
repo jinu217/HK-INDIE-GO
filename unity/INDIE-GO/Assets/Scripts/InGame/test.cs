@@ -11,6 +11,8 @@ using UnityEngine;
             Debug.Log(yutResult);
         }
         //Github notebook -- PC connect git push and pull test
+        //notebook Git pull ok
+        //notebook to PC Git push test
     }
 //}
 
