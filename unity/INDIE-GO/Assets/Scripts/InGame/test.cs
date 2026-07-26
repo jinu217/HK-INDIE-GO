@@ -10,6 +10,7 @@ using UnityEngine;
             Debug.Log((int)yutResult);
             Debug.Log(yutResult);
         }
+        //Github notebook -- PC connect git push and pull test
     }
 //}
 
