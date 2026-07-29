@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using YutArena.Common;
+//기연이랑 나랑 데이터 교환하는 스크립트
+//2026-07-30 부로 데이터 교환 방식 수정 필요
 
 namespace YutArena.Managers
 {

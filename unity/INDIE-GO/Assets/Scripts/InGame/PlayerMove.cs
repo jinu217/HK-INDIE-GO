@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
+//BoradInteractionTest를 통해 데이터 교환 테스트
+//내가 작성하는 스크립트
+//2026-07-30 부로 데이터 교환 방식 수정 필요
 
 namespace YutArena.Managers
 {
@@ -9,12 +12,20 @@ namespace YutArena.Managers
     {
         public event Action<BoardMoveResult> OnMoveResolved;
 
+        public PieceMover[] pieces;
+
         public void RequestMove(BoardMoveRequest request)
         {
             Debug.Log("===== RequestMove 수신 =====");
             Debug.Log($"Piece ID : {request.pieceId}");
             Debug.Log($"Yut Result : {request.yutResult}");
             Debug.Log($"Move Count : {request.moveCount}");
+
+            //Target Piece Object Generate
+            PieceMover targetPiece = pieces[request.pieceId];
+
+            //Call Piece Move Function
+            targetPiece.MovePiece(request.moveCount);
 
             // 테스트용 결과 생성
             BoardMoveResult result = new BoardMoveResult

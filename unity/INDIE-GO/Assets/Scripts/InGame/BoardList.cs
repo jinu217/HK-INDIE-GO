@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
+//보드에서 이동하기 위해 위치 판정 위한 각 줄별로 리스트로 선언
+//각 위치마다 고정좌표를 주고, 해당 좌표로의 이동으로 애니메이션 처리 생각 중
+//윷 판의 종류는 달라지더라도 각 위치는 고정이기 때문에 효율적으로 보임
 
 namespace YutArena.InGame
 {

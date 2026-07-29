@@ -1,5 +1,8 @@
 using UnityEngine;
 using YutArena.Common;
+//BoardInteractionTest 스크립트로 정보 교환 테스트 한 스크립트
+//기연이가 호출하는 스크립트
+//2026-07-30 부로 데이터 교환 방식 수정 필요
 
 namespace YutArena.Managers
 {
