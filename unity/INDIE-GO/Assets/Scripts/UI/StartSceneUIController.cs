@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
+using YutArena.Managers;
 
 namespace YutArena.UI
 {
@@ -154,7 +155,7 @@ namespace YutArena.UI
 
             if (masterVolumeSlider != null)
             {
-                masterVolumeSlider.value = AudioListener.volume;
+                masterVolumeSlider.value = AudioSettingsManager.MasterVolume;
                 masterVolumeSlider.onValueChanged.AddListener(SetMasterVolume);
             }
         }
@@ -322,7 +323,7 @@ namespace YutArena.UI
 
         private void SetMasterVolume(float volume)
         {
-            AudioListener.volume = volume;
+            AudioSettingsManager.SetMasterVolume(volume);
         }
 
         private void SetResolution(int index)
@@ -437,4 +438,5 @@ namespace YutArena.UI
         }
     }
 }
+
 
