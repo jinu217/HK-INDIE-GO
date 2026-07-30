@@ -1,5 +1,7 @@
 using UnityEngine;
 using YutArena.Common;
+using YutArena.Managers.GameProgress;
+using YutArena.Managers;
 
 namespace YutArena.Managers
 {
@@ -32,22 +34,45 @@ namespace YutArena.Managers
             Instance = this;
         }
 
-        // 대기실에서 [게임 시작] 버튼을 눌렀을 때 UI가 호출하는 함수
-        public void StartGame(GameStartSettings settings)
+        // ===================================================================
+        // 새로 추가한 부분 (7/3 회의록 확정: "대기실 설정 후 인게임 들어가서 캐릭터 선택")
+        // 대기실에서 [게임 시작]을 누르면 원래는 바로 게임(첫 턴)이 시작됐는데,
+        // 이제는 그 사이에 "캐릭터 선택" 단계가 하나 더 끼어들어야 해서 함수를 2단계로 나눔
+        //   1단계: EnterCharacterSelect() - 화면만 캐릭터 선택으로 바꿈, 게임은 아직 시작 안 함
+        //   2단계: StartGame() - 캐릭터 선택 다 끝난 뒤에 호출되어야 진짜 게임(첫 턴)이 시작됨
+        // ===================================================================
+        public void EnterCharacterSelect()
         {
-            // 새 세션 데이터를 만들어서 교체 (이전 판 정보가 남지 않도록)
+            SetPhase(GamePhase.CharacterSelect);
+            // 여기서 함수가 끝남. 캐릭터 선택 화면(다른 담당자가 만들 UI)이 떠 있는 동안
+            // 플레이어들이 캐릭터를 고르고, 다 고르면(또는 제한시간 끝나면) 그 UI가 아래 StartGame()을 호출해줘야 함
+        }
+
+        // 캐릭터 선택이 끝났을 때 UI가 호출하는 함수 - 여기서부터 진짜 게임이 시작됨
+        public void StartGame()
+        {
+            var settings = GameStartSettingsHolder.Current;
+            if (settings == null)
+            {
+                Debug.LogError("TestGameManager: GameStartSettingsHolder.Current가 비어있음");
+                return;
+            }
+            StartGameWithSettings(settings);
+        }
+
+        private void StartGameWithSettings(GameStartSettings settings)
+        {
             Session = new GameSessionData
             {
-                sessionId = System.Guid.NewGuid().ToString(), // 이 게임 판을 구분하는 고유 id(중복 안됨)
+                sessionId = System.Guid.NewGuid().ToString(),
                 settings = settings,
                 elapsedSeconds = 0f
             };
             SetPhase(GamePhase.InGame);
 
-            // 다른 매니저들에게 "게임 시작"을 알리면서 설정값을 넘겨줌
             winConditionManager.Initialize(settings);
             turnManager.Initialize(settings);
-            turnManager.StartFirstTurn(); // 턴 시작
+            turnManager.StartFirstTurn();
         }
 
         // WinConditionManager가 승패를 확정지었을 때(Declare/DeclareSurrender에서) 호출됨
