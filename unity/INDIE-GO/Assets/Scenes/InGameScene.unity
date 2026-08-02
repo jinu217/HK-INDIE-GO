@@ -345,7 +345,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDataDebugTester
   playerManager: {fileID: 41707850}
-  pieceMovementManager: {fileID: 0}
+  pieceMovementManager: {fileID: 41707852}
   testPlayerId: 1
   testPieceId: 0
   testMoveCount: 1

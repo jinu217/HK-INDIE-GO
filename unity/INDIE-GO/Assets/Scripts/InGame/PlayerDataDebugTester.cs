@@ -9,7 +9,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
     [SerializeField] private PlayerManager playerManager;
     [SerializeField] private PieceMovementManager pieceMovementManager;
 
-    [Header("Move Test Input")]
+    [Header("Move Test Input (positive: forward, negative: back-do)")]
     [SerializeField] private int testPlayerId = 1;
     [SerializeField] private int testPieceId;
     [SerializeField] private int testMoveCount = 1;
@@ -43,8 +43,11 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
             {
                 Debug.Log(
                     $"[Player {player.PlayerId}] Piece {piece.PieceId + 1} | " +
-                    $"Position: {piece.BoardPosition} | " +
+                    $"Current: {piece.CurrentTileId} | " +
+                    $"Previous: {piece.PreviousTileId} | " +
+                    $"State: {piece.State} | " +
                     $"StackGroup: {piece.StackGroupId} | " +
+                    $"StackLeader: {piece.StackLeaderPieceId} | " +
                     $"Finished: {piece.IsFinished} | " +
                     $"CC: {piece.CurrentCc} (remaining: {piece.RemainingCcTurns})",
                     player);

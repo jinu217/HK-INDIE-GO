@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using YutArena.Common;
 using YutArena.InGame;
 
-/// <summary>
-/// 게임 한 판 동안만 존재하는 플레이어의 가변 데이터다.
-/// ScriptableObject에 저장하지 않으므로, 플레이가 끝난 값이 원본 설정에 남지 않는다.
-/// </summary>
+public enum PieceState
+{
+    Waiting,
+    InBoard,
+    Goal
+}
+
 [Serializable]
 public sealed class PlayerRuntimeData
 {
@@ -13,19 +17,17 @@ public sealed class PlayerRuntimeData
     public sealed class PieceRuntimeData
     {
         public int PieceId { get; private set; }
-        public int BoardPosition { get; private set; }
-        public bool IsFinished { get; private set; }
+        public BoardTileId CurrentTileId { get; private set; }
+        public BoardTileId PreviousTileId { get; private set; }
+        public PieceState State { get; private set; }
+        public bool IsFinished => State == PieceState.Goal;
 
-        // -1은 다른 말과 업혀 있지 않은 단독 상태를 뜻한다.
+        // -1 means this piece is not stacked with another piece.
         public int StackGroupId { get; private set; }
+        public int StackLeaderPieceId { get; private set; }
+        public bool IsStacked => StackGroupId >= 0;
 
-        /// <summary>현재 이 말에 적용된 CC 또는 특수 처리 상태.</summary>
         public CcDefine CurrentCc { get; private set; }
-
-        /// <summary>
-        /// Stun, Silence 등 시간 제한 CC의 남은 턴 수.
-        /// 감소 및 만료 처리는 TurnManager가 담당한다.
-        /// </summary>
         public int RemainingCcTurns { get; private set; }
 
         internal PieceRuntimeData(int pieceId)
@@ -34,25 +36,64 @@ public sealed class PlayerRuntimeData
             Reset();
         }
 
-        public void SetBoardPosition(int boardPosition)
+        /// <summary>
+        /// Moves this piece to a tile. Goal pieces are allowed to re-enter the
+        /// board for future game modes; mode rules decide whether that is legal.
+        /// </summary>
+        public void MoveTo(BoardTileId nextTileId)
         {
-            BoardPosition = boardPosition;
+            PreviousTileId = CurrentTileId;
+            CurrentTileId = nextTileId;
+
+            if (nextTileId != BoardTileId.None)
+                State = PieceState.InBoard;
         }
 
-        public void SetFinished(bool isFinished)
+        public void SetGoal()
         {
-            IsFinished = isFinished;
+            State = PieceState.Goal;
+            CurrentTileId = BoardTileId.None;
+            PreviousTileId = BoardTileId.None;
+            ClearStack();
         }
 
-        public void SetStackGroupId(int stackGroupId)
+        /// <summary>
+        /// Removes a captured piece from the board and records its capture CC.
+        /// TurnManager later consumes Kill/Retire and decides extra throws.
+        /// </summary>
+        public void SetCaptured(CcDefine captureCc)
         {
+            if (captureCc != CcDefine.Kill && captureCc != CcDefine.Retire)
+                throw new ArgumentException("Capture CC must be Kill or Retire.", nameof(captureCc));
+
+            State = PieceState.Waiting;
+            CurrentTileId = BoardTileId.None;
+            PreviousTileId = BoardTileId.None;
+            ClearStack();
+            SetCc(captureCc);
+        }
+
+        public void SetStackGroup(int stackGroupId, int stackLeaderPieceId)
+        {
+            if (stackGroupId < 0)
+                throw new ArgumentOutOfRangeException(nameof(stackGroupId));
+            if (stackLeaderPieceId < 0)
+                throw new ArgumentOutOfRangeException(nameof(stackLeaderPieceId));
+
             StackGroupId = stackGroupId;
+            StackLeaderPieceId = stackLeaderPieceId;
+        }
+
+        public void ClearStack()
+        {
+            StackGroupId = -1;
+            StackLeaderPieceId = -1;
         }
 
         public void SetCc(CcDefine ccType, int remainingTurns = 0)
         {
             if (remainingTurns < 0)
-                throw new ArgumentOutOfRangeException(nameof(remainingTurns), "CC 남은 턴은 0 이상이어야 합니다.");
+                throw new ArgumentOutOfRangeException(nameof(remainingTurns));
 
             CurrentCc = ccType;
             RemainingCcTurns = ccType == CcDefine.None ? 0 : remainingTurns;
@@ -66,9 +107,10 @@ public sealed class PlayerRuntimeData
 
         public void Reset()
         {
-            BoardPosition = -1; // 출발 전 대기 상태
-            IsFinished = false;
-            StackGroupId = -1;
+            CurrentTileId = BoardTileId.None;
+            PreviousTileId = BoardTileId.None;
+            State = PieceState.Waiting;
+            ClearStack();
             ClearCc();
         }
     }
@@ -78,19 +120,25 @@ public sealed class PlayerRuntimeData
     public IReadOnlyList<PieceRuntimeData> Pieces => pieces;
 
     private readonly List<PieceRuntimeData> pieces = new List<PieceRuntimeData>();
+    private int nextStackGroupId;
 
     public PlayerRuntimeData(int playerId, string playerName, int pieceCount)
     {
         if (playerId <= 0)
-            throw new ArgumentOutOfRangeException(nameof(playerId), "플레이어 ID는 1 이상이어야 합니다.");
+            throw new ArgumentOutOfRangeException(nameof(playerId));
         if (pieceCount <= 0)
-            throw new ArgumentOutOfRangeException(nameof(pieceCount), "말 수는 1 이상이어야 합니다.");
+            throw new ArgumentOutOfRangeException(nameof(pieceCount));
 
         PlayerId = playerId;
         PlayerName = string.IsNullOrWhiteSpace(playerName) ? $"Player {playerId}" : playerName;
 
         for (int pieceId = 0; pieceId < pieceCount; pieceId++)
             pieces.Add(new PieceRuntimeData(pieceId));
+    }
+
+    public int CreateStackGroupId()
+    {
+        return nextStackGroupId++;
     }
 
     public bool TryGetPiece(int pieceId, out PieceRuntimeData piece)
@@ -107,6 +155,8 @@ public sealed class PlayerRuntimeData
 
     public void ResetPieces()
     {
+        nextStackGroupId = 0;
+
         foreach (PieceRuntimeData piece in pieces)
             piece.Reset();
     }
