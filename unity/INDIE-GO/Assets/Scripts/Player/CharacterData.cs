@@ -8,10 +8,6 @@ public class CharacterData : ScriptableObject
     public string char_Name;
     [TextArea]
     public string char_Desc;
-    [SerializeField]
-    private bool currentTurn = false;
-    [SerializeField]
-    private YutResult currentYut = YutResult.None;
     
     public Sprite char_Icon;
     [Header("# Skills")]

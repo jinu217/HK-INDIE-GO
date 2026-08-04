@@ -2,7 +2,7 @@ using System;
 using Unity.Mathematics;
 using UnityEngine;
 using YutArena.Common;
-public class CHAR_001_Status : MonoBehaviour
+public class CHAR_009_Status : MonoBehaviour
 {
     [SerializeField]
     private CharacterData characterData;

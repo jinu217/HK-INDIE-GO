@@ -12,13 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f970a92b1fac54646ac5f6ae5cafab58, type: 3}
   m_Name: CHAR_003_SO
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
-  char_Name: "\uC804\uC6B0\uCE58"
-  char_Desc: "\uC804\uC6B0\uCE58"
+  char_Name: "\uD64D\uAE38\uB3D9"
+  char_Desc: "\uD64D\uAE38\uB3D9"
   char_Icon: {fileID: 0}
-  passive_Name: "\uCD95\uC9C0\uBC95"
-  passive_Desc: "\uB9D0\uC758 \uCCAB \uC774\uB3D9 \uC2DC 1\uCE78 \uCD94\uAC00 \uC774\uB3D9"
-  active_Name: "\uB454\uAC11\uC220"
-  active_Desc: "\uC0C1\uB300 \uB9D0\uB85C \uB454\uAC11\uD558\uC5EC \uC7A1\uD788\uAC70\uB098
-    \uC5C5\uD788\uC9C0 \uC54A\uC74C (\uC544\uAD70 \uC5C5\uAE30 \uC2DC \uD574\uC81C)"
+  passive_Name: "\uC758\uC801\uC758 \uAE30\uAC1C"
+  passive_Desc: "\uC7A1\uD790 \uC2DC, \uC801\uC758 \uB9D0\uC758 \uC22B\uC790\uB9CC\uD07C\uB9CC
+    \uB9AC\uD0C0\uC774\uC5B4"
+  active_Name: "\uBD84\uC2E0\uC220"
+  active_Desc: "5\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5. \uC790\uC2E0\uC758
+    \uB9D0\uC5D0 \uBD84\uC2E0\uC744 \uC5C5\uC74C. \uBD84\uC2E0\uC744 \uC7A1\uC740
+    \uC801\uC740 \uCD94\uAC00 \uD134\uC774 \uC5C6\uC74C. (\uBD84\uC2E0\uC73C\uB85C
+    \uC810\uC218 \uD68D\uB4DD \uBD88\uAC00\uB2A5)"
   cooldown_Turn: 5
   cost_Sp: 0
