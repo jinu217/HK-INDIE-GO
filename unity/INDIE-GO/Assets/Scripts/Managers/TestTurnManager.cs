@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -10,8 +11,6 @@ namespace YutArena.Managers
     // 전체 흐름: 턴 시작 -> 윷 던지기(윷/모면 반복, 최대 3회) -> 결과 묶음 중 원하는 순서로 말 이동 -> 잡기 보너스 던지기(있으면) -> 턴 종료 -> 다음 플레이어
     // 아주 중요한 원칙:
     // 보드 좌표/다음칸/갈림길/잡기/업기/완주 "판정"은 절대 이 클래스에서 하지 않는다.
-    // IBoardExecutor(말 이동 코드)에게 "이동해줘"라고 요청만 던지고, "이렇게 됐어"라는
-    // 결과(BoardMoveResult)만 받아서 턴 흐름을 진행한다. 이 클래스는 좌표를 아예 모른다.
     // ===================================================================
     public class TestTurnManager : MonoBehaviour
     {
@@ -19,8 +18,8 @@ namespace YutArena.Managers
         [Header("Dependencies")]
         [SerializeField] private TestYutRuleManager yutRuleManager;
         [SerializeField] private TestWinConditionManager winConditionManager;
-        [SerializeField] private MonoBehaviour boardExecutorSource;
-        private IBoardExecutor boardExecutor;
+        [SerializeField] private PlayerManager playerManager;               // 말판 코드: 플레이어/말 데이터 보관
+        [SerializeField] private PieceMovementManager pieceMovementManager; // 말판 코드: 이동/잡기/업기/완주 실제 처리
 
         // 외부에서 볼 수 있지만 코드 수정은 내부에서 가능
         public TurnContext CurrentTurn { get; private set; } = new TurnContext();
@@ -31,6 +30,11 @@ namespace YutArena.Managers
 
         // 잡기로 얻은 보너스 던지기 횟수 저장( 던진 윷 결과를 다 소모하고 보너스 던지기를 하니까)
         private int pendingCaptureThrows = 0;
+
+        // 스킬로 얻은 보너스 던지기 횟수 저장 (예: 기본형 "한번더")
+        // 잡기(pendingCaptureThrows)랑 따로 관리하는 이유: 나중에 "왜 추가 던지기가 생겼는지"
+        // (잡아서인지 스킬 때문인지) UI에서 구분해서 보여줘야 할 수도 있어서. 
+        private int pendingSkillThrows = 0;
 
         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
@@ -49,16 +53,12 @@ namespace YutArena.Managers
         {
             settings = gameSettings;
 
-            // boardExecutorSource가 실제로 IBoardExecutor를 구현하고 있는지 확인
-            // "as" 형변환은 실패하면 예외를 던지지 않고 그냥 null을 돌려줌 (안전한 형변환)
-            boardExecutor = boardExecutorSource as IBoardExecutor;
-            if (boardExecutor == null)
+            // 말판 매니저 2개가 잘 연결됐는지만 확인
+            if (playerManager == null || pieceMovementManager == null)
             {
-                Debug.LogError("TestTurnManager: boardExecutorSource가 IBoardExecutor를 구현하지 않음");
+                Debug.LogError("TestTurnManager: playerManager 또는 pieceMovementManager가 연결 안 됨");
                 return;
             }
-
-            boardExecutor.OnMoveResolved += HandleBoardMoveResolved;
 
             // 대기실 인원수(settings.playerCount)만큼 참가자 목록을 만듦
             // 예: playerCount=4 -> [Player1, Player2, Player3, Player4]
@@ -86,7 +86,7 @@ namespace YutArena.Managers
         public void StartFirstTurn()
         {
             // ===================================================================
-            // 순서 정하기: 기획서 "윷 던지기로 정하기, 도개걸윷모뒷도 모두 같은 확률"
+            // 순서 정하기: "윷 던지기로 정하기, 도개걸윷모뒷도 모두 같은 확률"
             // 참가자 전원이 균등확률로 한 번씩 던져서, 높은 결과가 나온 사람이 먼저 시작
             // (동점이면 동점자끼리만 다시 던져서 순위를 가림)
             // ===================================================================
@@ -155,6 +155,7 @@ namespace YutArena.Managers
 
             pendingResults.Clear();
             pendingCaptureThrows = 0;
+            pendingSkillThrows = 0; // 새 턴 시작이니 스킬 보너스 던지기도 초기화
             throwCountInTurn = 0;
             CurrentTurn.extraThrowByYutMoCount = 0;
             CurrentTurn.extraThrowByCaptureCount = 0;
@@ -166,6 +167,7 @@ namespace YutArena.Managers
             SetPhase(TurnPhase.ApplyTurnStartRule);
 
             SetPhase(TurnPhase.WaitThrow);
+            StartThrowTimer(); //  던지기 제한시간 시작 (기본룰일 때만 실제로 작동함)
         }
 
         // ===================================================================
@@ -188,7 +190,7 @@ namespace YutArena.Managers
             }
             var first = pendingResults[0];
             Debug.Log("이동 요청 보냄: " + first.result);
-            RequestMovePiece(1, first.result);
+            RequestMovePiece(0, first.result); // [수정] 테스트용 pieceId를 1 -> 0으로 (영서 코드는 pieceId가 0부터 시작함)
             Debug.Log("이동 요청 처리 끝, 현재 단계: " + CurrentTurn.currentPhase);
         }
 
@@ -208,7 +210,11 @@ namespace YutArena.Managers
                 return;
             }
 
+            StopPhaseTimer(); // 시간 안에 던졌으니, 흐르고 있던 던지기 타이머는 여기서 멈춤
+
+            //  잡기 보너스를 먼저 소비하고, 없으면 스킬 보너스를 소비함 
             bool isCaptureBonusThrow = pendingCaptureThrows > 0;
+            bool isSkillBonusThrow = !isCaptureBonusThrow && pendingSkillThrows > 0;
 
             SetPhase(TurnPhase.Throwing);
             YutResult result = yutRuleManager.Throw(CurrentTurn.currentPlayer);
@@ -224,6 +230,8 @@ namespace YutArena.Managers
 
             if (isCaptureBonusThrow)
                 pendingCaptureThrows--;
+            else if (isSkillBonusThrow) 
+                pendingSkillThrows--;
 
             var throwData = new YutThrowData
             {
@@ -243,15 +251,17 @@ namespace YutArena.Managers
             {
                 CurrentTurn.extraThrowByYutMoCount++;
                 SetPhase(TurnPhase.WaitThrow);
+                StartThrowTimer(); //  다시 던질 기회 생겼으니 던지기 타이머 재시작 (보너스 초 반영됨)
                 return;
             }
 
             SetPhase(TurnPhase.WaitAction);
+            StartActionTimer(); // 이동 단계로 넘어가니 이동 제한시간 시작
         }
 
         // UI에서 플레이어가 [결과 묶음] 중 하나를 골라(chosenResult), 어떤 말을 옮길지(pieceId) 정하면 호출됨
         // pieceId, chosenResult는 이 함수의 매개변수 - UI가 호출할 때 직접 넣어주는 값
-        // 여기서는 실제 이동은 안 하고, "이동해도 되는지" 3가지만 검사함
+        // 이 함수 안에서 검사 -> 이동요청 -> 결과 확인 -> 다음 단계 결정까지 한번에 처리함
         public void RequestMovePiece(int pieceId, YutResult chosenResult)
         {
             // 검사 1: 지금 말 이동 가능한 단계(WaitAction)가 맞는지
@@ -261,15 +271,19 @@ namespace YutArena.Managers
                 return;
             }
 
-            // 검사 2: chosenResult가 실제로 던져서 얻은 결과(pendingResults 안)가 맞는지 찾음
+            // 검사 2: chosenResult가 실제로 던져서 얻은 결과(pendingResults)가 맞는지 찾음
             var matched = pendingResults.Find(r => r.result == chosenResult);
             if (matched == null)
             {
                 Debug.LogWarning("결과 묶음에 없는 결과를 사용하려 함: " + chosenResult);
                 return;
             }
-            // 검사 3: 상태이상(속박/기절 등)으로 이 말이 못 움직이는 상태는 아닌지 영서 쪽에 확인
-            if (boardExecutor != null && !boardExecutor.CanMove(pieceId))
+
+            int playerId = (int)CurrentTurn.currentPlayer; // PlayerSlot(Player1=1..) 값 그대로 영서쪽 playerId(int)로 씀
+
+            // 검사 3: 상태이상(Stun)으로 이 말이 못 움직이는 상태는 아닌지 확인
+            // 데이터(CurrentCc)를 직접 조회해서 판단
+            if (!CanPieceMove(playerId, pieceId))
             {
                 Debug.LogWarning("상태이상 등으로 이동할 수 없는 말: " + pieceId);
                 return;
@@ -278,33 +292,38 @@ namespace YutArena.Managers
             // 3가지 검사 다 통과 -> "말 선택함" 단계로 표시 (이 아래에서 실제 이동 요청으로 이어짐)
             SetPhase(TurnPhase.SelectPiece);
 
-            var request = new BoardMoveRequest
-            {
-                pieceId = pieceId,
-                yutResult = chosenResult,
-                moveCount = YutResultRule.GetMoveCount(chosenResult)
-            };
-
             pendingResults.Remove(matched);
             OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
 
+            int moveCount = YutResultRule.GetMoveCount(chosenResult);
+
+            // 완주 개수는 "이동 전/후 완주한 말 개수 차이"로 계산 (업기로 여러 마리가 한꺼번에 골인할 수 있어서)
+            int finishedCountBefore = CountFinishedPieces(playerId);
+
             SetPhase(TurnPhase.MovePiece);
-            boardExecutor.RequestMove(request);
-        }
+ 
+            // pieceMovementManager.TryMovePiece()가 호출 즉시 이동/잡기/업기/완주를 다 처리함
+            bool moveSucceeded = pieceMovementManager.TryMovePiece(playerId, pieceId, moveCount);
+            if (!moveSucceeded)
+            {
+                Debug.LogWarning("영서 쪽 이동 처리 실패: player=" + playerId + " piece=" + pieceId);
+            }
 
-        // 영서(보드) 쪽이 말 이동 처리를 다 끝내면 자동으로 호출되는 함수 (59번째 줄에서 등록해둠)
-        // 여기서부터 다시 내(턴 관리자) 담당 - 이동 결과를 보고 다음에 뭘 할지 결정만 함
-        private void HandleBoardMoveResolved(BoardMoveResult result)
-        {
             SetPhase(TurnPhase.ResolveTile); // 도착 칸 처리 단계로 표시 (특수효과는 아직 미구현)
-
             SetPhase(TurnPhase.ResolveBoardRule); // 잡기/업기/완주 결과 처리 단계로 표시
 
             // 완주했는지 확인은 여기서 안 하고, WinConditionManager한테 결과를 넘겨서 대신 확인시킴
-            winConditionManager.OnPieceMoveResolved(CurrentTurn.currentPlayer, CurrentTurn.currentTeam, result);
+            int finishedCountAfter = CountFinishedPieces(playerId);
+            int newlyFinishedCount = finishedCountAfter - finishedCountBefore;
+            bool isFinished = newlyFinishedCount > 0;
+
+            winConditionManager.OnPieceMoveResolved(
+                CurrentTurn.currentPlayer, CurrentTurn.currentTeam, isFinished, newlyFinishedCount);
 
             SetPhase(TurnPhase.CheckBonusThrow); // 잡기로 보너스 던지기 생겼는지 확인하는 단계로 표시
-            if (result.capturedPieceIds.Count > 0) // 이번 이동으로 상대 말을 잡았으면
+            // 상대 말들의 CC(Kill/Retire)를 직접 찾아서 확인함. 윷/모(4~5칸)로 잡으면 Retire(추가턴 없음), 도~걸/뒷도(1~3칸,-1칸)로 잡으면 Kill(추가턴 있음)
+            bool gotKillCapture = ConsumeCaptureResults(playerId);
+            if (gotKillCapture) // 이번 이동으로 상대 말을 Kill로 잡았으면
             {
                 pendingCaptureThrows++;             // 나중에 쓸 보너스 던지기 개수 +1 (지금 바로 던지는 거 아님)
                 CurrentTurn.extraThrowByCaptureCount++;
@@ -317,18 +336,65 @@ namespace YutArena.Managers
                 return;
             }
 
-            // 쓸 결과는 다 썼는데, 쌓아둔 보너스 던지기가 있으면 -> 그거 쓰러 던지기 단계로 돌아감
-            if (pendingCaptureThrows > 0)
+            // 쓸 결과는 다 썼는데, 쌓아둔 보너스 던지기(잡기 또는 스킬)가 있으면 -> 그거 쓰러 던지기 단계로 돌아감
+            if (pendingCaptureThrows > 0 || pendingSkillThrows > 0) // 스킬 보너스도 같이 확인
             {
                 SetPhase(TurnPhase.WaitThrow);
+                StartThrowTimer(); // 여기서 흐르던 이동 타이머는 멈추고, 던지기 타이머 새로 시작
                 return;
             }
 
             EndTurn(); // 쓸 결과도, 보너스 던지기도 없으면 이 턴은 여기서 끝
         }
 
+        //  이 플레이어가 지금까지 완주시킨 말이 몇 개인지 셈 (State == Goal)
+        private int CountFinishedPieces(int playerId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return 0;
+            int count = 0;
+            foreach (var piece in player.RuntimeData.Pieces)
+                if (piece.IsFinished) count++;
+            return count;
+        }
+
+        //  이 말이 지금 이동 가능한 상태인지 (Stun이면 불가, 나머지는 가능)
+        private bool CanPieceMove(int playerId, int pieceId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
+            if (!player.TryGetPieceData(pieceId, out var pieceData)) return false;
+            return pieceData.CurrentCc != CcDefine.Stun;
+        }
+
+        // 방금 이동으로 상대 말이 잡혔는지(Kill/Retire) 전체 상대 플레이어를 훑어서 확인.
+        // 발견하면 그 즉시 CC를 지워서(ClearCc) "소비 완료" 처리함 (다음에 또 잡힌 걸로 착각 안 하게).
+        // 반환값: Kill(추가턴 있는 잡기)이 하나라도 있었으면 true
+        private bool ConsumeCaptureResults(int movingPlayerId)
+        {
+            bool gotKill = false;
+            foreach (var otherPlayer in playerManager.ActivePlayers)
+            {
+                if (otherPlayer.PlayerId == movingPlayerId) continue;
+
+                foreach (var piece in otherPlayer.RuntimeData.Pieces)
+                {
+                    if (piece.CurrentCc == CcDefine.Kill)
+                    {
+                        gotKill = true;
+                        piece.ClearCc();
+                    }
+                    else if (piece.CurrentCc == CcDefine.Retire)
+                    {
+                        piece.ClearCc();
+                    }
+                }
+            }
+            return gotKill;
+        }
+
         private void EndTurn()
         {
+            StopPhaseTimer(); //  턴이 진짜로 끝나는 지점이니, 혹시 남아있는 타이머가 있으면 정리
+
             SetPhase(TurnPhase.TurnEnd);
             OnTurnEnded?.Invoke(CurrentTurn.currentPlayer);
 
@@ -349,6 +415,7 @@ namespace YutArena.Managers
 
             if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++; // 처음으로 돌아왔다 = 한 바퀴 다 돔 -> 라운드 +1
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
+
             BeginTurnFor(TurnOrder.Current);  // 다음 사람 턴 시작
         }
 
@@ -358,6 +425,38 @@ namespace YutArena.Managers
         public void NotifyGameEnded()
         {
             CurrentTurn.isGameEnded = true;
+        }
+
+        // ===================================================================
+        // (캐릭터/스킬) 쪽에서, 스킬 효과로 재던지기를 부여했을 때 호출할  함수
+        // (예: 기본형 [한번더] 스킬 사용 시 캐릭터 코드가 이 함수를 부름)
+        // 윷/모로 얻는 추가 던지기(최대 3회 제한)와는 별도 카운트라서, 여기 카운트는 제한 없음
+        // ===================================================================
+        public void GrantSkillExtraThrow()
+        {
+            pendingSkillThrows++;
+        }
+
+        // ===================================================================
+        //  항복/탈주 처리용: 팀 전체가 아니라 "이 사람 한 명만" 턴 순서에서 뺌
+        // (팀전에서 한 명만 나가고 팀원은 남아있는 경우 씀. 팀원끼리는 남은 사람들끼리
+        //  기존 순서 그대로 돌게 되는데, 그게 자연스럽게 "인원비율대로 턴 배분"이 됨.
+        //  예: 2vs2에서 상대팀 1명 나가면 순서가 [상대1, 나1, 나2]가 되고, 이걸 그대로
+        //  돌리면 상대1이 2번에 1번꼴로 도는 셈이라 "상대2:나1" 비율이 저절로 만들어짐)
+        // ===================================================================
+        public void RemovePlayerFromTurnOrder(PlayerSlot player)
+        {
+            var remainingPlayers = TurnOrder.order.Where(p => p != player).ToList();
+
+            PlayerSlot currentBefore = TurnOrder.Current;
+            int newIndex = remainingPlayers.IndexOf(currentBefore);
+            if (newIndex < 0) newIndex = 0;
+
+            TurnOrder = new TurnOrderData
+            {
+                order = remainingPlayers,
+                currentIndex = remainingPlayers.Count > 0 ? newIndex : 0
+            };
         }
 
         // ===================================================================
@@ -391,5 +490,62 @@ namespace YutArena.Managers
             CurrentTurn.currentPhase = phase;
             OnTurnPhaseChanged?.Invoke(CurrentTurn);
         }
+
+        // ===================================================================
+        // 윷/이동 제한시간 타이머
+        //  던지기 기본 10초(+추가던지기 1회당 5초), 이동/스킬 기본 30초
+        //         (+추가 던지기로 얻은 이동 횟수만큼 10초). 시간 지나면 강제로 턴 넘김.
+        // settings.turnTimeMode가 Unlimited면 아예 타이머를 안 켬 ( 무제한 모드도 구현)
+        // ===================================================================
+        private Coroutine phaseTimerCoroutine;
+
+        // 던지기 제한시간 시작. 보너스(잡기/윷모로 인한 추가던지기) 1회당 +5초
+        private void StartThrowTimer()
+        {
+            if (settings == null || settings.turnTimeMode != TurnTimeMode.Limited) return; // 무제한 모드면 시작 안 함
+
+            int bonusThrowCount = CurrentTurn.extraThrowByYutMoCount + CurrentTurn.extraThrowByCaptureCount;
+            float seconds = settings.throwTimeSeconds + bonusThrowCount * GameRuleDefine.ExtraThrowTimeBonusSeconds;
+
+            StopPhaseTimer(); // 혹시 이전 타이머가 남아있으면 정리하고 새로 시작
+            phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitThrow));
+        }
+
+        // 이동/스킬 제한시간 시작. 이번 턴에 던진 횟수(=이동해야 할 횟수)가 많을수록 10초씩 추가
+        // (여러 번 이동하는 동안 하나로 이어지는 시간이라, RequestMovePiece 안에서는 다시 안 부름 -
+        //  한 번 시작하면 이 단계(WaitAction)를 벗어날 때까지 계속 흐름)
+        private void StartActionTimer()
+        {
+            if (settings == null || settings.turnTimeMode != TurnTimeMode.Limited) return;
+
+            int extraMoveCount = Mathf.Max(0, throwCountInTurn - 1); // 기본 1회는 기본시간에 포함, 그 이상만 보너스
+            float seconds = settings.actionTimeSeconds + extraMoveCount * GameRuleDefine.ExtraMoveTimeBonusSeconds;
+
+            StopPhaseTimer();
+            phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitAction));
+        }
+
+        // 지금 돌고 있는 타이머가 있으면 멈춤 (다른 단계로 넘어갈 때, 또는 새 타이머 시작 전에 호출)
+        private void StopPhaseTimer()
+        {
+            if (phaseTimerCoroutine != null)
+            {
+                StopCoroutine(phaseTimerCoroutine);
+                phaseTimerCoroutine = null;
+            }
+        }
+
+        // seconds만큼 기다렸다가, 그때도 여전히 phaseToCheck 단계에 머물러 있으면(=플레이어가 시간 안에
+        // 행동을 못 했으면) 강제로 턴을 끝냄. 그 전에 플레이어가 행동해서 단계가 바뀌었으면 아무 일도 안 함
+        private IEnumerator PhaseTimeoutRoutine(float seconds, TurnPhase phaseToCheck)
+        {
+            yield return new WaitForSeconds(seconds);
+
+            if (CurrentTurn.currentPhase == phaseToCheck)
+            {
+                Debug.Log("[타이머] " + phaseToCheck + " 단계 제한시간(" + seconds + "초) 초과, 턴 강제 종료");
+                EndTurn();
+            }
+        }
     }
-}   
+}
