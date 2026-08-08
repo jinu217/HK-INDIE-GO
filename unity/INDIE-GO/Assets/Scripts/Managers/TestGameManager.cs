@@ -36,24 +36,23 @@ namespace YutArena.Managers
         }
 
         // ===================================================================
-        // "대기실 설정 후 인게임 들어가서 캐릭터 선택"
         //   1단계: EnterCharacterSelect() - 화면만 캐릭터 선택으로 바꿈, 게임은 아직 시작 안 함
         //   2단계: StartGame() - 캐릭터 선택 다 끝난 뒤에 호출되어야 진짜 게임(첫 턴)이 시작됨
         // ===================================================================
         public void EnterCharacterSelect()
         {
             SetPhase(GamePhase.CharacterSelect);
-            // 여기서 함수가 끝남. 캐릭터 선택 화면이 떠 있는 동안
+            // 여기서 함수가 끝남. 캐릭터 선택 화면(다른 담당자가 만들 UI)이 떠 있는 동안
             // 플레이어들이 캐릭터를 고르고, 다 고르면 아래 NotifyAllPlayersSelectedCharacter()를 호출해줘야 함
         }
 
         // ===================================================================
-        // 캐릭터 선택 카운트다운
+        // [캐릭터 선택 카운트다운
         // "전원 캐릭터 선택시 자동으로 게임 시작 (카운트다운 5초에서 10초 후 시작)"
-        // 정확히 몇 초인지 정해진건 없어서 8초로 해놓음
+        // 정확히 몇 초인지는 아직 미확정이라, 일단 기본값(characterSelectCountdownSeconds)으로 구현해두고 나중에 값만 바꾸면 되게 함
         // ===================================================================
         [Header("Character Select")]
-        [SerializeField] private float characterSelectCountdownSeconds = 8f; //  임시 기본값
+        [SerializeField] private float characterSelectCountdownSeconds = 8f; // 5~10초 사이 임시 기본값
         private Coroutine characterSelectCountdownCoroutine;
 
         // 캐릭터 선택 UI가 "전원 다 골랐다"고 알려줄 때 호출하는 함수. 카운트다운 시작 후 자동으로 게임 시작됨
@@ -69,6 +68,15 @@ namespace YutArena.Managers
             characterSelectCountdownCoroutine = StartCoroutine(CharacterSelectCountdownRoutine());
         }
 
+        // 카운트다운 도중에 취소해야 하면(예: 누가 캐릭터를 다시 바꿈) UI가 호출
+        public void CancelCharacterSelectCountdown()
+        {
+            if (characterSelectCountdownCoroutine != null)
+            {
+                StopCoroutine(characterSelectCountdownCoroutine);
+                characterSelectCountdownCoroutine = null;
+            }
+        }
 
         private IEnumerator CharacterSelectCountdownRoutine()
         {
@@ -105,8 +113,7 @@ namespace YutArena.Managers
             turnManager.StartFirstTurn();
 
             // ===================================================================
-            //  Escape 승리조건 2번용 실시간 제한시간 타이머
-            // "제한 시간의 경우 기본 무제한 or 20분(추후수정) / 1분 단위로 조절 가능"
+            // Escape 승리조건 2번용 실시간 제한시간 타이머
             // ===================================================================
             if (settings.timeLimitMinutes != GameRuleDefine.UnlimitedTimeMinutes)
             {
@@ -115,7 +122,7 @@ namespace YutArena.Managers
             }
         }
 
-        // 위 타이머용 필드+코루틴
+        //  위 타이머용 필드+코루틴
         private Coroutine timeLimitCoroutine;
 
         private IEnumerator TimeLimitRoutine(float totalSeconds)
@@ -126,10 +133,10 @@ namespace YutArena.Managers
             winConditionManager.HandleTimeLimitReached(); // 시간 다 됐으니 지금까지 점수로 승부 결정
         }
 
-        // WinConditionManager가 승패를 확정지었을 때 호출됨
+        // WinConditionManager가 승패를 확정지었을 때호출됨
         public void EndGame(GameResultData result)
         {
-            if (timeLimitCoroutine != null) // 게임이 다른 이유로 먼저 끝났으면 남은 제한시간 타이머 정리
+            if (timeLimitCoroutine != null) //  게임이 다른 이유로 먼저 끝났으면 남은 제한시간 타이머 정리
             {
                 StopCoroutine(timeLimitCoroutine);
                 timeLimitCoroutine = null;

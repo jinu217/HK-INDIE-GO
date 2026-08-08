@@ -13,8 +13,8 @@ namespace YutArena.Managers
         // 이 룰이 어느 모드를 담당하는지
         GameMode Mode { get; }
 
-        // 지금까지 각 팀이 완주시킨 개수(escapeCountByTeam)와 설정값(settings)을 보고
-        // 이 팀(team)이 승리 조건을 만족했는지 판단해서 true/false로 알려줌
-        bool CheckWin(TeamSlot team, Dictionary<TeamSlot, int> escapeCountByTeam, GameStartSettings settings);
+        // Classic 모드는 "말들의 실제 상태(Goal인지)를 직접 확인"하는 방식
+        bool CheckWin(TeamSlot team, Dictionary<TeamSlot, int> escapeCountByTeam,
+            GameStartSettings settings, PlayerManager playerManager);
     }
 }
