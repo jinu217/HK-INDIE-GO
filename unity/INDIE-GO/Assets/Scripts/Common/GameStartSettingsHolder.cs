@@ -1,4 +1,4 @@
-﻿namespace YutArena.Common
+namespace YutArena.Common
 {
     public static class GameStartSettingsHolder
     {
