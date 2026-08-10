@@ -5,6 +5,7 @@ using YutArena.Common;
 public class CharacterData : ScriptableObject
 {
     [Header("# Main Info")]
+    public int char_ID;
     public string char_Name;
     [TextArea]
     public string char_Desc;

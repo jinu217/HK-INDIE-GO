@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f970a92b1fac54646ac5f6ae5cafab58, type: 3}
   m_Name: CHAR_002_SO
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  char_ID: 2
   char_Name: "\uC804\uC6B0\uCE58"
   char_Desc: "\uC804\uC6B0\uCE58"
   char_Icon: {fileID: 0}
