@@ -12,9 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f970a92b1fac54646ac5f6ae5cafab58, type: 3}
   m_Name: CHAR_001_1_SO
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  char_ID: 0
   char_Name: "\uAE30\uBCF8\uD615(\uB0A8)"
   char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130(\uB0A8)\uC774\uB2E4."
-  char_Icon: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
+  char_Icon: {fileID: 0}
   passive_Name: "\uBAA8 \uC544\uB2C8\uBA74 \uB3C4"
   passive_Desc: "\uB3C4\xB7\uBAA8\uAC00 \uB098\uC654\uC744 \uB54C \uC2A4\uD0AC\uD3EC\uC778\uD2B8
     \uD68D\uB4DD"

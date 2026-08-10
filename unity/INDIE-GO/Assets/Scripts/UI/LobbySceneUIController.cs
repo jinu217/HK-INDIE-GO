@@ -50,63 +50,63 @@ namespace YutArena.UI
         };
 
         [Header("Mode")]
-        [Tooltip("Game Mode Left")]
+        [Tooltip("게임 모드 이전 버튼")]
         [SerializeField] private Button gameModeLeftButton;
-        [Tooltip("Game Mode Right")]
+        [Tooltip("게임 모드 다음 버튼")]
         [SerializeField] private Button gameModeRightButton;
-        [Tooltip("Game Mode Value")]
+        [Tooltip("게임 모드 텍스트")]
         [SerializeField] private TMP_Text gameModeValueText;
 
         [Header("Players")]
-        [Tooltip("Player Count Left")]
+        [Tooltip("플레이어 수 감소 버튼")]
         [SerializeField] private Button playerCountLeftButton;
-        [Tooltip("Player Count Right")]
+        [Tooltip("플레이어 수 증가 버튼")]
         [SerializeField] private Button playerCountRightButton;
-        [Tooltip("Player Count Value")]
+        [Tooltip("플레이어 수 텍스트")]
         [SerializeField] private TMP_Text playerCountValueText;
-        [Tooltip("Team Mode Left")]
+        [Tooltip("팀 모드 이전 버튼")]
         [SerializeField] private Button teamModeLeftButton;
-        [Tooltip("Team Mode Right")]
+        [Tooltip("팀 모드 다음 버튼")]
         [SerializeField] private Button teamModeRightButton;
-        [Tooltip("Team Mode Value")]
+        [Tooltip("팀 모드 텍스트")]
         [SerializeField] private TMP_Text teamModeValueText;
-        [Tooltip("Player Rows")]
+        [Tooltip("플레이어 행")]
         [SerializeField] private GameObject[] playerRows;
-        [Tooltip("Player Team Left Buttons")]
+        [Tooltip("플레이어 팀 이전 버튼")]
         [SerializeField] private Button[] playerTeamLeftButtons;
-        [Tooltip("Player Team Right Buttons")]
+        [Tooltip("플레이어 팀 다음 버튼")]
         [SerializeField] private Button[] playerTeamRightButtons;
-        [Tooltip("Player Team Value Texts")]
+        [Tooltip("플레이어 팀 텍스트")]
         [SerializeField] private TMP_Text[] playerTeamValueTexts;
 
         [Header("Map")]
-        [Tooltip("Map Left")]
+        [Tooltip("맵 이전 버튼")]
         [SerializeField] private Button mapLeftButton;
-        [Tooltip("Map Right")]
+        [Tooltip("맵 다음 버튼")]
         [SerializeField] private Button mapRightButton;
-        [Tooltip("Map Value")]
+        [Tooltip("맵 텍스트")]
         [SerializeField] private TMP_Text mapValueText;
 
         [Header("Turn")]
-        [Tooltip("Turn Length Left")]
+        [Tooltip("턴 길이 감소 버튼")]
         [SerializeField] private Button turnLengthLeftButton;
-        [Tooltip("Turn Length Right")]
+        [Tooltip("턴 길이 증가 버튼")]
         [SerializeField] private Button turnLengthRightButton;
-        [Tooltip("Turn Length Value")]
+        [Tooltip("턴 길이 텍스트")]
         [SerializeField] private TMP_Text turnLengthValueText;
 
         [Header("Text")]
-        [Tooltip("Start Condition Text")]
+        [Tooltip("시작 조건 텍스트")]
         [SerializeField] private TMP_Text startConditionText;
 
         [Header("Navigation")]
-        [Tooltip("Start Game Button")]
+        [Tooltip("게임 시작 버튼")]
         [SerializeField] private Button startGameButton;
-        [Tooltip("Back Button")]
+        [Tooltip("뒤로가기 버튼")]
         [SerializeField] private Button backButton;
-        [Tooltip("In Game Scene Name")]
+        [Tooltip("인게임 씬 이름")]
         [SerializeField] private string inGameSceneName = "InGameScene";
-        [Tooltip("Start Scene Name")]
+        [Tooltip("시작 씬 이름")]
         [SerializeField] private string startSceneName = "StartScene";
 
         private int gameModeIndex = 1;
@@ -130,6 +130,11 @@ namespace YutArena.UI
         {
             BindButtons();
             RefreshUI();
+        }
+
+        private void Update()
+        {
+            RefreshStartAvailability();
         }
 
         private void BindButtons()
@@ -259,6 +264,11 @@ namespace YutArena.UI
 
             RefreshPlayerRows();
 
+            RefreshStartAvailability();
+        }
+
+        private void RefreshStartAvailability()
+        {
             string reason;
             bool canStart = CanStartGame(out reason);
             SetInteractable(startGameButton, canStart);
@@ -291,6 +301,14 @@ namespace YutArena.UI
 
         private bool CanStartGame(out string reason)
         {
+            int connectedPlayerCount = GetConnectedRequiredPlayerCount();
+
+            if (connectedPlayerCount < selectedPlayerCount)
+            {
+                reason = $"컨트롤러 연결 대기 중 ({connectedPlayerCount}/{selectedPlayerCount})";
+                return false;
+            }
+
             if (SelectedGameMode == GameMode.KillTheKing)
             {
                 reason = "Kill The King is coming soon.";
@@ -310,6 +328,21 @@ namespace YutArena.UI
 
             reason = string.Empty;
             return true;
+        }
+
+        private int GetConnectedRequiredPlayerCount()
+        {
+            int connectedCount = 0;
+
+            for (int playerIndex = 0; playerIndex < selectedPlayerCount; playerIndex++)
+            {
+                if (LocalPlayerJoinState.IsJoined(playerIndex))
+                {
+                    connectedCount++;
+                }
+            }
+
+            return connectedCount;
         }
 
         private bool IsValidTeamSelection(out string reason)

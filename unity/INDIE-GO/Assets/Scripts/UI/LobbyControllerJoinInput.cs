@@ -10,13 +10,13 @@ namespace YutArena.UI
         private const int FirstControllerPlayerIndex = 1;
 
         [Header("Player Texts")]
-        [Tooltip("Player Texts")]
+        [Tooltip("플레이어 텍스트")]
         [SerializeField] private TMP_Text[] playerTexts;
 
         [Header("Options")]
-        [Tooltip("Max Players")]
+        [Tooltip("최대 플레이어 수")]
         [SerializeField] private int maxPlayers = 4;
-        [Tooltip("Keyboard Player")]
+        [Tooltip("키보드 플레이어")]
         [SerializeField] private bool showKeyboardPlayerOnStart = true;
 
         private readonly Gamepad[] assignedGamepads = new Gamepad[4];
