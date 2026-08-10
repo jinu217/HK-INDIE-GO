@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f970a92b1fac54646ac5f6ae5cafab58, type: 3}
+  m_Name: CHAR_008_SO
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  char_Name: "\uD310\uD0C0\uC9C0 \uC5D8\uD504"
+  char_Desc: 
+  char_Icon: {fileID: 0}
+  passive_Name: "\uBC14\uB78C\uC758 \uAE38"
+  passive_Desc: "\uC774\uC804 \uD134\uC758 \uB9C8\uC9C0\uB9C9 \uC774\uB3D9 \uACBD\uB85C\uC5D0
+    \uBC14\uB78C\uC758 \uAE38 \uC0DD\uC131. \uC544\uAD70\uC774 \uBA48\uCD94\uBA74
+    1\uCE78 \uCD94\uAC00 \uC774\uB3D9"
+  active_Name: "\uC815\uB839\uC758 \uD654\uC0B4"
+  active_Desc: "5\uCE78 \uC774\uB0B4\uC758 \uC6D0\uD558\uB294 \uC801\uC5D0\uAC8C
+    \uC18D\uBC15 \uBD80\uC5EC"
+  cooldown_Turn: 3
+  cost_Sp: 0
+  visualModelPrefab: {fileID: 0}
