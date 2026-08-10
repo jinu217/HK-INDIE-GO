@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f970a92b1fac54646ac5f6ae5cafab58, type: 3}
   m_Name: CHAR_003_SO
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  char_ID: 3
   char_Name: "\uD64D\uAE38\uB3D9"
   char_Desc: "\uD64D\uAE38\uB3D9"
   char_Icon: {fileID: 0}
@@ -25,3 +26,4 @@ MonoBehaviour:
     \uC810\uC218 \uD68D\uB4DD \uBD88\uAC00\uB2A5)"
   cooldown_Turn: 5
   cost_Sp: 0
+  visualModelPrefab: {fileID: 0}
