@@ -1,4 +1,4 @@
-﻿using TMPro;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -10,225 +10,254 @@ namespace YutArena.UI
     {
         private const int MaxTeamSlotCount = 4;
 
+        private readonly GameMode[] gameModeOptions =
+        {
+            GameMode.Classic,
+            GameMode.Escape,
+            GameMode.KillTheKing
+        };
+
+        private readonly string[] gameModeLabels =
+        {
+            "Classic",
+            "Escape",
+            "Kill The King"
+        };
+
+        private readonly MapType[] mapOptions =
+        {
+            MapType.Random,
+            MapType.Basic,
+            MapType.Korean,
+            MapType.Grassland
+        };
+
+        private readonly string[] mapLabels =
+        {
+            "Random",
+            "Basic",
+            "Korean",
+            "Grassland"
+        };
+
+        private readonly string[] teamLabels =
+        {
+            "No Team",
+            "Blue",
+            "Yellow",
+            "Red",
+            "Green"
+        };
+
         [Header("Mode")]
-        [Tooltip("게임 모드 드롭다운")]
-        [SerializeField] private TMP_Dropdown gameModeDropdown;
+        [Tooltip("Game Mode Left")]
+        [SerializeField] private Button gameModeLeftButton;
+        [Tooltip("Game Mode Right")]
+        [SerializeField] private Button gameModeRightButton;
+        [Tooltip("Game Mode Value")]
+        [SerializeField] private TMP_Text gameModeValueText;
 
         [Header("Players")]
-        [Tooltip("플레이어 수 드롭다운")]
-        [SerializeField] private TMP_Dropdown playerCountDropdown;
-        [Tooltip("팀전 토글")]
-        [SerializeField] private Toggle teamModeToggle;
-        [Tooltip("팀 선택 드롭다운들")]
-        [SerializeField] private TMP_Dropdown[] playerTeamDropdowns;
-        [Tooltip("플레이어 줄들")]
+        [Tooltip("Player Count Left")]
+        [SerializeField] private Button playerCountLeftButton;
+        [Tooltip("Player Count Right")]
+        [SerializeField] private Button playerCountRightButton;
+        [Tooltip("Player Count Value")]
+        [SerializeField] private TMP_Text playerCountValueText;
+        [Tooltip("Team Mode Left")]
+        [SerializeField] private Button teamModeLeftButton;
+        [Tooltip("Team Mode Right")]
+        [SerializeField] private Button teamModeRightButton;
+        [Tooltip("Team Mode Value")]
+        [SerializeField] private TMP_Text teamModeValueText;
+        [Tooltip("Player Rows")]
         [SerializeField] private GameObject[] playerRows;
+        [Tooltip("Player Team Left Buttons")]
+        [SerializeField] private Button[] playerTeamLeftButtons;
+        [Tooltip("Player Team Right Buttons")]
+        [SerializeField] private Button[] playerTeamRightButtons;
+        [Tooltip("Player Team Value Texts")]
+        [SerializeField] private TMP_Text[] playerTeamValueTexts;
 
         [Header("Map")]
-        [Tooltip("맵 드롭다운")]
-        [SerializeField] private TMP_Dropdown mapDropdown;
+        [Tooltip("Map Left")]
+        [SerializeField] private Button mapLeftButton;
+        [Tooltip("Map Right")]
+        [SerializeField] private Button mapRightButton;
+        [Tooltip("Map Value")]
+        [SerializeField] private TMP_Text mapValueText;
 
         [Header("Turn")]
-        [Tooltip("턴 길이 슬라이더")]
-        [SerializeField] private Slider turnLengthSlider;
-        [Tooltip("턴 길이 텍스트")]
-        [SerializeField] private TMP_Text turnLengthText;
+        [Tooltip("Turn Length Left")]
+        [SerializeField] private Button turnLengthLeftButton;
+        [Tooltip("Turn Length Right")]
+        [SerializeField] private Button turnLengthRightButton;
+        [Tooltip("Turn Length Value")]
+        [SerializeField] private TMP_Text turnLengthValueText;
 
         [Header("Text")]
-        [Tooltip("시작 조건 텍스트")]
+        [Tooltip("Start Condition Text")]
         [SerializeField] private TMP_Text startConditionText;
 
         [Header("Navigation")]
-        [Tooltip("게임 시작 버튼")]
+        [Tooltip("Start Game Button")]
         [SerializeField] private Button startGameButton;
-        [Tooltip("뒤로 가기 버튼")]
+        [Tooltip("Back Button")]
         [SerializeField] private Button backButton;
-        [Tooltip("인게임 씬 이름")]
+        [Tooltip("In Game Scene Name")]
         [SerializeField] private string inGameSceneName = "InGameScene";
-        [Tooltip("시작 씬 이름")]
+        [Tooltip("Start Scene Name")]
         [SerializeField] private string startSceneName = "StartScene";
 
-        private GameMode selectedGameMode = GameMode.Escape;
+        private int gameModeIndex = 1;
         private int selectedPlayerCount = GameRuleDefine.DefaultPlayerCount;
-        private MapType selectedMapType = MapType.Random;
+        private int mapIndex;
+        private int turnLength = GameRuleDefine.DefaultMaxTurnCount;
+        private bool isTeamMode;
+        private int[] playerTeamIndexes = { 0, 0, 0, 0 };
+
+        private GameMode SelectedGameMode
+        {
+            get { return gameModeOptions[gameModeIndex]; }
+        }
+
+        private MapType SelectedMapType
+        {
+            get { return mapOptions[mapIndex]; }
+        }
 
         private void Awake()
         {
-            SetupGameModeDropdown();
-            SetupPlayerCountDropdown();
-            SetupMapDropdown();
-            SetupTurnLengthSlider();
-            SetupTeamControls();
             BindButtons();
             RefreshUI();
         }
 
-        private void SetupGameModeDropdown()
-        {
-            if (gameModeDropdown == null)
-            {
-                return;
-            }
-
-            gameModeDropdown.ClearOptions();
-            gameModeDropdown.options.Add(new TMP_Dropdown.OptionData("Classic"));
-            gameModeDropdown.options.Add(new TMP_Dropdown.OptionData("Escape"));
-            gameModeDropdown.options.Add(new TMP_Dropdown.OptionData("Kill The King"));
-            gameModeDropdown.value = 1;
-            gameModeDropdown.RefreshShownValue();
-            gameModeDropdown.onValueChanged.AddListener(SetGameModeByDropdown);
-        }
-
-        private void SetupPlayerCountDropdown()
-        {
-            if (playerCountDropdown == null)
-            {
-                return;
-            }
-
-            playerCountDropdown.ClearOptions();
-            playerCountDropdown.options.Add(new TMP_Dropdown.OptionData("2 Players"));
-            playerCountDropdown.options.Add(new TMP_Dropdown.OptionData("3 Players"));
-            playerCountDropdown.options.Add(new TMP_Dropdown.OptionData("4 Players"));
-            playerCountDropdown.value = GameRuleDefine.DefaultPlayerCount - GameRuleDefine.MinDemoPlayerCount;
-            playerCountDropdown.RefreshShownValue();
-            playerCountDropdown.onValueChanged.AddListener(SetPlayerCountByDropdown);
-        }
-
-        private void SetupMapDropdown()
-        {
-            if (mapDropdown == null)
-            {
-                return;
-            }
-
-            mapDropdown.ClearOptions();
-            mapDropdown.options.Add(new TMP_Dropdown.OptionData("Random"));
-            mapDropdown.options.Add(new TMP_Dropdown.OptionData("Basic"));
-            mapDropdown.options.Add(new TMP_Dropdown.OptionData("Korean"));
-            mapDropdown.options.Add(new TMP_Dropdown.OptionData("Grassland"));
-            mapDropdown.value = 0;
-            mapDropdown.RefreshShownValue();
-            mapDropdown.onValueChanged.AddListener(SetMapByDropdown);
-        }
-
-        private void SetupTurnLengthSlider()
-        {
-            if (turnLengthSlider == null)
-            {
-                return;
-            }
-
-            turnLengthSlider.wholeNumbers = true;
-            turnLengthSlider.minValue = GameRuleDefine.MinMaxTurnCount;
-            turnLengthSlider.maxValue = GameRuleDefine.MaxMaxTurnCount;
-            turnLengthSlider.value = GameRuleDefine.DefaultMaxTurnCount;
-            turnLengthSlider.onValueChanged.AddListener(delegate { RefreshUI(); });
-        }
-
-        private void SetupTeamControls()
-        {
-            if (teamModeToggle != null)
-            {
-                teamModeToggle.isOn = false;
-                teamModeToggle.onValueChanged.AddListener(delegate { RefreshUI(); });
-            }
-
-            if (playerTeamDropdowns == null)
-            {
-                return;
-            }
-
-            for (int i = 0; i < playerTeamDropdowns.Length; i++)
-            {
-                TMP_Dropdown dropdown = playerTeamDropdowns[i];
-
-                if (dropdown == null)
-                {
-                    continue;
-                }
-
-                dropdown.ClearOptions();
-                dropdown.options.Add(new TMP_Dropdown.OptionData("No Team"));
-                dropdown.options.Add(new TMP_Dropdown.OptionData("Blue"));
-                dropdown.options.Add(new TMP_Dropdown.OptionData("Yellow"));
-                dropdown.options.Add(new TMP_Dropdown.OptionData("Red"));
-                dropdown.options.Add(new TMP_Dropdown.OptionData("Green"));
-                dropdown.value = 0;
-                dropdown.RefreshShownValue();
-                dropdown.onValueChanged.AddListener(delegate { RefreshUI(); });
-            }
-        }
-
         private void BindButtons()
         {
+            AddClick(gameModeLeftButton, PreviousGameMode);
+            AddClick(gameModeRightButton, NextGameMode);
+            AddClick(playerCountLeftButton, PreviousPlayerCount);
+            AddClick(playerCountRightButton, NextPlayerCount);
+            AddClick(teamModeLeftButton, ToggleTeamMode);
+            AddClick(teamModeRightButton, ToggleTeamMode);
+            AddClick(mapLeftButton, PreviousMap);
+            AddClick(mapRightButton, NextMap);
+            AddClick(turnLengthLeftButton, DecreaseTurnLength);
+            AddClick(turnLengthRightButton, IncreaseTurnLength);
             AddClick(startGameButton, StartGame);
             AddClick(backButton, BackToStartScene);
+
+            BindTeamButtons(playerTeamLeftButtons, -1);
+            BindTeamButtons(playerTeamRightButtons, 1);
         }
 
-        private void SetGameModeByDropdown(int index)
+        private void BindTeamButtons(Button[] buttons, int direction)
         {
-            switch (index)
+            if (buttons == null)
             {
-                case 0:
-                    selectedGameMode = GameMode.Classic;
-                    break;
-                case 1:
-                    selectedGameMode = GameMode.Escape;
-                    break;
-                case 2:
-                    selectedGameMode = GameMode.KillTheKing;
-                    break;
+                return;
             }
 
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                int playerIndex = i;
+                AddClick(buttons[i], delegate { ChangePlayerTeam(playerIndex, direction); });
+            }
+        }
+
+        private void PreviousGameMode()
+        {
+            gameModeIndex = WrapIndex(gameModeIndex - 1, gameModeOptions.Length);
             RefreshUI();
         }
 
-        private void SetPlayerCountByDropdown(int index)
+        private void NextGameMode()
         {
-            selectedPlayerCount = GameRuleDefine.MinDemoPlayerCount + index;
+            gameModeIndex = WrapIndex(gameModeIndex + 1, gameModeOptions.Length);
             RefreshUI();
         }
 
-        private void SetMapByDropdown(int index)
+        private void PreviousPlayerCount()
         {
-            switch (index)
+            selectedPlayerCount = Mathf.Max(GameRuleDefine.MinDemoPlayerCount, selectedPlayerCount - 1);
+            RefreshUI();
+        }
+
+        private void NextPlayerCount()
+        {
+            selectedPlayerCount = Mathf.Min(GameRuleDefine.MaxDemoPlayerCount, selectedPlayerCount + 1);
+            RefreshUI();
+        }
+
+        private void ToggleTeamMode()
+        {
+            if (!CanUseTeamMode())
             {
-                case 0:
-                    selectedMapType = MapType.Random;
-                    break;
-                case 1:
-                    selectedMapType = MapType.Basic;
-                    break;
-                case 2:
-                    selectedMapType = MapType.Korean;
-                    break;
-                case 3:
-                    selectedMapType = MapType.Grassland;
-                    break;
+                isTeamMode = false;
+                RefreshUI();
+                return;
             }
 
+            isTeamMode = !isTeamMode;
+            RefreshUI();
+        }
+
+        private void PreviousMap()
+        {
+            mapIndex = WrapIndex(mapIndex - 1, mapOptions.Length);
+            RefreshUI();
+        }
+
+        private void NextMap()
+        {
+            mapIndex = WrapIndex(mapIndex + 1, mapOptions.Length);
+            RefreshUI();
+        }
+
+        private void DecreaseTurnLength()
+        {
+            turnLength = Mathf.Max(GameRuleDefine.MinMaxTurnCount, turnLength - 1);
+            RefreshUI();
+        }
+
+        private void IncreaseTurnLength()
+        {
+            turnLength = Mathf.Min(GameRuleDefine.MaxMaxTurnCount, turnLength + 1);
+            RefreshUI();
+        }
+
+        private void ChangePlayerTeam(int playerIndex, int direction)
+        {
+            if (!isTeamMode || playerIndex < 0 || playerIndex >= playerTeamIndexes.Length)
+            {
+                return;
+            }
+
+            playerTeamIndexes[playerIndex] = WrapIndex(playerTeamIndexes[playerIndex] + direction, teamLabels.Length);
             RefreshUI();
         }
 
         private void RefreshUI()
         {
-            bool isTeamMode = IsTeamModeSelected();
-            bool canUseTeamMode = selectedPlayerCount == GameRuleDefine.DefaultPlayerCount;
-
-            if (teamModeToggle != null)
+            if (!CanUseTeamMode())
             {
-                teamModeToggle.interactable = canUseTeamMode;
-
-                if (!canUseTeamMode && teamModeToggle.isOn)
-                {
-                    teamModeToggle.isOn = false;
-                    isTeamMode = false;
-                }
+                isTeamMode = false;
             }
 
-            RefreshPlayerRows(isTeamMode);
-            SetText(turnLengthText, "Turn Length: " + GetTurnLength() + " Turns");
+            SetText(gameModeValueText, gameModeLabels[gameModeIndex]);
+            SetText(playerCountValueText, selectedPlayerCount + " Players");
+            SetText(teamModeValueText, isTeamMode ? "Team" : "Solo");
+            SetText(mapValueText, mapLabels[mapIndex]);
+            SetText(turnLengthValueText, turnLength + " Turns");
+
+            SetInteractable(playerCountLeftButton, selectedPlayerCount > GameRuleDefine.MinDemoPlayerCount);
+            SetInteractable(playerCountRightButton, selectedPlayerCount < GameRuleDefine.MaxDemoPlayerCount);
+            SetInteractable(teamModeLeftButton, CanUseTeamMode());
+            SetInteractable(teamModeRightButton, CanUseTeamMode());
+            SetInteractable(turnLengthLeftButton, turnLength > GameRuleDefine.MinMaxTurnCount);
+            SetInteractable(turnLengthRightButton, turnLength < GameRuleDefine.MaxMaxTurnCount);
+
+            RefreshPlayerRows();
 
             string reason;
             bool canStart = CanStartGame(out reason);
@@ -236,29 +265,33 @@ namespace YutArena.UI
             SetText(startConditionText, canStart ? "Ready" : reason);
         }
 
-        private void RefreshPlayerRows(bool isTeamMode)
+        private void RefreshPlayerRows()
         {
             for (int i = 0; i < GetArrayLength(playerRows); i++)
             {
                 SetActive(playerRows[i], i < selectedPlayerCount);
             }
 
-            for (int i = 0; i < GetArrayLength(playerTeamDropdowns); i++)
+            for (int i = 0; i < GetArrayLength(playerTeamValueTexts); i++)
             {
-                TMP_Dropdown dropdown = playerTeamDropdowns[i];
+                SetText(playerTeamValueTexts[i], GetTeamLabel(i));
+                SetActive(playerTeamValueTexts[i] != null ? playerTeamValueTexts[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
+            }
 
-                if (dropdown == null)
-                {
-                    continue;
-                }
+            for (int i = 0; i < GetArrayLength(playerTeamLeftButtons); i++)
+            {
+                SetActive(playerTeamLeftButtons[i] != null ? playerTeamLeftButtons[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
+            }
 
-                dropdown.gameObject.SetActive(i < selectedPlayerCount && isTeamMode);
+            for (int i = 0; i < GetArrayLength(playerTeamRightButtons); i++)
+            {
+                SetActive(playerTeamRightButtons[i] != null ? playerTeamRightButtons[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
             }
         }
 
         private bool CanStartGame(out string reason)
         {
-            if (selectedGameMode == GameMode.KillTheKing)
+            if (SelectedGameMode == GameMode.KillTheKing)
             {
                 reason = "Kill The King is coming soon.";
                 return false;
@@ -270,7 +303,7 @@ namespace YutArena.UI
                 return false;
             }
 
-            if (IsTeamModeSelected() && !IsValidTeamSelection(out reason))
+            if (isTeamMode && !IsValidTeamSelection(out reason))
             {
                 return false;
             }
@@ -281,7 +314,7 @@ namespace YutArena.UI
 
         private bool IsValidTeamSelection(out string reason)
         {
-            if (selectedPlayerCount != GameRuleDefine.DefaultPlayerCount)
+            if (!CanUseTeamMode())
             {
                 reason = "Team mode is only available with 4 players for now.";
                 return false;
@@ -291,7 +324,7 @@ namespace YutArena.UI
 
             for (int i = 0; i < selectedPlayerCount; i++)
             {
-                int teamIndex = GetTeamDropdownValue(i) - 1;
+                int teamIndex = playerTeamIndexes[i] - 1;
 
                 if (teamIndex < 0)
                 {
@@ -378,12 +411,12 @@ namespace YutArena.UI
         {
             return new RoomSettingsData
             {
-                gameMode = (int)selectedGameMode,
-                mapType = (int)selectedMapType,
+                gameMode = (int)SelectedGameMode,
+                mapType = (int)SelectedMapType,
                 matchComposition = (int)GetMatchComposition(),
                 playerCount = selectedPlayerCount,
-                maxTurnCount = GetTurnLength(),
-                isTeamMode = IsTeamModeSelected(),
+                maxTurnCount = turnLength,
+                isTeamMode = isTeamMode,
                 playerTeams = CreatePlayerTeamData()
             };
         }
@@ -394,7 +427,7 @@ namespace YutArena.UI
 
             for (int i = 0; i < teams.Length; i++)
             {
-                teams[i] = IsTeamModeSelected() ? GetTeamDropdownValue(i) : 0;
+                teams[i] = isTeamMode ? playerTeamIndexes[i] : 0;
             }
 
             return teams;
@@ -402,7 +435,7 @@ namespace YutArena.UI
 
         private MatchComposition GetMatchComposition()
         {
-            if (IsTeamModeSelected())
+            if (isTeamMode)
             {
                 return MatchComposition.TwoVsTwo;
             }
@@ -431,24 +464,39 @@ namespace YutArena.UI
             SceneManager.LoadScene(startSceneName);
         }
 
-        private bool IsTeamModeSelected()
+        private bool CanUseTeamMode()
         {
-            return teamModeToggle != null && teamModeToggle.isOn;
+            return selectedPlayerCount == GameRuleDefine.DefaultPlayerCount;
         }
 
-        private int GetTurnLength()
+        private string GetTeamLabel(int playerIndex)
         {
-            return turnLengthSlider != null ? Mathf.RoundToInt(turnLengthSlider.value) : GameRuleDefine.DefaultMaxTurnCount;
+            if (playerIndex < 0 || playerIndex >= playerTeamIndexes.Length)
+            {
+                return teamLabels[0];
+            }
+
+            return teamLabels[playerTeamIndexes[playerIndex]];
         }
 
-        private int GetTeamDropdownValue(int index)
+        private static int WrapIndex(int index, int length)
         {
-            if (playerTeamDropdowns == null || index < 0 || index >= playerTeamDropdowns.Length || playerTeamDropdowns[index] == null)
+            if (length <= 0)
             {
                 return 0;
             }
 
-            return playerTeamDropdowns[index].value;
+            if (index < 0)
+            {
+                return length - 1;
+            }
+
+            if (index >= length)
+            {
+                return 0;
+            }
+
+            return index;
         }
 
         private static int GetArrayLength<T>(T[] array)
