@@ -7,9 +7,14 @@ using YutArena.InGame;
 /// </summary>
 public sealed class PlayerController : MonoBehaviour
 {
+    [Header("Job Piece Prefab")]
+    [Tooltip("This player's selected job prefab. One instance is created for each piece.")]
+    [SerializeField] private GameObject jobPiecePrefab;
+
     public int PlayerId => runtimeData != null ? runtimeData.PlayerId : -1;
     public bool IsInitialized { get; private set; }
     public PlayerRuntimeData RuntimeData => runtimeData;
+    public GameObject JobPiecePrefab => jobPiecePrefab;
 
     private PlayerRuntimeData runtimeData;
 
