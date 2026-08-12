@@ -269,7 +269,7 @@ namespace YutArena.Managers
 
             if (isCaptureBonusThrow)
                 pendingCaptureThrows--;
-            else if (isSkillBonusThrow) 
+            else if (isSkillBonusThrow)
                 pendingSkillThrows--;
 
             var throwData = new YutThrowData
@@ -336,11 +336,26 @@ namespace YutArena.Managers
 
             int moveCount = YutResultRule.GetMoveCount(chosenResult);
 
+            // ===================================================================
+            // [신규] 뒷도(BackDo)를 "실제로 쓰려는 이 시점"에 확인함 (던진 시점이 아님)
+            // "모→뒷도"처럼 먼저 다른 결과로 말을 내보낸 뒤에 뒷도를 쓰는 경우가 있어서,
+            // 던진 그 순간이 아니라 여기(실제 이동 시도하는 시점)에서 확인해야
+            // "이미 나간 말이 있으면 정상 후진 처리"까지 정확히 반영됨
+            // 규칙: 이 플레이어 말이 보드 위에(State == InBoard) 하나도 없으면(전부 대기중)
+            //       뒷도를 쓸 수 없으므로 바로 턴 종료
+            // ===================================================================
+            if (chosenResult == YutResult.BackDo && !HasAnyPieceInBoard(playerId))
+            {
+                Debug.LogWarning("뒷도인데 보드 위에 말이 하나도 없음 -> 턴 종료");
+                EndTurn();
+                return;
+            }
+
             // 완주 개수는 "이동 전/후 완주한 말 개수 차이"로 계산 (업기로 여러 마리가 한꺼번에 골인할 수 있어서)
             int finishedCountBefore = CountFinishedPieces(playerId);
 
             SetPhase(TurnPhase.MovePiece);
-          
+
             //  pieceMovementManager.TryMovePiece()가 호출 즉시 이동/잡기/업기/완주를 다 처리함
             bool moveSucceeded = pieceMovementManager.TryMovePiece(playerId, pieceId, moveCount);
             if (!moveSucceeded)
@@ -348,7 +363,7 @@ namespace YutArena.Managers
                 Debug.LogWarning("영서 쪽 이동 처리 실패: player=" + playerId + " piece=" + pieceId);
             }
 
-      
+
             SetPhase(TurnPhase.ResolveTile); // 도착 칸 처리 단계로 표시 (특수효과는 아직 미구현)
             SetPhase(TurnPhase.ResolveBoardRule); // 잡기/업기/완주 결과 처리 단계로 표시
 
@@ -397,6 +412,22 @@ namespace YutArena.Managers
             foreach (var piece in player.RuntimeData.Pieces)
                 if (piece.IsFinished) count++;
             return count;
+        }
+
+        // ===================================================================
+        // [신규] 이 플레이어 말 중 하나라도 보드 위에(State == InBoard) 있는지 확인하는 함수
+        // 뒷도(BackDo)를 쓸 수 있는지 판단하는 용도로 씀 - 전부 대기중(Waiting)이면
+        // 뒤로 물러날 곳 자체가 없다는 뜻이라, 이 경우엔 뒷도를 쓸 수 없다고 판단함
+        // ===================================================================
+        private bool HasAnyPieceInBoard(int playerId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                if (piece.State == PieceState.InBoard)
+                    return true;
+            }
+            return false;
         }
 
         //  이 말이 지금 이동 가능한 상태인지 (Stun이면 불가, 나머지는 가능)
