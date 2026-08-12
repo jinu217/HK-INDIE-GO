@@ -22,4 +22,5 @@ MonoBehaviour:
   active_Desc: "3턴마다 사용 가능, 윷을 던진 후 한 번 더 던질 기회 부여 (추가 던지기에 영향 없음)"
   passive_Status: 0
   active_Status: 0
+  gameplayPrefab: {fileID: 7582462517120778866, guid: 423b66fab11796146a67ba855bd8fa10, type: 3}
   visualModelPrefab: {fileID: 0}

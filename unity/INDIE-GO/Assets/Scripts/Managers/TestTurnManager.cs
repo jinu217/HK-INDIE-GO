@@ -5,6 +5,7 @@ using UnityEngine;
 using YutArena.Common;
 using YutArena.Managers.GameProgress;
 using YutArena.InGame;
+using YutArena.GameCore;
 
 namespace YutArena.Managers
 {
@@ -285,8 +286,17 @@ namespace YutArena.Managers
 
             SetPhase(TurnPhase.CheckExtraThrow);
 
-            if (YutResultRule.IsExtraThrowResult(result) &&
-                CurrentTurn.extraThrowByYutMoCount < GameRuleDefine.MaxYutMoExtraThrowCount)
+            bool grantsYutExtraThrow = CharacterSkillRegistry.ShouldGrantExtraThrow(
+                (int)CurrentTurn.currentPlayer,
+                result,
+                YutResultRule.IsExtraThrowResult(result));
+
+            int extraThrowLimit = CharacterSkillRegistry.GetYutMoExtraThrowLimit(
+                (int)CurrentTurn.currentPlayer,
+                GameRuleDefine.MaxYutMoExtraThrowCount);
+
+            if (grantsYutExtraThrow &&
+                CurrentTurn.extraThrowByYutMoCount < extraThrowLimit)
             {
                 CurrentTurn.extraThrowByYutMoCount++;
                 SetPhase(TurnPhase.WaitThrow);
@@ -337,15 +347,23 @@ namespace YutArena.Managers
             int moveCount = YutResultRule.GetMoveCount(chosenResult);
 
             // 완주 개수는 "이동 전/후 완주한 말 개수 차이"로 계산 (업기로 여러 마리가 한꺼번에 골인할 수 있어서)
-            int finishedCountBefore = CountFinishedPieces(playerId);
-
             SetPhase(TurnPhase.MovePiece);
           
             //  pieceMovementManager.TryMovePiece()가 호출 즉시 이동/잡기/업기/완주를 다 처리함
-            bool moveSucceeded = pieceMovementManager.TryMovePiece(playerId, pieceId, moveCount);
+            bool moveSucceeded = pieceMovementManager.TryMovePiece(
+                playerId,
+                pieceId,
+                moveCount,
+                out PieceMoveResult moveResult);
             if (!moveSucceeded)
             {
+                pendingResults.Add(matched);
+                OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+                SetPhase(TurnPhase.WaitAction);
+                return;
+#if false // Legacy mojibake log retained only to avoid rewriting the merged source encoding.
                 Debug.LogWarning("영서 쪽 이동 처리 실패: player=" + playerId + " piece=" + pieceId);
+            #endif
             }
 
       
@@ -353,8 +371,7 @@ namespace YutArena.Managers
             SetPhase(TurnPhase.ResolveBoardRule); // 잡기/업기/완주 결과 처리 단계로 표시
 
             // 완주했는지 확인은 여기서 안 하고, WinConditionManager한테 결과를 넘겨서 대신 확인시킴
-            int finishedCountAfter = CountFinishedPieces(playerId);
-            int newlyFinishedCount = finishedCountAfter - finishedCountBefore;
+            int newlyFinishedCount = moveResult.FinishedPieceCount;
             bool isFinished = newlyFinishedCount > 0;
 
             winConditionManager.OnPieceMoveResolved(
@@ -364,7 +381,7 @@ namespace YutArena.Managers
             //  상대 말들의 CC(Kill/Retire)를
             // 직접 훑어서 확인함. 윷/모(4~5칸)로 잡으면 Retire(추가턴 없음),
             // 도~걸/뒷도(1~3칸,-1칸)로 잡으면 Kill(추가턴 있음)
-            bool gotKillCapture = ConsumeCaptureResults(playerId);
+            bool gotKillCapture = moveResult.GrantsCaptureExtraThrow;
             if (gotKillCapture) // 이번 이동으로 상대 말을 Kill로 잡았으면
             {
                 pendingCaptureThrows++;             // 나중에 쓸 보너스 던지기 개수 +1 (지금 바로 던지는 거 아님)
@@ -390,15 +407,6 @@ namespace YutArena.Managers
         }
 
         // 이 플레이어가 지금까지 완주시킨 말이 몇 개인지 셈 (State == Goal)
-        private int CountFinishedPieces(int playerId)
-        {
-            if (!playerManager.TryGetPlayer(playerId, out var player)) return 0;
-            int count = 0;
-            foreach (var piece in player.RuntimeData.Pieces)
-                if (piece.IsFinished) count++;
-            return count;
-        }
-
         //  이 말이 지금 이동 가능한 상태인지 (Stun이면 불가, 나머지는 가능)
         private bool CanPieceMove(int playerId, int pieceId)
         {
@@ -410,29 +418,6 @@ namespace YutArena.Managers
         // 방금 이동으로 상대 말이 잡혔는지(Kill/Retire) 전체 상대 플레이어를 훑어서 확인.
         // 발견하면 그 즉시 CC를 지워서(ClearCc) "소비 완료" 처리함 (다음에 또 잡힌 걸로 착각 안 하게).
         // 반환값: Kill(추가턴 있는 잡기)이 하나라도 있었으면 true
-        private bool ConsumeCaptureResults(int movingPlayerId)
-        {
-            bool gotKill = false;
-            foreach (var otherPlayer in playerManager.ActivePlayers)
-            {
-                if (otherPlayer.PlayerId == movingPlayerId) continue;
-
-                foreach (var piece in otherPlayer.RuntimeData.Pieces)
-                {
-                    if (piece.CurrentCc == CcDefine.Kill)
-                    {
-                        gotKill = true;
-                        piece.ClearCc();
-                    }
-                    else if (piece.CurrentCc == CcDefine.Retire)
-                    {
-                        piece.ClearCc();
-                    }
-                }
-            }
-            return gotKill;
-        }
-
         private void EndTurn()
         {
             StopPhaseTimer(); // 턴이 진짜로 끝나는 지점이니, 혹시 남아있는 타이머가 있으면 정리

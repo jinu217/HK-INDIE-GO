@@ -18,6 +18,8 @@ namespace YutArena.UI
         [SerializeField] private int maxPlayers = 4;
         [Tooltip("키보드 플레이어")]
         [SerializeField] private bool showKeyboardPlayerOnStart = true;
+        [Tooltip("Allow all local players to share the keyboard in this turn-based game.")]
+        [SerializeField] private bool allowKeyboardHotseat = true;
 
         private readonly Gamepad[] assignedGamepads = new Gamepad[4];
         private readonly bool[] connectedPlayers = new bool[4];
@@ -26,7 +28,9 @@ namespace YutArena.UI
         {
             maxPlayers = Mathf.Clamp(maxPlayers, 2, connectedPlayers.Length);
 
-            connectedPlayers[0] = showKeyboardPlayerOnStart;
+            for (int playerIndex = 0; playerIndex < maxPlayers; playerIndex++)
+                connectedPlayers[playerIndex] = allowKeyboardHotseat ||
+                                                (playerIndex == 0 && showKeyboardPlayerOnStart);
             SaveJoinState();
             RefreshPlayerTexts();
         }
@@ -58,7 +62,7 @@ namespace YutArena.UI
         {
             for (int playerIndex = FirstControllerPlayerIndex; playerIndex < maxPlayers; playerIndex++)
             {
-                if (connectedPlayers[playerIndex])
+                if (assignedGamepads[playerIndex] != null)
                 {
                     continue;
                 }
@@ -81,7 +85,7 @@ namespace YutArena.UI
                 }
 
                 assignedGamepads[playerIndex] = null;
-                connectedPlayers[playerIndex] = false;
+                connectedPlayers[playerIndex] = allowKeyboardHotseat;
             }
         }
 

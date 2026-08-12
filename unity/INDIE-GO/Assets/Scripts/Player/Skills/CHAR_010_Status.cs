@@ -29,7 +29,7 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("PieceMovementManager is not available.");
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Tactical Retreat requires a piece on the board.");
-        if (!Movement.TryMovePiece(PlayerId, PieceId, -1))
+        if (!Movement.TryMovePiece(PlayerId, PieceId, -1, out _, true))
             return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
 
         return CharacterActiveResult.Success(

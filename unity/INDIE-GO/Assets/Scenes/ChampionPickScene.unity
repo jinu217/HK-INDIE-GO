@@ -157,6 +157,7 @@ MonoBehaviour:
   remainingTimeText: {fileID: 422701570}
   selectedCountText: {fileID: 78808906}
   startNowButton: {fileID: 951118324}
+  showRuntimeSelectionUI: 1
   cardViews:
   - {fileID: 1402241593}
   - {fileID: 1268827952}

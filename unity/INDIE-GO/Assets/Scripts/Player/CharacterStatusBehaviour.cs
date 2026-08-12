@@ -112,6 +112,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         return defaultValue;
     }
 
+    public virtual int YutMoExtraThrowLimitBonus => 0;
+
     public virtual CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
         return TryConsumeGrantedProtection()

@@ -78,10 +78,10 @@ public static class CharacterSkillRegistry
         int playerId,
         (YutResult, float)[] currentTable)
     {
-        CharacterStatusBehaviour behaviour = FindFirstForPlayer(playerId);
-        return behaviour != null
-            ? behaviour.ModifyYutProbability(currentTable)
-            : currentTable;
+        (YutResult, float)[] result = currentTable;
+        foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
+            result = behaviour.ModifyYutProbability(result);
+        return result;
     }
 
     public static bool ShouldGrantExtraThrow(
@@ -89,10 +89,18 @@ public static class CharacterSkillRegistry
         YutResult result,
         bool defaultValue)
     {
-        CharacterStatusBehaviour behaviour = FindFirstForPlayer(playerId);
-        return behaviour != null
-            ? behaviour.ShouldGrantExtraThrow(result, defaultValue)
-            : defaultValue;
+        bool resolved = defaultValue;
+        foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
+            resolved = behaviour.ShouldGrantExtraThrow(result, resolved);
+        return resolved;
+    }
+
+    public static int GetYutMoExtraThrowLimit(int playerId, int baseLimit)
+    {
+        int bonus = 0;
+        foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
+            bonus = Math.Max(bonus, behaviour.YutMoExtraThrowLimitBonus);
+        return Math.Max(0, baseLimit + bonus);
     }
 
     public static CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
@@ -205,17 +213,6 @@ public static class CharacterSkillRegistry
 
         throw new InvalidOperationException(
             $"Player {owner.PlayerId} already has a character component for every piece.");
-    }
-
-    private static CharacterStatusBehaviour FindFirstForPlayer(int playerId)
-    {
-        foreach (KeyValuePair<(int playerId, int pieceId), CharacterStatusBehaviour> entry in Behaviours)
-        {
-            if (entry.Key.playerId == playerId && entry.Value != null)
-                return entry.Value;
-        }
-
-        return null;
     }
 
     private static List<CharacterStatusBehaviour> SnapshotForPlayer(int playerId)

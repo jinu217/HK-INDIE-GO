@@ -54,6 +54,7 @@ namespace YutArena.Managers
                         Debug.LogWarning("TestWinConditionManager: modeRuleSources에 IGameModeRule을 구현하지 않은 항목이 있음 - " + source);
                 }
             }
+            EnsureBuiltInModeRules();
             // 참가자 전체(1~playerCount)를 훑으면서, 실제로 존재하는 팀들을 다 모아서 activeTeams에 넣음
             // (예: 1vs1vs1vs1이면 팀 4개, 2vs2면 팀 2개)
             activeTeams.Clear();
@@ -63,6 +64,21 @@ namespace YutArena.Managers
                 if (team != TeamSlot.None)
                     activeTeams.Add(team);
             }
+        }
+
+        private void EnsureBuiltInModeRules()
+        {
+            if (!modeRules.ContainsKey(GameMode.Classic))
+                modeRules[GameMode.Classic] = GetComponent<ClassicModeRule>() ??
+                    gameObject.AddComponent<ClassicModeRule>();
+            if (!modeRules.ContainsKey(GameMode.Escape))
+                modeRules[GameMode.Escape] = GetComponent<EscapeModeRule>() ??
+                    gameObject.AddComponent<EscapeModeRule>();
+
+            // KillTheKing has no rule implementation in this branch. It is
+            // intentionally rejected instead of silently declaring a winner.
+            if (settings != null && settings.gameMode == GameMode.KillTheKing)
+                Debug.LogError("KillTheKing mode is not implemented. Select Classic or Escape.", this);
         }
         // TurnManager가 말 이동을 처리한 직후마다 호출해주는 함수.
         // "매 득점 시 반드시 실행", 이동이 일어날 때마다 무조건 호출됨

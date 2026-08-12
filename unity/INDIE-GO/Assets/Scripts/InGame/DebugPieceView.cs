@@ -31,7 +31,7 @@ namespace YutArena.InGame
             PieceId = pieceId;
             // Preserve a job prefab's authored appearance; only the primitive fallback is player-tinted.
             baseColor = usesFallbackVisual ? color : Color.white;
-            spriteRenderer.color = color;
+            spriteRenderer.color = baseColor;
             gameObject.name = $"Piece_P{playerId}_{pieceId + 1}";
         }
 

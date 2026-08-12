@@ -34,7 +34,7 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 
         if (Movement == null) return;
         windTriggeredPieces.Add(record.PieceId);
-        Movement.TryMovePiece(record.PlayerId, record.PieceId, 1);
+        Movement.TryMovePiece(record.PlayerId, record.PieceId, 1, out _, true);
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -45,7 +45,8 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("Spirit Arrow requires an enemy target.");
         if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out CharacterPieceReference target))
             return CharacterActiveResult.Failure("The selected target does not exist.");
-        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+        if (Players.AreAllies(target.Player.PlayerId, PlayerId) ||
+            target.Piece.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Spirit Arrow can target only an enemy on the board.");
         if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
             return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");

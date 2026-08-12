@@ -43,6 +43,8 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Issen requires a piece on the board.");
+        if (Movement == null)
+            return CharacterActiveResult.Failure("PieceMovementManager is not available.");
 
         List<BoardTileId> path = CharacterBoardUtility.GetForwardPath(caster, 3);
         foreach (BoardTileId tile in path)
@@ -51,29 +53,16 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
             {
                 if (enemy.Piece.CurrentTileId == tile &&
                     CharacterSkillRegistry.IsTargetable(enemy.Player.PlayerId, enemy.Piece.PieceId))
-                    CharacterBoardUtility.Retire(enemy.Piece, false);
+                    Movement.TryForceRetire(enemy.Player.PlayerId, enemy.Piece.PieceId);
             }
         }
 
-        MoveStackAlongPath(caster, path);
+        if (!Movement.TryMovePiece(PlayerId, PieceId, 3, out _, true))
+            return CharacterActiveResult.Failure("Issen movement could not be resolved.");
+
         return CharacterActiveResult.Success(
             "Moved three spaces and retired enemies along the path.",
             suppressExtraThrow: true);
-    }
-
-    private void MoveStackAlongPath(
-        PlayerRuntimeData.PieceRuntimeData caster,
-        IReadOnlyList<BoardTileId> path)
-    {
-        foreach (BoardTileId tile in path)
-        {
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
-            {
-                if (piece.PieceId == caster.PieceId ||
-                    (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-                    piece.MoveTo(tile);
-            }
-        }
     }
 
     private static void AddWeight(

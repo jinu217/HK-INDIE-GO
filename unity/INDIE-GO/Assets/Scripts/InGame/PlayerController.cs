@@ -1,5 +1,6 @@
 using UnityEngine;
 using YutArena.InGame;
+using System.Collections.Generic;
 
 /// <summary>
 /// 한 PlayerSlot의 진입점이다. 슬롯마다 같은 컴포넌트를 사용하며,
@@ -15,8 +16,17 @@ public sealed class PlayerController : MonoBehaviour
     public bool IsInitialized { get; private set; }
     public PlayerRuntimeData RuntimeData => runtimeData;
     public GameObject JobPiecePrefab => jobPiecePrefab;
+    public IReadOnlyList<GameObject> SpawnedPieceObjects => spawnedPieceObjects;
 
     private PlayerRuntimeData runtimeData;
+    private readonly List<GameObject> spawnedPieceObjects = new List<GameObject>();
+
+    public void SetJobPiecePrefab(GameObject prefab)
+    {
+        if (IsInitialized)
+            throw new System.InvalidOperationException("Set the job prefab before player initialization.");
+        jobPiecePrefab = prefab;
+    }
 
     public void Initialize(int playerId, string playerName, int pieceCount)
     {
@@ -27,6 +37,7 @@ public sealed class PlayerController : MonoBehaviour
 
         runtimeData = new PlayerRuntimeData(playerId, playerName, pieceCount);
         IsInitialized = true;
+        SpawnPieceObjects(pieceCount);
     }
 
     public bool TryGetPieceData(int pieceId, out PlayerRuntimeData.PieceRuntimeData pieceData)
@@ -56,7 +67,37 @@ public sealed class PlayerController : MonoBehaviour
     /// </summary>
     public void ResetPlayer()
     {
+        ClearPieceObjects();
         runtimeData = null;
         IsInitialized = false;
+    }
+
+    private void SpawnPieceObjects(int pieceCount)
+    {
+        ClearPieceObjects();
+        if (jobPiecePrefab == null)
+        {
+            Debug.LogError($"{name}: no gameplay prefab is assigned.", this);
+            return;
+        }
+
+        for (int pieceId = 0; pieceId < pieceCount; pieceId++)
+        {
+            GameObject instance = Instantiate(jobPiecePrefab, transform);
+            instance.name = $"{jobPiecePrefab.name}_Piece_{pieceId + 1}";
+            instance.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            spawnedPieceObjects.Add(instance);
+        }
+    }
+
+    private void ClearPieceObjects()
+    {
+        foreach (GameObject instance in spawnedPieceObjects)
+        {
+            if (instance == null) continue;
+            instance.SetActive(false);
+            Destroy(instance);
+        }
+        spawnedPieceObjects.Clear();
     }
 }

@@ -23,4 +23,5 @@ MonoBehaviour:
   active_Desc: "1\uCE78 \uD6C4\uC9C4 \uC774\uB3D9 (\uCD94\uAC00 \uD134 \uBD88\uAC00)"
   passive_Status: 0
   active_Status: 0
+  gameplayPrefab: {fileID: 8292563948524017160, guid: 35ba6b69b05f36247a214d0a77eebb52, type: 3}
   visualModelPrefab: {fileID: 0}

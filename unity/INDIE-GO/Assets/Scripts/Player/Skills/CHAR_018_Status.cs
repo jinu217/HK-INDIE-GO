@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using YutArena.Common;
 using YutArena.InGame;
 
 public sealed class CHAR_018_Status : CharacterStatusBehaviour
@@ -46,24 +47,34 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
     {
         if (!request.HasTarget)
             return CharacterActiveResult.Failure("Assassination requires an enemy target.");
+        if (Movement == null)
+            return CharacterActiveResult.Failure("PieceMovementManager is not available.");
         if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out CharacterPieceReference target))
             return CharacterActiveResult.Failure("The selected target does not exist.");
-        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+        if (Players.AreAllies(target.Player.PlayerId, PlayerId) ||
+            target.Piece.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Assassination can target only an enemy on the board.");
         if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
             return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
 
-        caster.MoveTo(target.Piece.CurrentTileId);
-        CharacterBoardUtility.Retire(target.Piece, true);
+        BoardTileId from = caster.CurrentTileId;
+        BoardTileId destination = target.Piece.CurrentTileId;
+        if (!Movement.TryCapturePiece(
+                PlayerId,
+                PieceId,
+                target.Player.PlayerId,
+                target.Piece.PieceId,
+                true,
+                out _))
+            return CharacterActiveResult.Failure("The assassination was prevented by the target.");
 
-        var capture = new CharacterCaptureRequest(
+        caster.MoveTo(destination);
+        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(
             PlayerId,
             PieceId,
-            target.Player.PlayerId,
-            target.Piece.PieceId,
-            1,
-            true);
-        OnCaptureCompleted(capture);
+            from,
+            destination,
+            new[] { destination }));
 
         return CharacterActiveResult.Success("Moved to and captured the selected enemy.");
     }

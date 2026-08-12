@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using YutArena.Common;
 using YutArena.InGame;
+using YutArena.GameCore;
 
 public sealed class CHAR_007_Status : CharacterStatusBehaviour
 {
@@ -15,21 +16,16 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Frenzy Charge requires a piece on the board.");
+        if (Movement == null)
+            return CharacterActiveResult.Failure("PieceMovementManager is not available.");
 
         List<BoardTileId> path = GetPathToStraightEnd(caster);
         if (path.Count == 0)
             return CharacterActiveResult.Failure("No forward straight path is available.");
 
         CharacterPieceReference? firstEnemy = FindFirstEnemyOnPath(path);
-        foreach (BoardTileId tile in path)
-        {
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
-            {
-                if (piece.PieceId == caster.PieceId ||
-                    (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-                    piece.MoveTo(tile);
-            }
-        }
+        if (!Movement.TryMovePiece(PlayerId, PieceId, path.Count, out _, true))
+            return CharacterActiveResult.Failure("Frenzy Charge movement could not be resolved.");
 
         if (firstEnemy.HasValue &&
             CharacterSkillRegistry.IsTargetable(
@@ -51,7 +47,7 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
 
         for (int i = 0; i < 20; i++)
         {
-            BoardTileId next = CharacterBoardUtility.GetNextForwardTile(current, previous, i == 0);
+            BoardTileId next = BoardGraph.GetNextForward(current, previous, i == 0);
             path.Add(next);
             previous = current;
             current = next;

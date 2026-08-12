@@ -23,4 +23,5 @@ MonoBehaviour:
     \uC2A4\uD134 + \uC124\uCE58\uD615 \uC544\uC774\uD15C \uBB34\uC2DC"
   passive_Status: 1
   active_Status: 10
+  gameplayPrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}
   visualModelPrefab: {fileID: 0}

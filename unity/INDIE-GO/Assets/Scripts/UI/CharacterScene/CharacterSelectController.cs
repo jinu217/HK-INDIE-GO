@@ -36,6 +36,10 @@ namespace YutArena.UI.CharacterScene
         [Tooltip("바로 시작 버튼")]
         [SerializeField] private Button startNowButton;
 
+        [Header("Runtime Fallback UI")]
+        [Tooltip("Shows a complete text-based selector when character portraits/UI are incomplete.")]
+        [SerializeField] private bool showRuntimeSelectionUI = true;
+
         [Header("Character UI")]
         [Tooltip("캐릭터 카드 목록")]
         [SerializeField] private CharacterCardView[] cardViews;
@@ -50,8 +54,13 @@ namespace YutArena.UI.CharacterScene
         private readonly List<CharacterData> runtimeCharacters = new List<CharacterData>();
 
         private int playerCount;
+        private int keyboardPlayerIndex;
         private float remainingTime;
         private bool isFinalized;
+        private Vector2 runtimeScrollPosition;
+        private GUIStyle runtimeTitleStyle;
+        private GUIStyle runtimeCardStyle;
+        private GUIStyle runtimeSelectedCardStyle;
 
         private void Awake()
         {
@@ -95,6 +104,130 @@ namespace YutArena.UI.CharacterScene
             }
 
             RefreshUI();
+        }
+
+        private void OnGUI()
+        {
+            if (!showRuntimeSelectionUI || isFinalized || runtimeCharacters.Count == 0)
+                return;
+
+            GUI.depth = -100;
+            EnsureRuntimeStyles();
+
+            float width = Mathf.Min(Screen.width - 40f, 1120f);
+            float height = Mathf.Min(Screen.height - 40f, 760f);
+            Rect area = new Rect(
+                (Screen.width - width) * .5f,
+                (Screen.height - height) * .5f,
+                width,
+                height);
+
+            GUILayout.BeginArea(area, GUI.skin.window);
+            GUILayout.Label("CHAMPION PICK", runtimeTitleStyle);
+            DrawRuntimePlayerSummary();
+
+            int activePlayer = Mathf.Clamp(keyboardPlayerIndex, 0, Mathf.Max(0, playerCount - 1));
+            GUILayout.Label(
+                $"P{activePlayer + 1} character selection — click a card, then confirm");
+
+            runtimeScrollPosition = GUILayout.BeginScrollView(runtimeScrollPosition);
+            const int columns = 4;
+            for (int start = 0; start < runtimeCharacters.Count; start += columns)
+            {
+                GUILayout.BeginHorizontal();
+                for (int column = 0; column < columns; column++)
+                {
+                    int characterIndex = start + column;
+                    if (characterIndex >= runtimeCharacters.Count)
+                    {
+                        GUILayout.FlexibleSpace();
+                        continue;
+                    }
+
+                    CharacterData data = runtimeCharacters[characterIndex];
+                    bool highlighted = cursorIndexes[activePlayer] == characterIndex;
+                    GUIStyle style = highlighted ? runtimeSelectedCardStyle : runtimeCardStyle;
+                    string characterName = string.IsNullOrWhiteSpace(data.char_Name)
+                        ? $"CHAR {data.char_ID:000}"
+                        : data.char_Name;
+                    string passive = string.IsNullOrWhiteSpace(data.passive_Name)
+                        ? "Passive: -"
+                        : $"Passive: {data.passive_Name}";
+                    string active = string.IsNullOrWhiteSpace(data.active_Name)
+                        ? "Active: -"
+                        : $"Active: {data.active_Name}";
+
+                    if (GUILayout.Button(
+                            $"{characterName}\n{passive}\n{active}",
+                            style,
+                            GUILayout.MinWidth(220f),
+                            GUILayout.Height(92f)))
+                    {
+                        cursorIndexes[activePlayer] = characterIndex;
+                        if (selectedPlayers[activePlayer])
+                            selectedPlayers[activePlayer] = false;
+                        RefreshUI();
+                    }
+                }
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndScrollView();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button($"Confirm P{activePlayer + 1}", GUILayout.Height(44f)))
+                ConfirmRuntimePlayer(activePlayer);
+
+            GUI.enabled = AreAllPlayersSelected();
+            if (GUILayout.Button("START GAME", GUILayout.Height(44f))) TryStartNow();
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        private void DrawRuntimePlayerSummary()
+        {
+            GUILayout.BeginHorizontal();
+            for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
+            {
+                CharacterData data = runtimeCharacters[cursorIndexes[playerIndex]];
+                string state = selectedPlayers[playerIndex] ? "READY" : "SELECTING";
+                GUILayout.Label(
+                    $"P{playerIndex + 1}: {data.char_Name}\n{state}",
+                    GUI.skin.box,
+                    GUILayout.MinWidth(150f),
+                    GUILayout.Height(44f));
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void ConfirmRuntimePlayer(int playerIndex)
+        {
+            if (playerIndex < 0 || playerIndex >= playerCount) return;
+            selectedPlayers[playerIndex] = true;
+            int next = FindNextKeyboardPlayer(playerIndex + 1);
+            if (next >= 0) keyboardPlayerIndex = next;
+            RefreshUI();
+        }
+
+        private void EnsureRuntimeStyles()
+        {
+            if (runtimeTitleStyle != null) return;
+
+            runtimeTitleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 26,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            runtimeCardStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 13,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true
+            };
+            runtimeSelectedCardStyle = new GUIStyle(runtimeCardStyle);
+            runtimeSelectedCardStyle.normal.textColor = new Color(.25f, .9f, 1f);
+            runtimeSelectedCardStyle.fontStyle = FontStyle.Bold;
         }
 
         public void TryStartNow()
@@ -147,6 +280,8 @@ namespace YutArena.UI.CharacterScene
                     ? Gamepad.all[gamepadIndex]
                     : null;
             }
+
+            keyboardPlayerIndex = FindNextKeyboardPlayer(0);
         }
 
         private void InitializeCards()
@@ -188,45 +323,57 @@ namespace YutArena.UI.CharacterScene
 
         private void ProcessInputs()
         {
-            for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
+            if (keyboardPlayerIndex >= 0)
+                ProcessKeyboardInput(keyboardPlayerIndex);
+
+            for (int playerIndex = 1; playerIndex < playerCount; playerIndex++)
             {
-                if (playerIndex == 0)
-                {
-                    ProcessKeyboardInput();
-                }
-                else
-                {
+                if (playerGamepads[playerIndex] != null)
                     ProcessGamepadInput(playerIndex, playerGamepads[playerIndex]);
-                }
             }
         }
 
-        private void ProcessKeyboardInput()
+        private void ProcessKeyboardInput(int playerIndex)
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return;
 
-            if (!selectedPlayers[0])
+            if (!selectedPlayers[playerIndex])
             {
-                if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) MoveCursor(0, -1, 0);
-                if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame) MoveCursor(0, 1, 0);
-                if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) MoveCursor(0, 0, -1);
-                if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) MoveCursor(0, 0, 1);
+                if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) MoveCursor(playerIndex, -1, 0);
+                if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame) MoveCursor(playerIndex, 1, 0);
+                if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, -1);
+                if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, 1);
 
                 if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
                 {
-                    selectedPlayers[0] = true;
+                    selectedPlayers[playerIndex] = true;
+                    int next = FindNextKeyboardPlayer(playerIndex + 1);
+                    if (next >= 0) keyboardPlayerIndex = next;
                 }
             }
             else if (keyboard.escapeKey.wasPressedThisFrame)
             {
-                selectedPlayers[0] = false;
+                selectedPlayers[playerIndex] = false;
             }
             else if ((keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) &&
                      AreAllPlayersSelected())
             {
                 TryStartNow();
             }
+        }
+
+        private int FindNextKeyboardPlayer(int startIndex)
+        {
+            for (int offset = 0; offset < playerCount; offset++)
+            {
+                int playerIndex = (startIndex + offset) % playerCount;
+                bool hasDedicatedGamepad = playerIndex > 0 && playerGamepads[playerIndex] != null;
+                if (!hasDedicatedGamepad && !selectedPlayers[playerIndex])
+                    return playerIndex;
+            }
+
+            return -1;
         }
 
         private void ProcessGamepadInput(int playerIndex, Gamepad gamepad)

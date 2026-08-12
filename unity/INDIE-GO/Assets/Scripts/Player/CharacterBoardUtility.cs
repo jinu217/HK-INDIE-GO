@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
+using YutArena.GameCore;
 using YutArena.InGame;
 
 /// <summary>
@@ -54,7 +55,7 @@ public static class CharacterBoardUtility
         int ownerPlayerId)
     {
         List<CharacterPieceReference> all = GetPiecesOnBoard(players);
-        all.RemoveAll(reference => reference.Player.PlayerId == ownerPlayerId);
+        all.RemoveAll(reference => players.AreAllies(reference.Player.PlayerId, ownerPlayerId));
         return all;
     }
 
@@ -64,22 +65,28 @@ public static class CharacterBoardUtility
         int sourcePieceId,
         BoardTileId sourceTile)
     {
-        if (players == null || !players.TryGetPlayer(ownerPlayerId, out PlayerController owner))
+        if (players == null || !players.TryGetPlayer(ownerPlayerId, out _))
             return null;
 
         CharacterPieceReference? nearest = null;
         int nearestDistance = int.MaxValue;
 
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        foreach (PlayerController ally in players.ActivePlayers)
         {
-            if (piece.PieceId == sourcePieceId || piece.State != PieceState.InBoard)
-                continue;
+            if (!players.AreAllies(ownerPlayerId, ally.PlayerId)) continue;
 
-            int distance = GetDistance(sourceTile, piece.CurrentTileId);
-            if (distance < nearestDistance)
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in ally.RuntimeData.Pieces)
             {
-                nearest = new CharacterPieceReference(owner, piece);
-                nearestDistance = distance;
+                if ((ally.PlayerId == ownerPlayerId && piece.PieceId == sourcePieceId) ||
+                    piece.State != PieceState.InBoard)
+                    continue;
+
+                int distance = GetDistance(sourceTile, piece.CurrentTileId);
+                if (distance < nearestDistance)
+                {
+                    nearest = new CharacterPieceReference(ally, piece);
+                    nearestDistance = distance;
+                }
             }
         }
 
@@ -129,7 +136,7 @@ public static class CharacterBoardUtility
 
         for (int step = 0; step < stepCount; step++)
         {
-            BoardTileId next = GetNextForwardTile(current, previous, step == 0);
+            BoardTileId next = BoardGraph.GetNextForward(current, previous, step == 0);
             result.Add(next);
             previous = current;
             current = next;

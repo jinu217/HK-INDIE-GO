@@ -1,137 +1,375 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
+using YutArena.GameCore;
 using YutArena.InGame;
 
 /// <summary>
-/// Resolves piece movement, stacking, and captures. Positive move counts move
-/// forward; negative values are back-do moves.
+/// Unity adapter that validates a move command, applies the board rules, and
+/// returns a complete result. Presentation code should react to the result
+/// instead of re-reading and guessing changed runtime state.
 /// </summary>
 public sealed class PieceMovementManager : MonoBehaviour
 {
     [SerializeField] private PlayerManager playerManager;
 
+    public event Action<PieceMoveResult> MoveResolved;
+
+    /// <summary>Compatibility entry point for existing callers.</summary>
     public bool TryMovePiece(int playerId, int pieceId, int moveCount)
     {
-        if (playerManager == null)
+        return TryMovePiece(playerId, pieceId, moveCount, out _);
+    }
+
+    public bool TryMovePiece(
+        int playerId,
+        int pieceId,
+        int moveCount,
+        out PieceMoveResult result,
+        bool isActiveSkillMove = false)
+    {
+        return TryExecute(
+            new PieceMoveCommand(playerId, pieceId, moveCount, isActiveSkillMove),
+            out result);
+    }
+
+    public bool TryExecute(PieceMoveCommand command, out PieceMoveResult result)
+    {
+        if (!TryValidate(command, out PlayerController player,
+                out PlayerRuntimeData.PieceRuntimeData selectedPiece, out string error))
         {
-            Debug.LogError("PieceMovementManager requires a PlayerManager reference.", this);
+            result = PieceMoveResult.Failure(command, error);
+            Debug.LogWarning(error, this);
+            MoveResolved?.Invoke(result);
             return false;
         }
 
-        if (moveCount == 0)
+        bool isFirstBoardMove = selectedPiece.State == PieceState.Waiting;
+        int appliedMoveCount = CharacterSkillRegistry.ModifyMoveCount(
+            new CharacterMoveRequest(
+                command.PlayerId,
+                command.PieceId,
+                command.MoveCount,
+                isFirstBoardMove,
+                command.IsActiveSkillMove));
+
+        if (appliedMoveCount == 0)
         {
-            //나중에 낙 처리(movecount를 0으로 주면 낙으로 처리 예정)
-            Debug.LogWarning("Move count cannot be zero.", this);
+            result = PieceMoveResult.Failure(command, "A skill changed the move count to zero.");
+            MoveResolved?.Invoke(result);
             return false;
         }
 
-        if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
-            !player.TryGetPieceData(pieceId, out PlayerRuntimeData.PieceRuntimeData selectedPiece))
-        {
-            Debug.LogError($"Could not find Player {playerId}, Piece {pieceId + 1}.", this);
-            return false;
-        }
+        result = PieceMoveResult.Success(command);
+        result.AppliedMoveCount = appliedMoveCount;
+        result.From = selectedPiece.CurrentTileId;
 
         List<PlayerRuntimeData.PieceRuntimeData> movingPieces = GetMovingPieces(player, selectedPiece);
-        BoardTileId startingTile = selectedPiece.CurrentTileId;
-        bool isBackward = moveCount < 0;
-        int stepCount = Mathf.Abs(moveCount);
+        bool wasWaiting = selectedPiece.State == PieceState.Waiting;
+        bool isBackward = appliedMoveCount < 0;
+        int stepCount = Math.Abs(appliedMoveCount);
 
         for (int step = 0; step < stepCount; step++)
         {
-            // A piece that has stopped on the shared start tile goals only when
-            // it attempts to move past that tile.
+            // Crossing the shared start/goal point completes the moving group.
             if (!isBackward && selectedPiece.State == PieceState.InBoard &&
                 selectedPiece.CurrentTileId == BoardTileId.None)
             {
                 SetGroupGoal(movingPieces);
+                result.FinishedPieceCount = movingPieces.Count;
                 break;
             }
 
             BoardTileId nextTile = isBackward
-                ? GetNextBackwardTile(selectedPiece)
-                : GetNextForwardTile(selectedPiece, step == 0);
+                ? BoardGraph.GetNextBackward(selectedPiece.CurrentTileId, selectedPiece.PreviousTileId)
+                : BoardGraph.GetNextForward(
+                    selectedPiece.CurrentTileId,
+                    selectedPiece.PreviousTileId,
+                    step == 0);
 
             foreach (PlayerRuntimeData.PieceRuntimeData movingPiece in movingPieces)
                 movingPiece.MoveTo(nextTile);
+
+            result.AddPath(nextTile);
         }
 
-        // Goal pieces have been removed from the board and cannot interact.
-        if (selectedPiece.State == PieceState.Goal)
+        result.To = selectedPiece.CurrentTileId;
+        result.EnteredBoard = wasWaiting && selectedPiece.State == PieceState.InBoard;
+
+        if (selectedPiece.State != PieceState.Goal)
         {
-            Debug.Log($"Player {playerId}, Piece {pieceId + 1} reached Goal.", this);
-            return true;
+            ResolveCaptures(command, selectedPiece.CurrentTileId, movingPieces.Count, result);
+            ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
         }
 
-        ResolveCaptures(playerId, selectedPiece.CurrentTileId, moveCount);
-        ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
+        PublishLifecycle(result, movingPieces);
+        MoveResolved?.Invoke(result);
 
         Debug.Log(
-            $"Player {playerId}, Piece {pieceId + 1}: {startingTile} -> " +
-            $"{selectedPiece.CurrentTileId} ({moveCount} spaces)",
+            $"Player {command.PlayerId}, Piece {command.PieceId + 1}: " +
+            $"{result.From} -> {result.To} ({result.AppliedMoveCount} spaces)",
             this);
         return true;
+    }
+
+    /// <summary>
+    /// Resolves a skill-originated capture through the same targetability and
+    /// defensive-passive pipeline used by normal movement.
+    /// </summary>
+    public bool TryCapturePiece(
+        int attackerPlayerId,
+        int attackerPieceId,
+        int targetPlayerId,
+        int targetPieceId,
+        bool wouldGrantExtraThrow,
+        out PieceCaptureResult result)
+    {
+        result = default;
+        if (playerManager == null ||
+            !playerManager.TryGetPlayer(attackerPlayerId, out PlayerController attacker) ||
+            !attacker.TryGetPieceData(attackerPieceId, out PlayerRuntimeData.PieceRuntimeData attackerPiece) ||
+            !playerManager.TryGetPlayer(targetPlayerId, out PlayerController targetPlayer) ||
+            !targetPlayer.TryGetPieceData(targetPieceId, out PlayerRuntimeData.PieceRuntimeData target) ||
+            playerManager.AreAllies(attackerPlayerId, targetPlayerId) ||
+            attackerPiece.State != PieceState.InBoard ||
+            target.State != PieceState.InBoard ||
+            !CharacterSkillRegistry.IsTargetable(targetPlayerId, targetPieceId))
+        {
+            return false;
+        }
+
+        var request = new CharacterCaptureRequest(
+            attackerPlayerId,
+            attackerPieceId,
+            targetPlayerId,
+            targetPieceId,
+            1,
+            wouldGrantExtraThrow);
+        CharacterCaptureDecision decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+        CcDefine appliedCc = CcDefine.None;
+        bool grantsBonus = false;
+
+        if (decision == CharacterCaptureDecision.Proceed ||
+            decision == CharacterCaptureDecision.LimitRetireToAttackingCount)
+        {
+            appliedCc = wouldGrantExtraThrow && decision == CharacterCaptureDecision.Proceed
+                ? CcDefine.Kill
+                : CcDefine.Retire;
+            grantsBonus = appliedCc == CcDefine.Kill;
+            target.SetCaptured(appliedCc);
+            CharacterSkillRegistry.NotifyPieceRetired(targetPlayerId, targetPieceId);
+            target.ClearCc();
+        }
+
+        if (appliedCc != CcDefine.None ||
+            decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus)
+        {
+            CharacterSkillRegistry.NotifyCaptureCompleted(request);
+        }
+
+        result = new PieceCaptureResult(
+            targetPlayerId,
+            targetPieceId,
+            decision,
+            appliedCc,
+            grantsBonus);
+        return appliedCc != CcDefine.None ||
+               decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+               decision == CharacterCaptureDecision.ConvertToParts;
+    }
+
+    /// <summary>
+    /// Removes a piece for effects that explicitly bypass capture defenses,
+    /// such as self-destruction and path attacks.
+    /// </summary>
+    public bool TryForceRetire(int targetPlayerId, int targetPieceId)
+    {
+        if (playerManager == null ||
+            !playerManager.TryGetPlayer(targetPlayerId, out PlayerController player) ||
+            !player.TryGetPieceData(targetPieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+            piece.State != PieceState.InBoard)
+        {
+            return false;
+        }
+
+        piece.SetCaptured(CcDefine.Retire);
+        CharacterSkillRegistry.NotifyPieceRetired(targetPlayerId, targetPieceId);
+        piece.ClearCc();
+        return true;
+    }
+
+    private bool TryValidate(
+        PieceMoveCommand command,
+        out PlayerController player,
+        out PlayerRuntimeData.PieceRuntimeData piece,
+        out string error)
+    {
+        player = null;
+        piece = null;
+
+        if (playerManager == null)
+        {
+            error = "PieceMovementManager requires a PlayerManager reference.";
+            return false;
+        }
+
+        if (command.MoveCount == 0)
+        {
+            error = "Move count cannot be zero.";
+            return false;
+        }
+
+        if (!playerManager.TryGetPlayer(command.PlayerId, out player) ||
+            !player.TryGetPieceData(command.PieceId, out piece))
+        {
+            error = $"Could not find Player {command.PlayerId}, Piece {command.PieceId + 1}.";
+            return false;
+        }
+
+        if (piece.CurrentCc == CcDefine.Stun)
+        {
+            error = $"Player {command.PlayerId}, Piece {command.PieceId + 1} is stunned.";
+            return false;
+        }
+
+        if (piece.State == PieceState.Goal)
+        {
+            error = $"Player {command.PlayerId}, Piece {command.PieceId + 1} already reached the goal.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private void ResolveCaptures(
+        PieceMoveCommand command,
+        BoardTileId landingTile,
+        int attackingPieceCount,
+        PieceMoveResult result)
+    {
+        bool defaultBonus = result.AppliedMoveCount == -1 ||
+                            (result.AppliedMoveCount >= 1 && result.AppliedMoveCount <= 3);
+        var limitedRetireCountByGroup = new Dictionary<(int playerId, int groupId), int>();
+
+        foreach (PlayerController otherPlayer in playerManager.ActivePlayers)
+        {
+            if (playerManager.AreAllies(otherPlayer.PlayerId, command.PlayerId)) continue;
+
+            // Snapshot prevents a skill callback from invalidating enumeration.
+            var targets = new List<PlayerRuntimeData.PieceRuntimeData>();
+            foreach (PlayerRuntimeData.PieceRuntimeData candidate in otherPlayer.RuntimeData.Pieces)
+            {
+                if (candidate.State == PieceState.InBoard && candidate.CurrentTileId == landingTile)
+                    targets.Add(candidate);
+            }
+
+            foreach (PlayerRuntimeData.PieceRuntimeData target in targets)
+            {
+                if (!CharacterSkillRegistry.IsTargetable(otherPlayer.PlayerId, target.PieceId))
+                    continue;
+
+                bool isBonusCandidate = defaultBonus &&
+                    (!target.IsStacked || target.PieceId == target.StackLeaderPieceId);
+                var request = new CharacterCaptureRequest(
+                    command.PlayerId,
+                    command.PieceId,
+                    otherPlayer.PlayerId,
+                    target.PieceId,
+                    attackingPieceCount,
+                    isBonusCandidate);
+                CharacterCaptureDecision decision =
+                    CharacterSkillRegistry.EvaluateIncomingCapture(request);
+
+                CcDefine appliedCc = CcDefine.None;
+                bool grantsBonus = false;
+
+                if (decision == CharacterCaptureDecision.Proceed)
+                {
+                    appliedCc = isBonusCandidate ? CcDefine.Kill : CcDefine.Retire;
+                    grantsBonus = appliedCc == CcDefine.Kill;
+                    target.SetCaptured(appliedCc);
+                }
+                else if (decision == CharacterCaptureDecision.LimitRetireToAttackingCount)
+                {
+                    int groupId = target.IsStacked ? target.StackGroupId : -target.PieceId - 1;
+                    var key = (otherPlayer.PlayerId, groupId);
+                    limitedRetireCountByGroup.TryGetValue(key, out int retired);
+                    if (retired < attackingPieceCount)
+                    {
+                        target.SetCaptured(CcDefine.Retire);
+                        appliedCc = CcDefine.Retire;
+                        limitedRetireCountByGroup[key] = retired + 1;
+                    }
+                }
+                // Prevent, clone consumption, and parts conversion deliberately
+                // leave the target runtime position unchanged.
+
+                result.AddCapture(new PieceCaptureResult(
+                    otherPlayer.PlayerId,
+                    target.PieceId,
+                    decision,
+                    appliedCc,
+                    grantsBonus));
+
+                if (appliedCc == CcDefine.Kill || appliedCc == CcDefine.Retire)
+                {
+                    CharacterSkillRegistry.NotifyPieceRetired(otherPlayer.PlayerId, target.PieceId);
+                    target.ClearCc();
+                }
+
+                if (appliedCc != CcDefine.None ||
+                    decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus)
+                {
+                    CharacterSkillRegistry.NotifyCaptureCompleted(request);
+                }
+            }
+        }
+    }
+
+    private static void PublishLifecycle(
+        PieceMoveResult result,
+        List<PlayerRuntimeData.PieceRuntimeData> movingPieces)
+    {
+        if (result.EnteredBoard)
+        {
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+                CharacterSkillRegistry.NotifyPieceEnteredBoard(result.PlayerId, piece.PieceId);
+        }
+
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+        {
+            CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(
+                result.PlayerId,
+                piece.PieceId,
+                result.From,
+                result.To,
+                result.Path));
+        }
     }
 
     private static List<PlayerRuntimeData.PieceRuntimeData> GetMovingPieces(
         PlayerController player,
         PlayerRuntimeData.PieceRuntimeData selectedPiece)
     {
-        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
-
+        var result = new List<PlayerRuntimeData.PieceRuntimeData>();
         if (!selectedPiece.IsStacked)
         {
-            movingPieces.Add(selectedPiece);
-            return movingPieces;
+            result.Add(selectedPiece);
+            return result;
         }
 
         foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
         {
-            if (piece.StackGroupId == selectedPiece.StackGroupId)
-                movingPieces.Add(piece);
+            if (piece.StackGroupId == selectedPiece.StackGroupId) result.Add(piece);
         }
-
-        return movingPieces;
+        return result;
     }
 
-    private static void SetGroupGoal(List<PlayerRuntimeData.PieceRuntimeData> movingPieces)
+    private static void SetGroupGoal(List<PlayerRuntimeData.PieceRuntimeData> pieces)
     {
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
-            piece.SetGoal();
-    }
-
-    private void ResolveCaptures(int movingPlayerId, BoardTileId landingTile, int moveCount)
-    {
-        foreach (PlayerController otherPlayer in playerManager.ActivePlayers)
-        {
-            if (otherPlayer.PlayerId == movingPlayerId)
-                continue;
-
-            foreach (PlayerRuntimeData.PieceRuntimeData targetPiece in otherPlayer.RuntimeData.Pieces)
-            {
-                if (targetPiece.State != PieceState.InBoard || targetPiece.CurrentTileId != landingTile)
-                    continue;
-
-                CcDefine captureCc = GetCaptureCc(targetPiece, moveCount);
-                targetPiece.SetCaptured(captureCc);
-            }
-        }
-    }
-
-    private static CcDefine GetCaptureCc(PlayerRuntimeData.PieceRuntimeData targetPiece, int moveCount)
-    {
-        bool grantsExtraThrow = moveCount == -1 || (moveCount >= 1 && moveCount <= 3);
-
-        // A stacked group grants only one extra throw: its carrier is Kill,
-        // and all carried pieces are Retire.
-        if (grantsExtraThrow && (!targetPiece.IsStacked ||
-                                 targetPiece.PieceId == targetPiece.StackLeaderPieceId))
-        {
-            return CcDefine.Kill;
-        }
-
-        return CcDefine.Retire;
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces) piece.SetGoal();
     }
 
     private static void ResolveStacking(
@@ -140,141 +378,25 @@ public sealed class PieceMovementManager : MonoBehaviour
         BoardTileId landingTile)
     {
         var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
-        PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
+        PlayerRuntimeData.PieceRuntimeData stationary = null;
 
         foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
         {
-            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile)
-                continue;
-
+            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile) continue;
             piecesOnTile.Add(piece);
-
-            if (stationaryPiece == null && !movingPieces.Contains(piece))
-                stationaryPiece = piece;
+            if (stationary == null && !movingPieces.Contains(piece)) stationary = piece;
         }
 
-        // No friendly piece was already on the tile, so an existing stack
-        // remains unchanged and a lone piece stays unstacked.
-        if (stationaryPiece == null)
-            return;
+        if (stationary == null) return;
 
-        int stackGroupId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackGroupId
+        int groupId = stationary.IsStacked
+            ? stationary.StackGroupId
             : player.RuntimeData.CreateStackGroupId();
-        int stackLeaderPieceId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackLeaderPieceId
-            : stationaryPiece.PieceId;
+        int leaderId = stationary.IsStacked
+            ? stationary.StackLeaderPieceId
+            : stationary.PieceId;
 
         foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
-            piece.SetStackGroup(stackGroupId, stackLeaderPieceId);
-    }
-
-    private static BoardTileId GetNextForwardTile(
-        PlayerRuntimeData.PieceRuntimeData piece,
-        bool isStartingThisMove)
-    {
-        BoardTileId current = piece.CurrentTileId;
-
-        if (current == BoardTileId.None)
-            return BoardTileId.Outer01;
-
-        if (isStartingThisMove && current == BoardTileId.Corner01)
-            return BoardTileId.Inner01;
-        if (isStartingThisMove && current == BoardTileId.Corner02)
-            return BoardTileId.Inner05;
-        if (isStartingThisMove && current == BoardTileId.Center)
-            return BoardTileId.Inner07;
-
-        switch (current)
-        {
-            case BoardTileId.Outer01: return BoardTileId.Outer02;
-            case BoardTileId.Outer02: return BoardTileId.Outer03;
-            case BoardTileId.Outer03: return BoardTileId.Outer04;
-            case BoardTileId.Outer04: return BoardTileId.Corner01;
-            case BoardTileId.Corner01: return BoardTileId.Outer05;
-            case BoardTileId.Outer05: return BoardTileId.Outer06;
-            case BoardTileId.Outer06: return BoardTileId.Outer07;
-            case BoardTileId.Outer07: return BoardTileId.Outer08;
-            case BoardTileId.Outer08: return BoardTileId.Corner02;
-            case BoardTileId.Corner02: return BoardTileId.Outer09;
-            case BoardTileId.Outer09: return BoardTileId.Outer10;
-            case BoardTileId.Outer10: return BoardTileId.Outer11;
-            case BoardTileId.Outer11: return BoardTileId.Outer12;
-            case BoardTileId.Outer12: return BoardTileId.Corner03;
-            case BoardTileId.Corner03: return BoardTileId.Outer13;
-            case BoardTileId.Outer13: return BoardTileId.Outer14;
-            case BoardTileId.Outer14: return BoardTileId.Outer15;
-            case BoardTileId.Outer15: return BoardTileId.Outer16;
-            case BoardTileId.Outer16: return BoardTileId.None;
-            case BoardTileId.Inner01: return BoardTileId.Inner02;
-            case BoardTileId.Inner02: return BoardTileId.Center;
-            case BoardTileId.Inner03: return BoardTileId.Inner04;
-            case BoardTileId.Inner04: return BoardTileId.Corner03;
-            case BoardTileId.Inner05: return BoardTileId.Inner06;
-            case BoardTileId.Inner06: return BoardTileId.Center;
-            case BoardTileId.Inner07: return BoardTileId.Inner08;
-            case BoardTileId.Inner08: return BoardTileId.None;
-            case BoardTileId.Center:
-                return piece.PreviousTileId == BoardTileId.Inner02
-                    ? BoardTileId.Inner03
-                    : BoardTileId.Inner07;
-            default:
-                Debug.LogError($"Undefined forward tile: {current}");
-                return BoardTileId.None;
-        }
-    }
-
-    private static BoardTileId GetNextBackwardTile(PlayerRuntimeData.PieceRuntimeData piece)
-    {
-        switch (piece.CurrentTileId)
-        {
-            case BoardTileId.None:
-                if (piece.PreviousTileId == BoardTileId.Outer01)
-                    return BoardTileId.Outer16;
-                if (piece.PreviousTileId == BoardTileId.Inner08)
-                    return BoardTileId.Inner08;
-                if (piece.PreviousTileId == BoardTileId.Outer16)
-                    return BoardTileId.Outer16;
-                return BoardTileId.None;
-
-            case BoardTileId.Outer01: return BoardTileId.None;
-            case BoardTileId.Outer02: return BoardTileId.Outer01;
-            case BoardTileId.Outer03: return BoardTileId.Outer02;
-            case BoardTileId.Outer04: return BoardTileId.Outer03;
-            case BoardTileId.Corner01: return BoardTileId.Outer04;
-            case BoardTileId.Outer05: return BoardTileId.Corner01;
-            case BoardTileId.Outer06: return BoardTileId.Outer05;
-            case BoardTileId.Outer07: return BoardTileId.Outer06;
-            case BoardTileId.Outer08: return BoardTileId.Outer07;
-            case BoardTileId.Corner02: return BoardTileId.Outer08;
-            case BoardTileId.Outer09: return BoardTileId.Corner02;
-            case BoardTileId.Outer10: return BoardTileId.Outer09;
-            case BoardTileId.Outer11: return BoardTileId.Outer10;
-            case BoardTileId.Outer12: return BoardTileId.Outer11;
-            case BoardTileId.Corner03:
-                return piece.PreviousTileId == BoardTileId.Inner04
-                    ? BoardTileId.Inner04
-                    : BoardTileId.Outer12;
-            case BoardTileId.Outer13: return BoardTileId.Corner03;
-            case BoardTileId.Outer14: return BoardTileId.Outer13;
-            case BoardTileId.Outer15: return BoardTileId.Outer14;
-            case BoardTileId.Outer16: return BoardTileId.Outer15;
-            case BoardTileId.Inner01: return BoardTileId.Corner01;
-            case BoardTileId.Inner02: return BoardTileId.Inner01;
-            case BoardTileId.Inner03: return BoardTileId.Center;
-            case BoardTileId.Inner04: return BoardTileId.Inner03;
-            case BoardTileId.Inner05: return BoardTileId.Corner02;
-            case BoardTileId.Inner06: return BoardTileId.Inner05;
-            case BoardTileId.Inner07: return BoardTileId.Center;
-            case BoardTileId.Inner08: return BoardTileId.Inner07;
-            case BoardTileId.Center:
-                return piece.PreviousTileId == BoardTileId.Inner03 ||
-                       piece.PreviousTileId == BoardTileId.Inner02
-                    ? BoardTileId.Inner02
-                    : BoardTileId.Inner06;
-            default:
-                Debug.LogError($"Undefined back-do tile: {piece.CurrentTileId}");
-                return BoardTileId.None;
-        }
+            piece.SetStackGroup(groupId, leaderId);
     }
 }

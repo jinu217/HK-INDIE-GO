@@ -47,6 +47,8 @@ public class CharacterData : ScriptableObject
     public CharacterSkillStatus active_Status = CharacterSkillStatus.None;
 
     [Header("# Modelling")]
+    [Tooltip("Runtime prefab instantiated once for every piece owned by a player.")]
+    public GameObject gameplayPrefab;
     public GameObject visualModelPrefab;
 
     public bool HasPassiveStatus => passive_Status != CharacterSkillStatus.None;

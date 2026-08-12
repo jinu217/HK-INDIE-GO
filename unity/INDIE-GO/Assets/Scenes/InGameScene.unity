@@ -200,6 +200,7 @@ MonoBehaviour:
   - {fileID: 527872496}
   - {fileID: 1166113367}
   piecesPerPlayer: 4
+  characterDatabase: {fileID: 11400000, guid: 5607ff4bf64345fd94e0c38843515b71, type: 2}
 --- !u!4 &41707851
 Transform:
   m_ObjectHideFlags: 0
