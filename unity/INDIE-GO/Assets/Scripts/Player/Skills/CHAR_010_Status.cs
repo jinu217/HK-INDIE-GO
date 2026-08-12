@@ -1,56 +1,39 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
-using YutArena.Common;
-public class CHAR_010_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_010_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    public override int ModifyMoveCount(CharacterMoveRequest request)
     {
-        
-    }
+        if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData caster) || !caster.IsStacked)
+            return request.MoveCount;
 
-    void Update()
-    {
-        
-    }
-
-    private void OnEnable()
-    {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        int groupSize = 0;
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
+            if (piece.StackGroupId == caster.StackGroupId) groupSize++;
         }
+
+        int carriedPieceCount = groupSize > 0 ? groupSize - 1 : 0;
+        if (carriedPieceCount == 0) return request.MoveCount;
+
+        return request.MoveCount < 0
+            ? request.MoveCount - carriedPieceCount
+            : request.MoveCount + carriedPieceCount;
     }
 
-    private void InitStatus()
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        if (characterData == null) return;
-        
-    }
+        if (Movement == null)
+            return CharacterActiveResult.Failure("PieceMovementManager is not available.");
+        if (caster.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Tactical Retreat requires a piece on the board.");
+        if (!Movement.TryMovePiece(PlayerId, PieceId, -1))
+            return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
 
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        return CharacterActiveResult.Success(
+            "Moved one tile backward.",
+            suppressExtraThrow: true);
     }
 }

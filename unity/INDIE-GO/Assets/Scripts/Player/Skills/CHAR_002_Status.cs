@@ -1,56 +1,48 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
-using YutArena.Common;
-public class CHAR_002_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_002_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    private bool talismanAvailable = true;
+    private bool doubleNextMove;
+
+    public override void OnPieceEnteredBoard()
     {
-        
+        if (!talismanAvailable || !TryGetPiece(out PlayerRuntimeData.PieceRuntimeData source))
+            return;
+
+        CharacterPieceReference? nearest = CharacterBoardUtility.FindNearestAlly(
+            Players,
+            PlayerId,
+            PieceId,
+            source.CurrentTileId);
+        if (!nearest.HasValue ||
+            !CharacterSkillRegistry.TryGet(
+                nearest.Value.Player.PlayerId,
+                nearest.Value.Piece.PieceId,
+                out CharacterStatusBehaviour ally))
+            return;
+
+        ally.GrantProtection(1, 1);
+        talismanAvailable = false;
     }
 
-    void Update()
+    public override void OnPieceRetired()
     {
-        
+        talismanAvailable = true;
     }
 
-    private void OnEnable()
+    public override int ModifyMoveCount(CharacterMoveRequest request)
     {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
-        {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
-        }
+        if (!doubleNextMove) return request.MoveCount;
+        doubleNextMove = false;
+        return request.MoveCount * 2;
     }
 
-    private void InitStatus()
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        doubleNextMove = true;
+        return CharacterActiveResult.Success("The caster's next move count will be doubled.");
     }
 }

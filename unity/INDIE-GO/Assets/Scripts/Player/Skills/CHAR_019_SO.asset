@@ -23,6 +23,6 @@ MonoBehaviour:
   active_Desc: "3\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5. \uB3C4\xB7\uAC1C\xB7\uAC78\xB7\uB4B7\uB3C4\uC5D0
     \uCD94\uAC00 \uD134 \uBD80\uC5EC (\uC737\uACFC \uBAA8\uC5D0\uB294 \uCD94\uAC00
     \uD134 \uC0AC\uB77C\uC9D0)"
-  cooldown_Turn: 3
-  cost_Sp: 0
+  passive_Status: 0
+  active_Status: 0
   visualModelPrefab: {fileID: 0}

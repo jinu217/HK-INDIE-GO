@@ -19,9 +19,9 @@ MonoBehaviour:
   passive_Name: "\uD6C4\uD1F4\uB294 \uC5C6\uB2E4"
   passive_Desc: "\uB4B7\uB3C4 \uD655\uB960 0, \uC737\xB7\uBAA8 \uD655\uB960\uC5D0
     \uBD84\uBC30"
-  active_Name: "\uC0AC\uBB34\uB77C\uC774 \uC77C\uC12C"
+  active_Name: "일섬"
   active_Desc: "\uC9C1\uC120 3\uCE78 \uC774\uB3D9\uD558\uBA70 \uACBD\uB85C\uC758
     \uBAA8\uB4E0 \uC801 \uB9D0 \uB9AC\uD0C0\uC774\uC5B4 (\uCD94\uAC00 \uD134 \uBD88\uAC00)"
-  cooldown_Turn: 5
-  cost_Sp: 0
+  passive_Status: 7
+  active_Status: 8
   visualModelPrefab: {fileID: 0}

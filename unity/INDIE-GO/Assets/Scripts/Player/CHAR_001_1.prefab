@@ -43,5 +43,5 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 72bc3591a07178b4b9d210a812788ff4, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CHAR_001_Status
+  m_EditorClassIdentifier: Assembly-CSharp::CHAR_001_1_Status
   characterData: {fileID: 11400000, guid: 4aac0718a1cf4404b809098eada5210c, type: 2}

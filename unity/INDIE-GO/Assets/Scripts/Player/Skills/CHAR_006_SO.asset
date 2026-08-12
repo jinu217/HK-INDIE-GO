@@ -17,12 +17,10 @@ MonoBehaviour:
   char_Desc: 
   char_Icon: {fileID: 0}
   passive_Name: "\uAD73\uAC74\uD55C \uC790"
-  passive_Desc: "\uBC29\uD328\uB85C \uC801\uC758 \uC7A1\uAE30 \uD639\uC740 \uC801\uC778
-    \uAC00\uD558\uB294 \uB9AC\uD0C0\uC774\uC5B4 1\uD68C \uBC29\uC5B4 (\uBC29\uC5B4
-    \uD6C4 3\uD134 \uCFE8\uD0C0\uC784)"
+  passive_Desc: "25%의 확률로 적의 잡기나 리타이어를 방어한다."
   active_Name: "\uC18C\uB4DC \uC624\uB7EC"
   active_Desc: "\uC0AC\uC6A9 \uC2DC \uC790\uC2E0 \uCE78\uACFC \uC55E \uD55C \uCE78\uC758
     \uC801 \uC7A1\uAE30 \uAC00\uB2A5"
-  cooldown_Turn: 5
-  cost_Sp: 0
+  passive_Status: 5
+  active_Status: 9
   visualModelPrefab: {fileID: 0}

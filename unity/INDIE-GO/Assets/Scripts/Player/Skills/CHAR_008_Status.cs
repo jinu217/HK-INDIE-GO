@@ -1,56 +1,71 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
+using System.Collections.Generic;
 using YutArena.Common;
-public class CHAR_008_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_008_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    private readonly HashSet<int> windTriggeredPieces = new HashSet<int>();
+    private IReadOnlyList<BoardTileId> pendingLastPath;
+    private IReadOnlyList<BoardTileId> activeWindPath;
+
+    public override void OnMoveCompleted(CharacterMoveRecord record)
     {
-        
+        pendingLastPath = record.Path;
     }
 
-    void Update()
+    public override void OnOwnerTurnStarted()
     {
-        
+        base.OnOwnerTurnStarted();
+        windTriggeredPieces.Clear();
     }
 
-    private void OnEnable()
+    public override void OnOwnerTurnEnded()
     {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
+        activeWindPath = pendingLastPath;
+        pendingLastPath = null;
     }
-    private void OnDisable()
+
+    public override void OnAnyPieceMoveCompleted(CharacterMoveRecord record)
     {
-        //YutManager.Yutresult -= PassiveSkill;
+        if (activeWindPath == null || record.PlayerId != PlayerId ||
+            windTriggeredPieces.Contains(record.PieceId) ||
+            !Contains(activeWindPath, record.To))
+            return;
+
+        if (Movement == null) return;
+        windTriggeredPieces.Add(record.PieceId);
+        Movement.TryMovePiece(record.PlayerId, record.PieceId, 1);
     }
-    public void PassiveSkill(YutResult result)
+
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        if (!request.HasTarget)
+            return CharacterActiveResult.Failure("Spirit Arrow requires an enemy target.");
+        if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out CharacterPieceReference target))
+            return CharacterActiveResult.Failure("The selected target does not exist.");
+        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Spirit Arrow can target only an enemy on the board.");
+        if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
+            return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
+        if (!CharacterBoardUtility.IsWithinDistance(
+                caster.CurrentTileId,
+                target.Piece.CurrentTileId,
+                5))
+            return CharacterActiveResult.Failure("The selected enemy is farther than five tiles.");
+
+        target.Piece.SetCc(CcDefine.Stun, 1);
+        return CharacterActiveResult.Success("The selected enemy was bound for one turn.");
+    }
+
+    private static bool Contains(IReadOnlyList<BoardTileId> path, BoardTileId tile)
+    {
+        for (int i = 0; i < path.Count; i++)
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
+            if (path[i] == tile) return true;
         }
-    }
 
-    private void InitStatus()
-    {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        return false;
     }
 }

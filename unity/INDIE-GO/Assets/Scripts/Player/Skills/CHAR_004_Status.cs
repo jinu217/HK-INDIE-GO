@@ -1,56 +1,40 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
-using YutArena.Common;
-public class CHAR_004_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_004_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
-    {
-        
-    }
+    private bool charmShieldAvailable = true;
+    private int hiddenOwnerTurns;
 
-    void Update()
-    {
-        
-    }
+    public override bool IsTargetable => hiddenOwnerTurns <= 0;
 
-    private void OnEnable()
+    public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        if (charmShieldAvailable)
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
+            charmShieldAvailable = false;
+            return CharacterCaptureDecision.Prevent;
         }
+
+        return base.EvaluateIncomingCapture(request);
     }
 
-    private void InitStatus()
+    public override void OnPieceRetired()
     {
-        if (characterData == null) return;
-        
+        charmShieldAvailable = true;
+        hiddenOwnerTurns = 0;
     }
 
-    private void Generate3DModel()
+    public override void OnOwnerTurnStarted()
     {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
+        base.OnOwnerTurnStarted();
+        if (hiddenOwnerTurns > 0) hiddenOwnerTurns--;
+    }
 
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
+    {
+        hiddenOwnerTurns = 3;
+        return CharacterActiveResult.Success("The caster cannot be targeted for three owner turns.");
     }
 }

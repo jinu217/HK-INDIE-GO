@@ -1,56 +1,41 @@
-using System;
-using Unity.Mathematics;
 using UnityEngine;
 using YutArena.Common;
-public class CHAR_006_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_006_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        
+        if (Random.value < 0.25f)
+            return CharacterCaptureDecision.Prevent;
+
+        return base.EvaluateIncomingCapture(request);
     }
 
-    void Update()
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        
-    }
+        if (caster.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Sword Aura requires a piece on the board.");
+        if (!request.HasTarget)
+            return CharacterActiveResult.Failure("Sword Aura requires an enemy target.");
+        if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out CharacterPieceReference target))
+            return CharacterActiveResult.Failure("The selected target does not exist.");
+        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Sword Aura can target only an enemy on the board.");
+        if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
+            return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
 
-    private void OnEnable()
-    {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
-        {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
-        }
-    }
+        BoardTileId forward = CharacterBoardUtility.GetNextForwardTile(
+            caster.CurrentTileId,
+            caster.PreviousTileId,
+            true);
+        if (target.Piece.CurrentTileId != caster.CurrentTileId &&
+            target.Piece.CurrentTileId != forward)
+            return CharacterActiveResult.Failure("The enemy is not on the caster's tile or the next tile.");
 
-    private void InitStatus()
-    {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        CharacterBoardUtility.Retire(target.Piece, true);
+        return CharacterActiveResult.Success("The selected enemy was captured by Sword Aura.");
     }
 }

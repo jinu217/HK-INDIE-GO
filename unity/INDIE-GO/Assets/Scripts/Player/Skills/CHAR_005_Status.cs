@@ -1,56 +1,93 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
+using System.Collections.Generic;
 using YutArena.Common;
-public class CHAR_005_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_005_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    private static readonly (YutResult, float)[] DefaultTable =
     {
-        
-    }
+        (YutResult.Do, 10.79f),
+        (YutResult.Gae, 33.89f),
+        (YutResult.Geol, 35.49f),
+        (YutResult.Yut, 13.94f),
+        (YutResult.Mo, 2.29f),
+        (YutResult.BackDo, 3.59f),
+        (YutResult.Nak, 0.01f)
+    };
 
-    void Update()
+    public override (YutResult, float)[] ModifyYutProbability(
+        (YutResult, float)[] currentTable)
     {
-        
-    }
+        (YutResult, float)[] source = currentTable == null || currentTable.Length == 0
+            ? DefaultTable
+            : currentTable;
+        var result = new List<(YutResult, float)>();
+        float redistributedWeight = 0f;
 
-    private void OnEnable()
-    {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        foreach ((YutResult yutResult, float weight) entry in source)
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
+            if (entry.yutResult == YutResult.BackDo)
+                redistributedWeight += entry.weight;
+            else
+                result.Add(entry);
+        }
+
+        AddWeight(result, YutResult.Yut, redistributedWeight * 0.5f);
+        AddWeight(result, YutResult.Mo, redistributedWeight * 0.5f);
+        return result.ToArray();
+    }
+
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
+    {
+        if (caster.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Issen requires a piece on the board.");
+
+        List<BoardTileId> path = CharacterBoardUtility.GetForwardPath(caster, 3);
+        foreach (BoardTileId tile in path)
+        {
+            foreach (CharacterPieceReference enemy in CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
+            {
+                if (enemy.Piece.CurrentTileId == tile &&
+                    CharacterSkillRegistry.IsTargetable(enemy.Player.PlayerId, enemy.Piece.PieceId))
+                    CharacterBoardUtility.Retire(enemy.Piece, false);
+            }
+        }
+
+        MoveStackAlongPath(caster, path);
+        return CharacterActiveResult.Success(
+            "Moved three spaces and retired enemies along the path.",
+            suppressExtraThrow: true);
+    }
+
+    private void MoveStackAlongPath(
+        PlayerRuntimeData.PieceRuntimeData caster,
+        IReadOnlyList<BoardTileId> path)
+    {
+        foreach (BoardTileId tile in path)
+        {
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
+            {
+                if (piece.PieceId == caster.PieceId ||
+                    (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
+                    piece.MoveTo(tile);
+            }
         }
     }
 
-    private void InitStatus()
+    private static void AddWeight(
+        List<(YutResult, float)> table,
+        YutResult result,
+        float additionalWeight)
     {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
+        for (int i = 0; i < table.Count; i++)
         {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
+            if (table[i].Item1 != result) continue;
+            table[i] = (result, table[i].Item2 + additionalWeight);
+            return;
         }
+
+        table.Add((result, additionalWeight));
     }
 }

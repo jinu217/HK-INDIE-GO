@@ -1,56 +1,15 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
-using YutArena.Common;
-public class CHAR_001_2_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        
-    }
+        if (Turns == null)
+            return CharacterActiveResult.Failure("TestTurnManager is not available.");
 
-    void Update()
-    {
-        
-    }
-
-    private void OnEnable()
-    {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
-        {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
-        }
-    }
-
-    private void InitStatus()
-    {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        Turns.GrantSkillExtraThrow();
+        return CharacterActiveResult.Success("One skill extra throw was granted.");
     }
 }

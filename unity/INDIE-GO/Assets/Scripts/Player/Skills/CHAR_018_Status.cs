@@ -1,56 +1,76 @@
-using System;
-using Unity.Mathematics;
+using System.Collections.Generic;
 using UnityEngine;
-using YutArena.Common;
-public class CHAR_018_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_018_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
-    {
-        
-    }
+    private int markedPlayerId = -1;
+    private int markedPieceId = -1;
 
-    void Update()
+    public override void OnPieceEnteredBoard()
     {
-        
-    }
+        List<CharacterPieceReference> enemies = CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId);
+        enemies.RemoveAll(reference =>
+            !CharacterSkillRegistry.IsTargetable(
+                reference.Player.PlayerId,
+                reference.Piece.PieceId));
 
-    private void OnEnable()
-    {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        if (enemies.Count == 0)
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
+            ClearMark();
+            return;
         }
+
+        CharacterPieceReference selected = enemies[Random.Range(0, enemies.Count)];
+        markedPlayerId = selected.Player.PlayerId;
+        markedPieceId = selected.Piece.PieceId;
     }
 
-    private void InitStatus()
+    public override void OnPieceRetired()
     {
-        if (characterData == null) return;
-        
+        ClearMark();
     }
 
-    private void Generate3DModel()
+    public override void OnCaptureCompleted(CharacterCaptureRequest request)
     {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
+        if (request.TargetPlayerId != markedPlayerId || request.TargetPieceId != markedPieceId)
+            return;
 
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
+        RequestSkillPoint();
+        ClearMark();
+    }
 
-            Debug.Log("3D Models spawn success");
-        }
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
+    {
+        if (!request.HasTarget)
+            return CharacterActiveResult.Failure("Assassination requires an enemy target.");
+        if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out CharacterPieceReference target))
+            return CharacterActiveResult.Failure("The selected target does not exist.");
+        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Assassination can target only an enemy on the board.");
+        if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
+            return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
+
+        caster.MoveTo(target.Piece.CurrentTileId);
+        CharacterBoardUtility.Retire(target.Piece, true);
+
+        var capture = new CharacterCaptureRequest(
+            PlayerId,
+            PieceId,
+            target.Player.PlayerId,
+            target.Piece.PieceId,
+            1,
+            true);
+        OnCaptureCompleted(capture);
+
+        return CharacterActiveResult.Success("Moved to and captured the selected enemy.");
+    }
+
+    private void ClearMark()
+    {
+        markedPlayerId = -1;
+        markedPieceId = -1;
     }
 }

@@ -16,13 +16,10 @@ MonoBehaviour:
   char_Name: "\uAE30\uBCF8\uD615(\uB0A8)"
   char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130(\uB0A8)\uC774\uB2E4."
   char_Icon: {fileID: 0}
-  passive_Name: "\uBAA8 \uC544\uB2C8\uBA74 \uB3C4"
-  passive_Desc: "\uB3C4\xB7\uBAA8\uAC00 \uB098\uC654\uC744 \uB54C \uC2A4\uD0AC\uD3EC\uC778\uD2B8
-    \uD68D\uB4DD"
-  active_Name: "\uD55C\uBC88 \uB354"
-  active_Desc: "\uC737\uC744 \uB358\uC9C4 \uD6C4 \uD55C \uBC88 \uB354 \uB358\uC9C8
-    \uAE30\uD68C \uBD80\uC5EC (\uCD94\uAC00 \uB358\uC9C0\uAE30\uC5D0 \uC601\uD5A5
-    \uC5C6\uC74C)"
-  cooldown_Turn: 0
-  cost_Sp: 5
+  passive_Name: "한 걸음 더"
+  passive_Desc: "말의 첫 이동 시 1칸 추가 이동 (리타이어 시 패시브 재사용 가능)"
+  active_Name: "모 아니면 도"
+  active_Desc: "3턴마다 사용 가능, 스킬 사용 시 다음 윷 던지기에서 모와 도가 나올 확률이 각각 50%가 된다."
+  passive_Status: 1
+  active_Status: 2
   visualModelPrefab: {fileID: 0}

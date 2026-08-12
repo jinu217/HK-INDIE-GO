@@ -24,6 +24,6 @@ MonoBehaviour:
     \uB9D0\uC5D0 \uBD84\uC2E0\uC744 \uC5C5\uC74C. \uBD84\uC2E0\uC744 \uC7A1\uC740
     \uC801\uC740 \uCD94\uAC00 \uD134\uC774 \uC5C6\uC74C. (\uBD84\uC2E0\uC73C\uB85C
     \uC810\uC218 \uD68D\uB4DD \uBD88\uAC00\uB2A5)"
-  cooldown_Turn: 5
-  cost_Sp: 0
+  passive_Status: 0
+  active_Status: 0
   visualModelPrefab: {fileID: 0}

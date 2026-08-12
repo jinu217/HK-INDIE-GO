@@ -1,56 +1,45 @@
-using System;
-using Unity.Mathematics;
-using UnityEngine;
+using System.Collections.Generic;
 using YutArena.Common;
-public class CHAR_001_1_Status : MonoBehaviour
+using YutArena.InGame;
+
+public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
 {
-    [SerializeField]
-    private CharacterData characterData;
-    private void Start()
+    private static readonly HashSet<int> ForceDoOrMoPlayers = new HashSet<int>();
+    private bool firstMovePassiveAvailable = true;
+
+    public override int ModifyMoveCount(CharacterMoveRequest request)
     {
-        
+        if (!firstMovePassiveAvailable || !request.IsFirstBoardMove)
+            return request.MoveCount;
+
+        firstMovePassiveAvailable = false;
+        return request.MoveCount < 0
+            ? request.MoveCount - 1
+            : request.MoveCount + 1;
     }
 
-    void Update()
+    public override void OnPieceRetired()
     {
-        
+        firstMovePassiveAvailable = true;
     }
 
-    private void OnEnable()
+    public override (YutResult, float)[] ModifyYutProbability(
+        (YutResult, float)[] currentTable)
     {
-        InitStatus();
-        Generate3DModel();
-        //YutManager.Yutresult += PassiveSkill;
-    }
-    private void OnDisable()
-    {
-        //YutManager.Yutresult -= PassiveSkill;
-    }
-    public void PassiveSkill(YutResult result)
-    {
-        if (YutResult.Do == result || YutResult.Mo == result)
+        if (!ForceDoOrMoPlayers.Remove(PlayerId)) return currentTable;
+
+        return new[]
         {
-            Debug.Log($"[{characterData.char_Name}] 패시브 발동");
-            //+1 턴
-        }
+            (YutResult.Do, 50f),
+            (YutResult.Mo, 50f)
+        };
     }
 
-    private void InitStatus()
+    protected override CharacterActiveResult ExecuteActive(
+        CharacterActiveRequest request,
+        PlayerRuntimeData.PieceRuntimeData caster)
     {
-        if (characterData == null) return;
-        
-    }
-
-    private void Generate3DModel()
-    {
-        if (characterData != null && characterData.visualModelPrefab != null)
-        {
-            GameObject spawnModel = Instantiate(characterData.visualModelPrefab, this.transform);
-
-            spawnModel.transform.localPosition = Vector3.zero;
-            spawnModel.transform.localRotation = Quaternion.identity;
-
-            Debug.Log("3D Models spawn success");
-        }
+        ForceDoOrMoPlayers.Add(PlayerId);
+        return CharacterActiveResult.Success("The next throw is limited to Do or Mo at 50% each.");
     }
 }
