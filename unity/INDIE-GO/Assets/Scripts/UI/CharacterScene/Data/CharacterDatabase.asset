@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbf8606fd4bd4e738e5ca8326a12a6ab, type: 3}
+  m_Name: CharacterDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.CharacterScene.CharacterDatabase
+  characters:
+  - {fileID: 11400000, guid: 4aac0718a1cf4404b809098eada5210c, type: 2}
+  - {fileID: 11400000, guid: 9e8604535dbd43648b30756604d923a3, type: 2}
+  - {fileID: 11400000, guid: 8f67e9b32678e1b4784932d9798974e8, type: 2}
+  - {fileID: 11400000, guid: 090edbf229adf324089a48f95903bffa, type: 2}
+  - {fileID: 11400000, guid: e6b3017c558944e45ac1b4f54d0eef91, type: 2}
+  - {fileID: 11400000, guid: c8ca85446498a6245996518c09813f30, type: 2}
+  - {fileID: 11400000, guid: 6e2903c25a9cd8c4c8fcb658aaafb3ba, type: 2}
+  - {fileID: 11400000, guid: a6ecbf5918f66fc4d8390faaad2dc4f5, type: 2}
+  - {fileID: 11400000, guid: 7a1a4aee89f502b47b8521687e2794f8, type: 2}
+  - {fileID: 11400000, guid: 61c47297cd705ea4e931d00e1cf38e3b, type: 2}
+  - {fileID: 11400000, guid: e0f00c8cf43ce3e48b3a97bb98418f2c, type: 2}
+  - {fileID: 11400000, guid: a02b86bc4937b244ea0c0415cd8f597a, type: 2}
+  - {fileID: 11400000, guid: cd2f3c8cbbbee304ca4cf77a1acc15ec, type: 2}
