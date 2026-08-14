@@ -13,12 +13,16 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
         if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece) ||
-            piece.State != PieceState.InBoard)
+            piece.State != PieceState.InBoard || !TryStartPassiveCooldown())
             return CharacterCaptureDecision.Proceed;
 
         isParts = true;
         partsRemainingOwnerTurns = 3;
         partsTile = piece.CurrentTileId;
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Passive] {nameof(CHAR_009_Status)} converted to parts at " +
+            $"{partsTile}. Player={PlayerId}, Piece={PieceId}",
+            this);
         return CharacterCaptureDecision.ConvertToParts;
     }
 
@@ -31,7 +35,9 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
         if (partsRemainingOwnerTurns > 0) return;
 
         if (TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece))
-            CharacterBoardUtility.Retire(piece, false);
+            CharacterBoardUtility.Retire(
+                new CharacterPieceReference(Owner, piece),
+                false);
         ClearParts();
     }
 
@@ -52,7 +58,8 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
 
     public override void OnPieceRetired()
     {
-        if (!isParts) ClearParts();
+        ClearParts();
+        ResetPassiveCooldown();
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -74,10 +81,14 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
                 !CharacterBoardUtility.IsWithinDistance(origin, reference.Piece.CurrentTileId, 1))
                 continue;
 
-            CharacterBoardUtility.Retire(reference.Piece, false);
+            CharacterBoardUtility.Retire(reference, false);
             retiredCount++;
         }
 
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Active] {nameof(CHAR_009_Status)} activated and retired " +
+            $"{retiredCount} piece(s). Player={PlayerId}, Piece={PieceId}",
+            this);
         return CharacterActiveResult.Success(
             $"Self Destruct retired {retiredCount} piece(s), including allies and the caster.",
             suppressExtraThrow: true);

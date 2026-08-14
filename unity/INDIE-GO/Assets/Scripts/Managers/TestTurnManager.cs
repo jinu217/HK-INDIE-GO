@@ -285,8 +285,16 @@ namespace YutArena.Managers
 
             SetPhase(TurnPhase.CheckExtraThrow);
 
-            if (YutResultRule.IsExtraThrowResult(result) &&
-                CurrentTurn.extraThrowByYutMoCount < GameRuleDefine.MaxYutMoExtraThrowCount)
+            //수정: 기본 윷 규칙을 계산한 뒤 Player 스킬 시스템이 최종 추가 던지기를 결정합니다.
+            bool grantsDefaultExtraThrow =
+                YutResultRule.IsExtraThrowResult(result) &&
+                CurrentTurn.extraThrowByYutMoCount < GameRuleDefine.MaxYutMoExtraThrowCount;
+            bool grantsExtraThrow = CharacterSkillRegistry.ShouldGrantExtraThrow(
+                (int)CurrentTurn.currentPlayer,
+                result,
+                grantsDefaultExtraThrow);
+
+            if (grantsExtraThrow)
             {
                 CurrentTurn.extraThrowByYutMoCount++;
                 SetPhase(TurnPhase.WaitThrow);
@@ -410,12 +418,17 @@ namespace YutArena.Managers
         // 방금 이동으로 상대 말이 잡혔는지(Kill/Retire) 전체 상대 플레이어를 훑어서 확인.
         // 발견하면 그 즉시 CC를 지워서(ClearCc) "소비 완료" 처리함 (다음에 또 잡힌 걸로 착각 안 하게).
         // 반환값: Kill(추가턴 있는 잡기)이 하나라도 있었으면 true
-        private bool ConsumeCaptureResults(int movingPlayerId)
+        //수정: 자폭 같은 스킬은 현재 플레이어 말의 Kill/Retire도 정리할 수 있습니다.
+        private bool ConsumeCaptureResults(
+            int movingPlayerId,
+            bool includeMovingPlayer = false)
         {
             bool gotKill = false;
             foreach (var otherPlayer in playerManager.ActivePlayers)
             {
-                if (otherPlayer.PlayerId == movingPlayerId) continue;
+                //수정: 일반 이동은 기존처럼 상대 말만, 스킬은 필요할 때 모든 말을 검사합니다.
+                if (!includeMovingPlayer && otherPlayer.PlayerId == movingPlayerId)
+                    continue;
 
                 foreach (var piece in otherPlayer.RuntimeData.Pieces)
                 {
@@ -477,6 +490,27 @@ namespace YutArena.Managers
         public void GrantSkillExtraThrow()
         {
             pendingSkillThrows++;
+        }
+
+        /// <summary>
+        /// Character code reports only the generic result of a completed active skill.
+        /// The turn manager remains responsible for consuming capture markers and
+        /// scheduling any capture bonus throw.
+        /// </summary>
+        //수정: 액티브 스킬의 잡기 결과와 추가 던지기를 턴 흐름에 반영합니다.
+        public void ResolveSkillResult(bool suppressExtraThrow)
+        {
+            if (CurrentTurn == null || CurrentTurn.currentPlayer == PlayerSlot.None)
+                return;
+
+            bool gotKillCapture = ConsumeCaptureResults(
+                (int)CurrentTurn.currentPlayer,
+                includeMovingPlayer: true);
+            if (!gotKillCapture || suppressExtraThrow)
+                return;
+
+            pendingCaptureThrows++;
+            CurrentTurn.extraThrowByCaptureCount++;
         }
 
         // ===================================================================

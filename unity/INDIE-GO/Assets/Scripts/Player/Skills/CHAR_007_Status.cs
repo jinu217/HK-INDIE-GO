@@ -6,7 +6,13 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
 {
     public override void OnCaptureCompleted(CharacterCaptureRequest request)
     {
+        if (!TryStartPassiveCooldown()) return;
+
         RequestSkillPoint();
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Passive] {nameof(CHAR_007_Status)} requested 1 skill point. " +
+            $"Player={PlayerId}, Piece={PieceId}",
+            this);
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -21,24 +27,24 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("No forward straight path is available.");
 
         CharacterPieceReference? firstEnemy = FindFirstEnemyOnPath(path);
-        foreach (BoardTileId tile in path)
-        {
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
-            {
-                if (piece.PieceId == caster.PieceId ||
-                    (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-                    piece.MoveTo(tile);
-            }
-        }
+        CharacterBoardUtility.MoveStackAlongPath(
+            Owner,
+            caster,
+            path,
+            ignoresInstalledItems: true);
 
         if (firstEnemy.HasValue &&
             CharacterSkillRegistry.IsTargetable(
                 firstEnemy.Value.Player.PlayerId,
                 firstEnemy.Value.Piece.PieceId))
-            firstEnemy.Value.Piece.SetCc(CcDefine.Stun, 1);
+            // CC is decremented at the start of its owner's turn. Two stored
+            // ticks therefore produce one complete turn in which movement is blocked.
+            firstEnemy.Value.Piece.SetCc(CcDefine.Stun, 2);
 
-        // 설치형 아이템 시스템은 현재 프로젝트에 없으므로 무시 플래그를 전달할 대상이 없습니다.
-        // 아이템 시스템 추가 시 이 액티브 결과에 item-ignore 컨텍스트를 연결해야 합니다.
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +
+            $"Player={PlayerId}, Piece={PieceId}",
+            this);
         return CharacterActiveResult.Success(
             "Charged to the end of the straight path and stunned the first enemy ahead.");
     }

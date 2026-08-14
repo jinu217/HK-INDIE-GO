@@ -40,6 +40,19 @@ public class CharacterData : ScriptableObject
     [TextArea]
     public string active_Desc;
 
+    [Header("# Active Runtime")]
+    [Min(0)]
+    [Tooltip("0 means that the active skill has no turn cooldown.")]
+    public int active_CooldownTurns;
+    [Min(0)]
+    [Tooltip("Skill points consumed only after the active skill succeeds.")]
+    public int active_SkillPointCost;
+
+    [Header("# Passive Runtime")]
+    [Min(0)]
+    [Tooltip("0 means that the passive uses only its character-specific trigger condition.")]
+    public int passive_CooldownTurns;
+
     [Header("# Skill Status")]
     [Tooltip("지정되지 않은 패시브는 None으로 둡니다.")]
     public CharacterSkillStatus passive_Status = CharacterSkillStatus.None;
@@ -51,4 +64,6 @@ public class CharacterData : ScriptableObject
 
     public bool HasPassiveStatus => passive_Status != CharacterSkillStatus.None;
     public bool HasActiveStatus => active_Status != CharacterSkillStatus.None;
+    public bool HasActiveSkill =>
+        HasActiveStatus || !string.IsNullOrWhiteSpace(active_Name);
 }

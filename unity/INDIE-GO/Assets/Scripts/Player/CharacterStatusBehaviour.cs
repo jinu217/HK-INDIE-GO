@@ -7,7 +7,7 @@ using YutArena.Managers;
 /// <summary>
 /// 캐릭터 말 프리팹의 공통 스킬 기반 클래스입니다.
 /// 네 개의 말은 각각 이 컴포넌트를 가지며 PlayerId/PieceId로 레지스트리에 등록됩니다.
-/// SP와 쿨타임은 이 클래스가 소유하지 않습니다. 액티브 호출 전 플레이어 시스템이 검증합니다.
+/// SP와 액티브 쿨타임은 CharacterSkillRegistry가 플레이어 단위로 검증합니다.
 /// </summary>
 public abstract class CharacterStatusBehaviour : MonoBehaviour
 {
@@ -19,12 +19,22 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     private bool isRegistered;
     private int grantedProtectionCharges;
     private int grantedProtectionRemainingOwnerTurns;
+    private int remainingPassiveCooldownTurns;
 
     public CharacterData Data => characterData;
     public CharacterSkillStatus PassiveStatus =>
         characterData != null ? characterData.passive_Status : CharacterSkillStatus.None;
     public CharacterSkillStatus ActiveStatus =>
         characterData != null ? characterData.active_Status : CharacterSkillStatus.None;
+    public bool HasActiveSkill => characterData != null && characterData.HasActiveSkill;
+    public int ActiveCooldownTurns =>
+        characterData != null ? Mathf.Max(0, characterData.active_CooldownTurns) : 0;
+    public int ActiveSkillPointCost =>
+        characterData != null ? Mathf.Max(0, characterData.active_SkillPointCost) : 0;
+    public int PassiveCooldownTurns =>
+        characterData != null ? Mathf.Max(0, characterData.passive_CooldownTurns) : 0;
+    public int RemainingPassiveCooldownTurns => remainingPassiveCooldownTurns;
+    public bool IsPassiveReady => remainingPassiveCooldownTurns <= 0;
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
     public virtual bool IsTargetable => true;
@@ -127,6 +137,9 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public virtual void OnOwnerTurnStarted()
     {
+        if (remainingPassiveCooldownTurns > 0)
+            remainingPassiveCooldownTurns--;
+
         if (grantedProtectionRemainingOwnerTurns <= 0) return;
 
         grantedProtectionRemainingOwnerTurns--;
@@ -142,12 +155,28 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
             return CharacterActiveResult.Failure("Character skill runtime is not registered.");
         if (request.PlayerId != PlayerId || request.CasterPieceId != PieceId)
             return CharacterActiveResult.Failure("Active request does not match this character piece.");
+        if (Turns == null)
+            return CharacterActiveResult.Failure("Turn manager is not available.");
+        if (Turns.CurrentTurn == null || (int)Turns.CurrentTurn.currentPlayer != PlayerId)
+            return CharacterActiveResult.Failure("The active skill can be used only during its owner's turn.");
+        if (!CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase))
+            return CharacterActiveResult.Failure(
+                $"The active skill cannot be used during {Turns.CurrentTurn.currentPhase}.");
         if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData caster))
             return CharacterActiveResult.Failure("Caster piece runtime data is missing.");
         if (caster.State == PieceState.Goal)
             return CharacterActiveResult.Failure("A goal piece cannot use an active skill.");
 
         return ExecuteActive(request, caster);
+    }
+
+    public bool IsActiveUsableInCurrentPhase()
+    {
+        return isRegistered &&
+               Turns != null &&
+               Turns.CurrentTurn != null &&
+               (int)Turns.CurrentTurn.currentPlayer == PlayerId &&
+               CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase);
     }
 
     /// <summary>
@@ -173,6 +202,32 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
             $"{GetType().Name} has no implemented active skill.");
     }
 
+    protected virtual bool CanUseActiveDuringPhase(TurnPhase phase)
+    {
+        return phase == TurnPhase.WaitAction;
+    }
+
+    protected bool TryStartPassiveCooldown()
+    {
+        if (!IsPassiveReady) return false;
+
+        remainingPassiveCooldownTurns = PassiveCooldownTurns;
+        if (remainingPassiveCooldownTurns > 0)
+        {
+            Debug.Log(
+                $"[CharacterSkill][PassiveCooldown] Started " +
+                $"{remainingPassiveCooldownTurns} turn(s). Player={PlayerId}, Piece={PieceId}",
+                this);
+        }
+
+        return true;
+    }
+
+    protected void ResetPassiveCooldown()
+    {
+        remainingPassiveCooldownTurns = 0;
+    }
+
     protected bool TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (Owner != null && Owner.TryGetPieceData(pieceId, out piece))
@@ -192,6 +247,26 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
             playerId,
             targetPieceId,
             out reference);
+    }
+
+    protected int GetStackPieceCount(PlayerRuntimeData.PieceRuntimeData caster)
+    {
+        if (caster == null || Owner == null || Owner.RuntimeData == null)
+            return 1;
+        if (!caster.IsStacked)
+            return 1;
+
+        int count = 0;
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
+        {
+            if (piece.State == PieceState.InBoard &&
+                piece.StackGroupId == caster.StackGroupId)
+            {
+                count++;
+            }
+        }
+
+        return Mathf.Max(1, count);
     }
 
     protected void RequestSkillPoint(int amount = 1)

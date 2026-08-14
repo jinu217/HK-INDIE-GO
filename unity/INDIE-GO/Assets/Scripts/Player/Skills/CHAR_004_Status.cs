@@ -9,9 +9,13 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
 
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        if (charmShieldAvailable)
+        if (charmShieldAvailable && TryStartPassiveCooldown())
         {
             charmShieldAvailable = false;
+            UnityEngine.Debug.Log(
+                $"[CharacterSkill][Passive] {nameof(CHAR_004_Status)} prevented capture. " +
+                $"Player={PlayerId}, Piece={PieceId}",
+                this);
             return CharacterCaptureDecision.Prevent;
         }
 
@@ -22,6 +26,7 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
     {
         charmShieldAvailable = true;
         hiddenOwnerTurns = 0;
+        ResetPassiveCooldown();
     }
 
     public override void OnOwnerTurnStarted()
@@ -34,7 +39,14 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
+        if (caster.State != PieceState.InBoard)
+            return CharacterActiveResult.Failure("Illusion requires a piece on the board.");
+
         hiddenOwnerTurns = 3;
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Active] {nameof(CHAR_004_Status)} activated. " +
+            $"Player={PlayerId}, Piece={PieceId}",
+            this);
         return CharacterActiveResult.Success("The caster cannot be targeted for three owner turns.");
     }
 }

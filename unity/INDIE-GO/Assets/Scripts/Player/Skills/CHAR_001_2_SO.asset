@@ -20,6 +20,8 @@ MonoBehaviour:
   passive_Desc: ""
   active_Name: "한번 더"
   active_Desc: "3턴마다 사용 가능, 윷을 던진 후 한 번 더 던질 기회 부여 (추가 던지기에 영향 없음)"
+  active_CooldownTurns: 3
+  passive_CooldownTurns: 0
   passive_Status: 0
   active_Status: 0
   visualModelPrefab: {fileID: 0}

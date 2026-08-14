@@ -18,6 +18,8 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
     public override (YutResult, float)[] ModifyYutProbability(
         (YutResult, float)[] currentTable)
     {
+        if (!TryStartPassiveCooldown()) return currentTable;
+
         (YutResult, float)[] source = currentTable == null || currentTable.Length == 0
             ? DefaultTable
             : currentTable;
@@ -34,6 +36,13 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
 
         AddWeight(result, YutResult.Yut, redistributedWeight * 0.5f);
         AddWeight(result, YutResult.Mo, redistributedWeight * 0.5f);
+        if (redistributedWeight > 0f)
+        {
+            UnityEngine.Debug.Log(
+                $"[CharacterSkill][Passive] {nameof(CHAR_005_Status)} redistributed " +
+                $"BackDo weight {redistributedWeight}. Player={PlayerId}, Piece={PieceId}",
+                this);
+        }
         return result.ToArray();
     }
 
@@ -45,35 +54,34 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("Issen requires a piece on the board.");
 
         List<BoardTileId> path = CharacterBoardUtility.GetForwardPath(caster, 3);
+        int retiredCount = 0;
         foreach (BoardTileId tile in path)
         {
             foreach (CharacterPieceReference enemy in CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
             {
                 if (enemy.Piece.CurrentTileId == tile &&
-                    CharacterSkillRegistry.IsTargetable(enemy.Player.PlayerId, enemy.Piece.PieceId))
-                    CharacterBoardUtility.Retire(enemy.Piece, false);
+                    CharacterSkillRegistry.IsTargetable(enemy.Player.PlayerId, enemy.Piece.PieceId) &&
+                    CharacterBoardUtility.TryCapture(
+                        PlayerId,
+                        PieceId,
+                        enemy,
+                        1,
+                        false,
+                        out _))
+                {
+                    retiredCount++;
+                }
             }
         }
 
-        MoveStackAlongPath(caster, path);
+        CharacterBoardUtility.MoveStackAlongPath(Owner, caster, path);
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Active] {nameof(CHAR_005_Status)} activated. " +
+            $"Player={PlayerId}, Piece={PieceId}",
+            this);
         return CharacterActiveResult.Success(
-            "Moved three spaces and retired enemies along the path.",
+            $"Moved three spaces and retired {retiredCount} enemy piece(s) along the path.",
             suppressExtraThrow: true);
-    }
-
-    private void MoveStackAlongPath(
-        PlayerRuntimeData.PieceRuntimeData caster,
-        IReadOnlyList<BoardTileId> path)
-    {
-        foreach (BoardTileId tile in path)
-        {
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
-            {
-                if (piece.PieceId == caster.PieceId ||
-                    (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-                    piece.MoveTo(tile);
-            }
-        }
     }
 
     private static void AddWeight(

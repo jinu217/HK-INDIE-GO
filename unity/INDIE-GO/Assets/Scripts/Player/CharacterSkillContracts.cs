@@ -143,13 +143,15 @@ public readonly struct CharacterMoveRecord
         int pieceId,
         BoardTileId from,
         BoardTileId to,
-        IReadOnlyList<BoardTileId> path)
+        IReadOnlyList<BoardTileId> path,
+        bool ignoresInstalledItems = false)
     {
         PlayerId = playerId;
         PieceId = pieceId;
         From = from;
         To = to;
         Path = path ?? Array.Empty<BoardTileId>();
+        IgnoresInstalledItems = ignoresInstalledItems;
     }
 
     public int PlayerId { get; }
@@ -157,4 +159,5 @@ public readonly struct CharacterMoveRecord
     public BoardTileId From { get; }
     public BoardTileId To { get; }
     public IReadOnlyList<BoardTileId> Path { get; }
+    public bool IgnoresInstalledItems { get; }
 }

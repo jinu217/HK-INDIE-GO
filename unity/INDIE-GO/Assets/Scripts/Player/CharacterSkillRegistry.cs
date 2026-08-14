@@ -9,17 +9,45 @@ using YutArena.Managers;
 /// </summary>
 public static class CharacterSkillRegistry
 {
+    private static readonly (YutResult result, float weight)[] DefaultYutProbabilityTable =
+    {
+        (YutResult.Do, 10.79f),
+        (YutResult.Gae, 33.89f),
+        (YutResult.Geol, 35.49f),
+        (YutResult.Yut, 13.94f),
+        (YutResult.Mo, 2.29f),
+        (YutResult.BackDo, 3.59f),
+        (YutResult.Nak, 0.01f)
+    };
+
     private static readonly Dictionary<(int playerId, int pieceId), CharacterStatusBehaviour>
         Behaviours = new Dictionary<(int, int), CharacterStatusBehaviour>();
     private static readonly HashSet<TestYutRuleManager> BridgedYutManagers =
         new HashSet<TestYutRuleManager>();
     private static readonly HashSet<TestTurnManager> BridgedTurnManagers =
         new HashSet<TestTurnManager>();
+    private static readonly Dictionary<(int playerId, CharacterData character), int>
+        ActiveCooldowns = new Dictionary<(int, CharacterData), int>();
+    private static readonly Dictionary<int, int> SkillPoints = new Dictionary<int, int>();
 
     /// <summary>
-    /// SP를 직접 변경하지 않고 플레이어 시스템에 획득 요청만 전달합니다.
+    /// SP가 변경됐을 때 UI나 별도 플레이어 시스템에 변경량을 전달합니다.
     /// </summary>
     public static event Action<int, int> SkillPointRequested;
+    public static event Action<CharacterMoveRecord> MoveCompleted;
+
+    [UnityEngine.RuntimeInitializeOnLoadMethod(
+        UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetRuntimeState()
+    {
+        Behaviours.Clear();
+        BridgedYutManagers.Clear();
+        BridgedTurnManagers.Clear();
+        ActiveCooldowns.Clear();
+        SkillPoints.Clear();
+        SkillPointRequested = null;
+        MoveCompleted = null;
+    }
 
     internal static int Register(
         PlayerController owner,
@@ -121,6 +149,8 @@ public static class CharacterSkillRegistry
 
         foreach (CharacterStatusBehaviour candidate in SnapshotBehaviours())
             candidate.OnAnyPieceMoveCompleted(record);
+
+        MoveCompleted?.Invoke(record);
     }
 
     public static void NotifyCaptureCompleted(CharacterCaptureRequest request)
@@ -131,6 +161,8 @@ public static class CharacterSkillRegistry
 
     public static void NotifyOwnerTurnStarted(int playerId)
     {
+        TickActiveCooldowns(playerId);
+
         foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
             behaviour.OnOwnerTurnStarted();
     }
@@ -147,7 +179,60 @@ public static class CharacterSkillRegistry
             return CharacterActiveResult.Failure(
                 $"No character skill is registered for Player {request.PlayerId}, Piece {request.CasterPieceId}.");
 
-        return behaviour.TryUseActive(request);
+        if (!behaviour.HasActiveSkill)
+            return CharacterActiveResult.Failure("This character has no active skill.");
+
+        int remainingCooldown = GetRemainingActiveCooldown(request.PlayerId, behaviour.Data);
+        if (remainingCooldown > 0)
+            return CharacterActiveResult.Failure(
+                $"The active skill is on cooldown for {remainingCooldown} more owner turn(s).");
+
+        int skillPointCost = behaviour.ActiveSkillPointCost;
+        int currentSkillPoints = GetSkillPoints(request.PlayerId);
+        if (currentSkillPoints < skillPointCost)
+            return CharacterActiveResult.Failure(
+                $"The active skill requires {skillPointCost} skill point(s), " +
+                $"but only {currentSkillPoints} are available.");
+
+        CharacterActiveResult result = behaviour.TryUseActive(request);
+        if (!result.Succeeded) return result;
+
+        if (skillPointCost > 0)
+        {
+            SkillPoints[request.PlayerId] = currentSkillPoints - skillPointCost;
+            UnityEngine.Debug.Log(
+                $"[CharacterSkill][SkillPoint] Spent {skillPointCost}. " +
+                $"Player={request.PlayerId}, Remaining={SkillPoints[request.PlayerId]}",
+                behaviour);
+        }
+
+        if (behaviour.ActiveCooldownTurns > 0)
+        {
+            ActiveCooldowns[(request.PlayerId, behaviour.Data)] = behaviour.ActiveCooldownTurns;
+            UnityEngine.Debug.Log(
+                $"[CharacterSkill][Cooldown] Started {behaviour.ActiveCooldownTurns} turn(s). " +
+                $"Player={request.PlayerId}, Character={behaviour.Data.char_Name}",
+                behaviour);
+        }
+
+        return result;
+    }
+
+    public static int GetSkillPoints(int playerId)
+    {
+        if (playerId <= 0) return 0;
+        return SkillPoints.TryGetValue(playerId, out int points)
+            ? Math.Max(0, points)
+            : 0;
+    }
+
+    public static int GetRemainingActiveCooldown(int playerId, CharacterData character)
+    {
+        if (playerId <= 0 || character == null) return 0;
+
+        return ActiveCooldowns.TryGetValue((playerId, character), out int remaining)
+            ? Math.Max(0, remaining)
+            : 0;
     }
 
     public static bool IsTargetable(int playerId, int pieceId)
@@ -160,6 +245,10 @@ public static class CharacterSkillRegistry
         if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
         if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
 
+        int total = GetSkillPoints(playerId) + amount;
+        SkillPoints[playerId] = total;
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][SkillPoint] Gained {amount}. Player={playerId}, Total={total}");
         SkillPointRequested?.Invoke(playerId, amount);
     }
 
@@ -173,7 +262,9 @@ public static class CharacterSkillRegistry
                 yutRules.ProbabilityTableProvider;
             yutRules.ProbabilityTableProvider = player =>
             {
-                (YutResult, float)[] baseTable = previous != null ? previous(player) : null;
+                (YutResult, float)[] baseTable = previous != null
+                    ? previous(player)
+                    : DefaultYutProbabilityTable;
                 return ModifyYutProbability((int)player, baseTable);
             };
         }
@@ -240,5 +331,24 @@ public static class CharacterSkillRegistry
         }
 
         return result;
+    }
+
+    private static void TickActiveCooldowns(int playerId)
+    {
+        var keys = new List<(int playerId, CharacterData character)>();
+        foreach ((int ownerId, CharacterData character) key in ActiveCooldowns.Keys)
+        {
+            if (key.ownerId == playerId)
+                keys.Add(key);
+        }
+
+        foreach ((int ownerId, CharacterData character) key in keys)
+        {
+            int remaining = ActiveCooldowns[key];
+            if (remaining <= 1)
+                ActiveCooldowns.Remove(key);
+            else
+                ActiveCooldowns[key] = remaining - 1;
+        }
     }
 }

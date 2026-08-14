@@ -22,6 +22,8 @@ MonoBehaviour:
   active_Name: "일섬"
   active_Desc: "\uC9C1\uC120 3\uCE78 \uC774\uB3D9\uD558\uBA70 \uACBD\uB85C\uC758
     \uBAA8\uB4E0 \uC801 \uB9D0 \uB9AC\uD0C0\uC774\uC5B4 (\uCD94\uAC00 \uD134 \uBD88\uAC00)"
+  active_CooldownTurns: 3
+  passive_CooldownTurns: 0
   passive_Status: 7
   active_Status: 8
   visualModelPrefab: {fileID: 0}

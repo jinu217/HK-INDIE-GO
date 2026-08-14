@@ -11,7 +11,12 @@ public sealed class PieceMovementManager : MonoBehaviour
 {
     [SerializeField] private PlayerManager playerManager;
 
-    public bool TryMovePiece(int playerId, int pieceId, int moveCount)
+    //수정: 일반 이동과 캐릭터 스킬 이동을 구분할 수 있도록 선택 인자를 추가했습니다.
+    public bool TryMovePiece(
+        int playerId,
+        int pieceId,
+        int moveCount,
+        bool isSkillMove = false)
     {
         if (playerManager == null)
         {
@@ -33,8 +38,25 @@ public sealed class PieceMovementManager : MonoBehaviour
             return false;
         }
 
+        //수정: 실제 이동 전에 Player 스킬 시스템에서 최종 이동량을 결정합니다.
+        bool isFirstBoardMove = selectedPiece.State == PieceState.Waiting;
+        moveCount = CharacterSkillRegistry.ModifyMoveCount(
+            new CharacterMoveRequest(
+                playerId,
+                pieceId,
+                moveCount,
+                isFirstBoardMove,
+                isSkillMove));
+        if (moveCount == 0)
+        {
+            Debug.LogWarning("A character skill changed the move count to zero.", this);
+            return false;
+        }
+
         List<PlayerRuntimeData.PieceRuntimeData> movingPieces = GetMovingPieces(player, selectedPiece);
         BoardTileId startingTile = selectedPiece.CurrentTileId;
+        //수정: 경로 기반 패시브에 전달할 실제 이동 타일을 기록합니다.
+        var path = new List<BoardTileId>();
         bool isBackward = moveCount < 0;
         int stepCount = Mathf.Abs(moveCount);
 
@@ -46,6 +68,8 @@ public sealed class PieceMovementManager : MonoBehaviour
                 selectedPiece.CurrentTileId == BoardTileId.None)
             {
                 SetGroupGoal(movingPieces);
+                //수정: 완주로 보드를 벗어난 마지막 경로도 기록합니다.
+                path.Add(BoardTileId.None);
                 break;
             }
 
@@ -55,23 +79,59 @@ public sealed class PieceMovementManager : MonoBehaviour
 
             foreach (PlayerRuntimeData.PieceRuntimeData movingPiece in movingPieces)
                 movingPiece.MoveTo(nextTile);
+
+            //수정: 한 칸씩 이동한 전체 경로를 Player 스킬 시스템에 전달하기 위해 저장합니다.
+            path.Add(nextTile);
         }
+
+        //수정: 대기 상태의 말이 처음 보드에 진입한 시점을 알립니다.
+        if (isFirstBoardMove && selectedPiece.State == PieceState.InBoard)
+            CharacterSkillRegistry.NotifyPieceEnteredBoard(playerId, pieceId);
 
         // Goal pieces have been removed from the board and cannot interact.
         if (selectedPiece.State == PieceState.Goal)
         {
+            //수정: 완주한 이동도 이동 완료 이벤트에서 누락되지 않도록 전달합니다.
+            NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
             Debug.Log($"Player {playerId}, Piece {pieceId + 1} reached Goal.", this);
             return true;
         }
 
-        ResolveCaptures(playerId, selectedPiece.CurrentTileId, moveCount);
+        //수정: 잡기 패시브 판단에 공격 말 ID와 업힌 실제 말 수를 함께 전달합니다.
+        ResolveCaptures(
+            playerId,
+            selectedPiece.PieceId,
+            movingPieces.Count,
+            selectedPiece.CurrentTileId,
+            moveCount);
         ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
+        //수정: 잡기와 업기 처리가 끝난 뒤 최종 이동 결과를 Player 시스템에 알립니다.
+        NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
 
         Debug.Log(
             $"Player {playerId}, Piece {pieceId + 1}: {startingTile} -> " +
             $"{selectedPiece.CurrentTileId} ({moveCount} spaces)",
             this);
         return true;
+    }
+
+    //수정: 이동한 모든 말에 출발지, 도착지, 전체 경로를 전달하는 공통 알림입니다.
+    private static void NotifyMoveCompleted(
+        int playerId,
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
+        BoardTileId startingTile,
+        IReadOnlyList<BoardTileId> path)
+    {
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+        {
+            CharacterSkillRegistry.NotifyMoveCompleted(
+                new CharacterMoveRecord(
+                    playerId,
+                    piece.PieceId,
+                    startingTile,
+                    piece.CurrentTileId,
+                    path));
+        }
     }
 
     private static List<PlayerRuntimeData.PieceRuntimeData> GetMovingPieces(
@@ -101,27 +161,81 @@ public sealed class PieceMovementManager : MonoBehaviour
             piece.SetGoal();
     }
 
-    private void ResolveCaptures(int movingPlayerId, BoardTileId landingTile, int moveCount)
+    //수정: 캐릭터 잡기 패시브가 판단할 수 있도록 공격 말 정보를 추가로 받습니다.
+    private void ResolveCaptures(
+        int movingPlayerId,
+        int movingPieceId,
+        int movingPieceCount,
+        BoardTileId landingTile,
+        int moveCount)
     {
         foreach (PlayerController otherPlayer in playerManager.ActivePlayers)
         {
             if (otherPlayer.PlayerId == movingPlayerId)
                 continue;
 
+            //수정: 공격 말 수만큼만 퇴장시키는 스킬 결과를 계산합니다.
+            int limitedRetiredCount = 0;
             foreach (PlayerRuntimeData.PieceRuntimeData targetPiece in otherPlayer.RuntimeData.Pieces)
             {
                 if (targetPiece.State != PieceState.InBoard || targetPiece.CurrentTileId != landingTile)
                     continue;
 
-                CcDefine captureCc = GetCaptureCc(targetPiece, moveCount);
+                //수정: 실제 잡기 전에 Player 스킬 시스템에 잡기 판단을 요청합니다.
+                bool wouldGrantExtraThrow = GrantsCaptureExtraThrow(moveCount);
+                var request = new CharacterCaptureRequest(
+                    movingPlayerId,
+                    movingPieceId,
+                    otherPlayer.PlayerId,
+                    targetPiece.PieceId,
+                    movingPieceCount,
+                    wouldGrantExtraThrow);
+                CharacterCaptureDecision decision =
+                    CharacterSkillRegistry.EvaluateIncomingCapture(request);
+
+                //수정: 방어, 분신 소모, 부품 전환 결과면 기본 잡기를 실행하지 않습니다.
+                if (decision == CharacterCaptureDecision.Prevent ||
+                    decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+                    decision == CharacterCaptureDecision.ConvertToParts)
+                {
+                    continue;
+                }
+
+                //수정: 캐릭터 판단에 따라 기본 잡기 또는 제한 퇴장을 적용합니다.
+                CcDefine captureCc;
+                if (decision == CharacterCaptureDecision.LimitRetireToAttackingCount)
+                {
+                    if (limitedRetiredCount >= movingPieceCount)
+                        continue;
+
+                    limitedRetiredCount++;
+                    captureCc = CcDefine.Retire;
+                }
+                else
+                {
+                    captureCc = GetCaptureCc(targetPiece, moveCount);
+                }
+
                 targetPiece.SetCaptured(captureCc);
+                //수정: 실제 잡기 이후 방어자 퇴장과 공격자 잡기 완료를 알립니다.
+                CharacterSkillRegistry.NotifyPieceRetired(
+                    otherPlayer.PlayerId,
+                    targetPiece.PieceId);
+                CharacterSkillRegistry.NotifyCaptureCompleted(request);
             }
         }
     }
 
+    //수정: 잡기 추가 던지기 판정을 요청 정보와 실제 잡기 처리에서 함께 사용합니다.
+    private static bool GrantsCaptureExtraThrow(int moveCount)
+    {
+        return moveCount == -1 || (moveCount >= 1 && moveCount <= 3);
+    }
+
     private static CcDefine GetCaptureCc(PlayerRuntimeData.PieceRuntimeData targetPiece, int moveCount)
     {
-        bool grantsExtraThrow = moveCount == -1 || (moveCount >= 1 && moveCount <= 3);
+        //수정: 중복된 추가 던지기 조건을 공통 함수로 통일했습니다.
+        bool grantsExtraThrow = GrantsCaptureExtraThrow(moveCount);
 
         // A stacked group grants only one extra throw: its carrier is Kill,
         // and all carried pieces are Retire.

@@ -20,6 +20,8 @@ MonoBehaviour:
   passive_Desc: "말의 첫 이동 시 1칸 추가 이동 (리타이어 시 패시브 재사용 가능)"
   active_Name: "모 아니면 도"
   active_Desc: "3턴마다 사용 가능, 스킬 사용 시 다음 윷 던지기에서 모와 도가 나올 확률이 각각 50%가 된다."
+  active_CooldownTurns: 3
+  passive_CooldownTurns: 0
   passive_Status: 1
   active_Status: 2
   visualModelPrefab: {fileID: 0}

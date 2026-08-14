@@ -21,6 +21,8 @@ MonoBehaviour:
   active_Name: "\uAD11\uD3ED \uB3CC\uC9C4"
   active_Desc: "\uC9C1\uC120 \uB05D\uAE4C\uC9C0 \uB3CC\uC9C4, \uC804\uBC29 \uC801\uC5D0\uAC8C
     \uC2A4\uD134 + \uC124\uCE58\uD615 \uC544\uC774\uD15C \uBB34\uC2DC"
+  active_CooldownTurns: 3
+  passive_CooldownTurns: 0
   passive_Status: 1
   active_Status: 10
   visualModelPrefab: {fileID: 0}

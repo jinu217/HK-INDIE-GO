@@ -235,11 +235,129 @@ public static class CharacterBoardUtility
     }
 
     public static void Retire(
-        PlayerRuntimeData.PieceRuntimeData piece,
+        CharacterPieceReference target,
         bool grantsExtraThrow)
     {
-        if (piece == null) throw new ArgumentNullException(nameof(piece));
-        piece.SetCaptured(grantsExtraThrow ? CcDefine.Kill : CcDefine.Retire);
+        target.Piece.SetCaptured(grantsExtraThrow ? CcDefine.Kill : CcDefine.Retire);
+        CharacterSkillRegistry.NotifyPieceRetired(
+            target.Player.PlayerId,
+            target.Piece.PieceId);
+    }
+
+    public static bool TryCapture(
+        int attackerPlayerId,
+        int attackerPieceId,
+        CharacterPieceReference target,
+        int attackingPieceCount,
+        bool grantsExtraThrow,
+        out CharacterCaptureDecision decision)
+    {
+        var request = new CharacterCaptureRequest(
+            attackerPlayerId,
+            attackerPieceId,
+            target.Player.PlayerId,
+            target.Piece.PieceId,
+            attackingPieceCount,
+            grantsExtraThrow);
+        decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+
+        if (decision == CharacterCaptureDecision.Prevent ||
+            decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+            decision == CharacterCaptureDecision.ConvertToParts)
+        {
+            return false;
+        }
+
+        bool finalExtraThrow =
+            grantsExtraThrow &&
+            decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
+        Retire(target, finalExtraThrow);
+        CharacterSkillRegistry.NotifyCaptureCompleted(request);
+        return true;
+    }
+
+    public static void MoveStackAlongPath(
+        PlayerController owner,
+        PlayerRuntimeData.PieceRuntimeData caster,
+        IReadOnlyList<BoardTileId> path,
+        bool ignoresInstalledItems = false)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        if (caster == null) throw new ArgumentNullException(nameof(caster));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+
+        BoardTileId startingTile = caster.CurrentTileId;
+        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        {
+            if (piece.PieceId == caster.PieceId ||
+                (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
+            {
+                movingPieces.Add(piece);
+            }
+        }
+
+        foreach (BoardTileId tile in path)
+        {
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+                piece.MoveTo(tile);
+        }
+
+        if (path.Count > 0)
+            ResolveFriendlyStack(owner, movingPieces, path[path.Count - 1]);
+
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+        {
+            CharacterSkillRegistry.NotifyMoveCompleted(
+                new CharacterMoveRecord(
+                    owner.PlayerId,
+                    piece.PieceId,
+                    startingTile,
+                    piece.CurrentTileId,
+                    path,
+                    ignoresInstalledItems));
+        }
+    }
+
+    private static void ResolveFriendlyStack(
+        PlayerController owner,
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
+        BoardTileId landingTile)
+    {
+        PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
+        var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        {
+            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile)
+                continue;
+
+            piecesOnTile.Add(piece);
+            if (stationaryPiece == null && !ContainsPiece(movingPieces, piece))
+                stationaryPiece = piece;
+        }
+
+        if (stationaryPiece == null) return;
+
+        int groupId = stationaryPiece.IsStacked
+            ? stationaryPiece.StackGroupId
+            : owner.RuntimeData.CreateStackGroupId();
+        int leaderId = stationaryPiece.IsStacked
+            ? stationaryPiece.StackLeaderPieceId
+            : stationaryPiece.PieceId;
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
+            piece.SetStackGroup(groupId, leaderId);
+    }
+
+    private static bool ContainsPiece(
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> pieces,
+        PlayerRuntimeData.PieceRuntimeData target)
+    {
+        for (int i = 0; i < pieces.Count; i++)
+        {
+            if (pieces[i] == target) return true;
+        }
+
+        return false;
     }
 
     private static Dictionary<BoardTileId, List<BoardTileId>> BuildGraph()
