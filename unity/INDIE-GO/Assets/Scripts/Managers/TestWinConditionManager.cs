@@ -29,7 +29,6 @@ namespace YutArena.Managers
         // ===================================================================
         private HashSet<TeamSlot> activeTeams = new HashSet<TeamSlot>();
         private List<TeamSlot> finishedRanking = new List<TeamSlot>();
-
         // 팀별 완주 수가 바뀔 때마다 UI(점수판 등)에 알려주기 위한 이벤트
         public System.Action<TeamSlot, int> OnEscapeCountChanged;
         // GameManager.StartGame()에서 호출됨. 새 게임 시작하니까 이전 판 점수 기록은 초기화
@@ -38,10 +37,10 @@ namespace YutArena.Managers
             settings = gameSettings;
             escapeCountByTeam.Clear();
             finishedRanking.Clear();
-            leftPlayers.Clear();              
-            eliminatedTeams.Clear();          
-            awaitingContinueDecision = false; 
-            pendingLeaveTeam = TeamSlot.None; 
+            leftPlayers.Clear();
+            eliminatedTeams.Clear();
+            awaitingContinueDecision = false;
+            pendingLeaveTeam = TeamSlot.None;
             // 인스펙터에 꽂아둔 모드 룰 스크립트들을 IGameModeRule로 형변환해서,
             // "이 모드는 이 룰"이라고 찾기 쉽게 표(Dictionary)로 정리해둠 (최초 1회만 하면 됨)
             if (modeRules.Count == 0 && modeRuleSources != null)
@@ -94,7 +93,6 @@ namespace YutArena.Managers
             if (won)
                 HandleTeamFinished(team); // 예전엔 여기서 바로 Declare 했는데, 다인전 순위 처리를 위해 분리
         }
-
         // ===================================================================
         // 목표를 채운 팀이 나왔을 때: "이게 게임을 완전히 끝낼 상황인지, 아니면 이 팀만 빠지고
         // 계속 진행할 상황인지"를 판단하는 함수 (다인전 순위 시스템)
@@ -142,8 +140,6 @@ namespace YutArena.Managers
             };
             gameManager.EndGame(result);
         }
-
-
         // ===================================================================
         //  항복/탈주 처리 
         // - 1vs1(팀 인원 1명씩): 나가면 그 팀은 바로 전멸 -> 상대 자동 승리 (즉시 패배)
@@ -183,7 +179,6 @@ namespace YutArena.Managers
                 HandleTeamEliminated(team);
             }
         }
-
         // 이 팀 소속 중에 "아직 안 나간 사람"이 있는지 확인
         private bool HasActiveTeammate(TeamSlot team)
         {
@@ -234,13 +229,13 @@ namespace YutArena.Managers
                 Debug.Log(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
             }
         }
-
         // ===================================================================
         //  Escape 승리조건 2번(제한 시간 안에 더 많은 말 탈출)
         // 1단계: 완주 개수 최다 팀 찾기 (여러 팀 동점 가능)
         // 2단계: 참먹이(골)에 더 가까운 말이 있는 팀 승리
-        //        (TODO: 말이 골 까지 남은 거리 계산하는 영서 함수 필요, 지금은 건너뜀)
         // 3단계: 그래도 동점이면, 팀 대표가 윷을 던져서 더 높은 결과가 나온 팀 승리 (동점이면 재던지기)
+        //        "팀 대표 1명"이 아니라 "팀 소속 전원이 던져서 결과값을
+        //        합산"하는 방식으로 변경. 개인전(팀 인원 1명)은 대표=본인이라 결과가 똑같아서 문제없을 듯
         // ===================================================================
         public void HandleTimeLimitReached()
         {
@@ -268,53 +263,47 @@ namespace YutArena.Managers
                     topTeams.Add(team);
                 }
             }
-
             if (topTeams.Count == 1)
             {
                 Declare(topTeams[0], GameResultType.TimeOver);
                 return;
             }
-
-            // 2단계: 참먹이 거리 비교 - 영서 함수 없어서 지금은 건너뜀
+            // 2단계: 참먹이 거리 비교 - 보드 함수 없어서 지금은 건너뜀
             Debug.LogWarning("TestWinConditionManager: 완주개수 동점(" + topCount + "개) 발생. " +
                 "참먹이 거리 비교는 아직 미구현(영서 함수 필요)이라 건너뛰고 바로 던지기 타이브레이커로 감");
             var distanceTiedTeams = topTeams; // TODO: 여기서 거리 비교로 좁혀야 함
-
             // 3단계: 타이브레이커 던지기
             TeamSlot winner = ResolveTieByThrow(distanceTiedTeams);
             Declare(winner, GameResultType.TimeOver);
         }
-
-        // 동점인 팀들끼리, 팀 대표 한 명씩 윷을 던져서 더 높은 결과가 나온 팀을 찾음
-        // (여러 팀이 또 동점이면, 그 팀들끼리만 다시 던짐)
+        // ===================================================================
+        // 동점인 팀들끼리, 팀 소속 전원이 윷을 던져서 그 팀의 결과값을 합산한 뒤
+        // 합산값이 더 높은 팀을 찾음. 여러 팀이 또 동점이면, 그 팀들끼리만 다시 던짐(재귀)
+        // ===================================================================
         private TeamSlot ResolveTieByThrow(List<TeamSlot> tiedTeams)
         {
             if (tiedTeams.Count == 1) return tiedTeams[0];
 
-            var resultByTeam = new Dictionary<TeamSlot, YutResult>();
+            var sumByTeam = new Dictionary<TeamSlot, int>();
             foreach (var team in tiedTeams)
             {
-                PlayerSlot representative = FindRepresentativePlayer(team);
-                resultByTeam[team] = yutRuleManager.Throw(representative);
+                int sum = 0;
+                // 이 팀 소속 플레이어 전원이 각자 던져서, 나온 결과값(이동칸수 기준)을 다 더함
+                for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+                {
+                    var p = (PlayerSlot)i;
+                    if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
+                    YutResult result = yutRuleManager.Throw(p);
+                    sum += YutResultRule.GetMoveCount(result); // 결과값을 칸수(숫자)로 바꿔서 합산
+                }
+                sumByTeam[team] = sum;
             }
 
-            int bestValue = tiedTeams.Max(t => (int)resultByTeam[t]);
-            var stillTied = tiedTeams.Where(t => (int)resultByTeam[t] == bestValue).ToList();
+            int bestSum = sumByTeam.Values.Max();
+            var stillTied = tiedTeams.Where(t => sumByTeam[t] == bestSum).ToList();
 
             if (stillTied.Count == 1) return stillTied[0];
             return ResolveTieByThrow(stillTied); // 그래도 동점이면 재귀로 재던지기
-        }
-
-        // 이 팀 소속 플레이어 중 아무나 한 명(제일 먼저 찾은 사람)을 "팀 대표"로 삼음
-        private PlayerSlot FindRepresentativePlayer(TeamSlot team)
-        {
-            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
-            {
-                var p = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) == team)
-                    return p;
-            }
-            return PlayerSlot.None;
         }
     }
 }
