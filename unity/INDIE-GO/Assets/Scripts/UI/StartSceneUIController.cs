@@ -68,8 +68,20 @@ namespace YutArena.UI
         [SerializeField] private Sprite modeHelpSprite;
 
         [Header("Settings")]
-        [Tooltip("음향 슬라이더")]
+        [Tooltip("게임 전체 오디오 볼륨을 조절하는 슬라이더")]
+        [FormerlySerializedAs("bgmVolumeSlider")]
+        [FormerlySerializedAs("masterVolumeSlider")]
         [SerializeField] private Slider masterVolumeSlider;
+        [Tooltip("BGM 전체 볼륨을 조절하는 슬라이더")]
+        [SerializeField] private Slider bgmVolumeSlider;
+        [Tooltip("모든 버튼 클릭음의 전체 볼륨을 조절하는 슬라이더")]
+        [SerializeField] private Slider clickVolumeSlider;
+        [Tooltip("게임 전체 오디오의 음소거 여부를 설정하는 토글")]
+        [SerializeField] private Toggle masterMuteToggle;
+        [Tooltip("BGM의 음소거 여부를 설정하는 토글")]
+        [SerializeField] private Toggle bgmMuteToggle;
+        [Tooltip("모든 버튼 클릭음의 음소거 여부를 설정하는 토글")]
+        [SerializeField] private Toggle clickMuteToggle;
         [Tooltip("해상도 드롭다운")]
         [SerializeField] private TMP_Dropdown resolutionDropdown;
         [Tooltip("화면 모드 드롭다운")]
@@ -146,6 +158,12 @@ namespace YutArena.UI
             WarnIfMissing(onlineJoinPanel, nameof(onlineJoinPanel));
             WarnIfMissing(helpPanel, nameof(helpPanel));
             WarnIfMissing(settingsPanel, nameof(settingsPanel));
+            WarnIfMissing(masterVolumeSlider, nameof(masterVolumeSlider));
+            WarnIfMissing(bgmVolumeSlider, nameof(bgmVolumeSlider));
+            WarnIfMissing(clickVolumeSlider, nameof(clickVolumeSlider));
+            WarnIfMissing(masterMuteToggle, nameof(masterMuteToggle));
+            WarnIfMissing(bgmMuteToggle, nameof(bgmMuteToggle));
+            WarnIfMissing(clickMuteToggle, nameof(clickMuteToggle));
         }
 
         private void SetupSettingsControls()
@@ -153,11 +171,12 @@ namespace YutArena.UI
             SetupResolutionDropdown();
             SetupScreenModeControls();
 
-            if (masterVolumeSlider != null)
-            {
-                masterVolumeSlider.value = AudioSettingsManager.MasterVolume;
-                masterVolumeSlider.onValueChanged.AddListener(SetMasterVolume);
-            }
+            SetupVolumeSlider(masterVolumeSlider, AudioManager.LoadMasterVolume(), SetMasterVolume);
+            SetupVolumeSlider(bgmVolumeSlider, AudioManager.LoadBgmVolume(), SetBgmVolume);
+            SetupVolumeSlider(clickVolumeSlider, AudioManager.LoadClickVolume(), SetClickVolume);
+            SetupMuteToggle(masterMuteToggle, AudioManager.LoadMasterMuted(), SetMasterMuted);
+            SetupMuteToggle(bgmMuteToggle, AudioManager.LoadBgmMuted(), SetBgmMuted);
+            SetupMuteToggle(clickMuteToggle, AudioManager.LoadClickMuted(), SetClickMuted);
         }
 
         private void SetupResolutionDropdown()
@@ -270,6 +289,7 @@ namespace YutArena.UI
             }
 
             HideAllPanels();
+            SyncVolumeSliders();
             SetActive(settingsPanel, true);
         }
 
@@ -323,7 +343,114 @@ namespace YutArena.UI
 
         private void SetMasterVolume(float volume)
         {
-            AudioSettingsManager.SetMasterVolume(volume);
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetMasterVolume(volume);
+            }
+        }
+
+        private void SetBgmVolume(float volume)
+        {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetBgmVolume(volume);
+            }
+        }
+
+        private void SetClickVolume(float volume)
+        {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetClickVolume(volume);
+            }
+        }
+
+        private void SetMasterMuted(bool muted)
+        {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetMasterMuted(muted);
+            }
+        }
+
+        private void SetBgmMuted(bool muted)
+        {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetBgmMuted(muted);
+            }
+        }
+
+        private void SetClickMuted(bool muted)
+        {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.SetClickMuted(muted);
+            }
+        }
+
+        private void SyncVolumeSliders()
+        {
+            if (masterVolumeSlider != null)
+            {
+                masterVolumeSlider.SetValueWithoutNotify(AudioManager.LoadMasterVolume());
+            }
+
+            if (bgmVolumeSlider != null)
+            {
+                bgmVolumeSlider.SetValueWithoutNotify(AudioManager.LoadBgmVolume());
+            }
+
+            if (clickVolumeSlider != null)
+            {
+                clickVolumeSlider.SetValueWithoutNotify(AudioManager.LoadClickVolume());
+            }
+
+            if (masterMuteToggle != null)
+            {
+                masterMuteToggle.SetIsOnWithoutNotify(AudioManager.LoadMasterMuted());
+            }
+
+            if (bgmMuteToggle != null)
+            {
+                bgmMuteToggle.SetIsOnWithoutNotify(AudioManager.LoadBgmMuted());
+            }
+
+            if (clickMuteToggle != null)
+            {
+                clickMuteToggle.SetIsOnWithoutNotify(AudioManager.LoadClickMuted());
+            }
+        }
+
+        private static void SetupVolumeSlider(
+            Slider slider,
+            float initialValue,
+            UnityEngine.Events.UnityAction<float> onValueChanged)
+        {
+            if (slider == null)
+            {
+                return;
+            }
+
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.wholeNumbers = false;
+            slider.SetValueWithoutNotify(initialValue);
+            slider.onValueChanged.AddListener(onValueChanged);
+        }
+
+        private static void SetupMuteToggle(
+            Toggle toggle,
+            bool initialValue,
+            UnityEngine.Events.UnityAction<bool> onValueChanged)
+        {
+            if (toggle == null)
+            {
+                return;
+            }
+
+            toggle.SetIsOnWithoutNotify(initialValue);
+            toggle.onValueChanged.AddListener(onValueChanged);
         }
 
         private void SetResolution(int index)
