@@ -186,15 +186,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         StartCoroutine(RefreshAfterRuntimeRegistration());
     }
 
-    private void Update()
-    {
-        // 말 프리팹 생성이 UI 초기화보다 늦는 경우에도, 현재 턴의 활성 스킬 UI를 놓치지 않도록 재탐색한다.
-        if (currentCharacter == null)
-        {
-            RefreshForCurrentTurn();
-        }
-    }
-
     private void OnDisable()
     {
         UnsubscribeFromTurnEvents();
@@ -211,6 +202,12 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void Update()
     {
+        // 말 프리팹 생성이 UI 초기화보다 늦는 경우에도, 현재 턴의 활성 스킬 UI를 놓치지 않도록 재탐색한다.
+        if (currentCharacter == null)
+        {
+            RefreshForCurrentTurn();
+        }
+
         if (!isSelectingCaster || Time.frameCount == casterSelectionStartedFrame)
             return;
 
