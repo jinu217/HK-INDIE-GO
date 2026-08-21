@@ -383,11 +383,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 603a501010a0d9a45831d579dd64bb0d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Test.YutThrowTest
-  throwButton: {fileID: 1114093340}
+  throwButton: {fileID: 0}
   turnManager: {fileID: 1332604209}
   normalYutPrefab: {fileID: 919132149155446097, guid: d10beee805d7580419a7c436edf7e7a5, type: 3}
   backDoYutPrefab: {fileID: 919132149155446097, guid: a9d937be9943c8b4287cd7da356538cc, type: 3}
-  boardCenter: {fileID: 677299708}
+  boardCenter: {fileID: 0}
   boardRadius: 1.5
   edgePadding: 0.35
   surfaceOffset: -0.1
@@ -1037,3 +1037,5 @@ SceneRoots:
   - {fileID: 1376455555}
   - {fileID: 671717252}
   - {fileID: 1048523384}
+  - {fileID: 69106635}
+  - {fileID: 79807027}
