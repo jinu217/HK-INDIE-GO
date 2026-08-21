@@ -115,6 +115,7 @@ namespace YutArena.UI
         private int turnLength = GameRuleDefine.DefaultMaxTurnCount;
         private bool isTeamMode;
         private int[] playerTeamIndexes = { 0, 0, 0, 0 };
+        private ButtonSound startButtonSound;
 
         private GameMode SelectedGameMode
         {
@@ -128,6 +129,11 @@ namespace YutArena.UI
 
         private void Awake()
         {
+            if (startGameButton != null)
+            {
+                startButtonSound = startGameButton.GetComponent<ButtonSound>();
+            }
+
             BindButtons();
             RefreshUI();
         }
@@ -271,7 +277,7 @@ namespace YutArena.UI
         {
             string reason;
             bool canStart = CanStartGame(out reason);
-            SetInteractable(startGameButton, canStart);
+            SetInteractable(startGameButton, true);
             SetText(startConditionText, canStart ? "Ready" : reason);
         }
 
@@ -409,6 +415,7 @@ namespace YutArena.UI
             if (!CanStartGame(out reason))
             {
                 SetText(startConditionText, reason);
+                PlayInvalidStartSound();
                 return;
             }
 
@@ -423,6 +430,14 @@ namespace YutArena.UI
             }
 
             SceneManager.LoadScene(inGameSceneName);
+        }
+
+        private void PlayInvalidStartSound()
+        {
+            if (startButtonSound != null)
+            {
+                startButtonSound.PlayInvalidClickSound();
+            }
         }
 
         public RoomSettingsData GetCurrentRoomSettingsData()
