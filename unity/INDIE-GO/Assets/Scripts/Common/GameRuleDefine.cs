@@ -22,7 +22,7 @@ namespace YutArena.Common
         public const int MaxMaxTurnCount = 25;
 
         public const int UnlimitedTimeMinutes = 0;
-        public const int DefaultTimeLimitMinutes = 20;
+        public const int DefaultTimeLimitMinutes = 15;
         public const int MinTimeLimitMinutes = 1;
         public const int MaxTimeLimitMinutes = 60;
 
