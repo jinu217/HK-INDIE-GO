@@ -5,13 +5,25 @@ using YutArena.InGame;
 public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
 {
     private static readonly HashSet<int> ForceDoOrMoPlayers = new HashSet<int>();
+    //수정: 첫 던지기 이후의 윷/모 및 잡기 재던지기 단계에서는 액티브를 막습니다.
+    private static readonly HashSet<int> PlayersWhoHaveThrown = new HashSet<int>();
     private bool firstMovePassiveAvailable = true;
+
+    //수정: 모 아니면 도는 특정 말이 아닌 플레이어의 다음 윷 결과에 적용됩니다.
+    public override bool RequiresCasterPieceSelection => false;
 
     [UnityEngine.RuntimeInitializeOnLoadMethod(
         UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()
     {
         ForceDoOrMoPlayers.Clear();
+        PlayersWhoHaveThrown.Clear();
+    }
+
+    public override void OnOwnerTurnStarted()
+    {
+        base.OnOwnerTurnStarted();
+        PlayersWhoHaveThrown.Remove(PlayerId);
     }
 
     public override int ModifyMoveCount(CharacterMoveRequest request)
@@ -54,6 +66,13 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
         };
     }
 
+    //수정: 첫 번째 윷 결과가 확정되는 시점부터 이번 턴에는 액티브를 사용할 수 없습니다.
+    public override bool ShouldGrantExtraThrow(YutResult result, bool defaultValue)
+    {
+        PlayersWhoHaveThrown.Add(PlayerId);
+        return defaultValue;
+    }
+
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
@@ -69,10 +88,11 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
     public override void OnOwnerTurnEnded()
     {
         ForceDoOrMoPlayers.Remove(PlayerId);
+        PlayersWhoHaveThrown.Remove(PlayerId);
     }
 
     protected override bool CanUseActiveDuringPhase(TurnPhase phase)
     {
-        return phase == TurnPhase.WaitThrow;
+        return phase == TurnPhase.WaitThrow && !PlayersWhoHaveThrown.Contains(PlayerId);
     }
 }

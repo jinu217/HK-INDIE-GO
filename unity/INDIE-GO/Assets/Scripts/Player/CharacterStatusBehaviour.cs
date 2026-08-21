@@ -38,6 +38,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
     public virtual bool IsTargetable => true;
+    //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
+    public virtual bool RequiresCasterPieceSelection => true;
 
     protected PlayerController Owner { get; private set; }
     protected PlayerManager Players { get; private set; }

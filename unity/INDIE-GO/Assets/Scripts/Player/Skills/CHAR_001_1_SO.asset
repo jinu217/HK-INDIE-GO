@@ -13,15 +13,19 @@ MonoBehaviour:
   m_Name: CHAR_001_1_SO
   m_EditorClassIdentifier: Assembly-CSharp::CharacterData
   char_ID: 0
-  char_Name: "\uAE30\uBCF8\uD615(\uB0A8)"
-  char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130(\uB0A8)\uC774\uB2E4."
+  char_Name: "\uC724\uB204\uB9AC"
+  char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130 \uC724\uB204\uB9AC\uC774\uB2E4."
   char_Icon: {fileID: 0}
-  passive_Name: "한 걸음 더"
-  passive_Desc: "말의 첫 이동 시 1칸 추가 이동 (리타이어 시 패시브 재사용 가능)"
-  active_Name: "모 아니면 도"
-  active_Desc: "3턴마다 사용 가능, 스킬 사용 시 다음 윷 던지기에서 모와 도가 나올 확률이 각각 50%가 된다."
+  passive_Name: "\uD55C \uAC78\uC74C \uB354"
+  passive_Desc: "\uB9D0\uC758 \uCCAB \uC774\uB3D9 \uC2DC 1\uCE78 \uCD94\uAC00 \uC774\uB3D9
+    (\uB9AC\uD0C0\uC774\uC5B4 \uC2DC \uD328\uC2DC\uBE0C \uC7AC\uC0AC\uC6A9 \uAC00\uB2A5)"
+  active_Name: "\uBAA8 \uC544\uB2C8\uBA74 \uB3C4"
+  active_Desc: "3\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5, \uC2A4\uD0AC \uC0AC\uC6A9
+    \uC2DC \uB2E4\uC74C \uC737 \uB358\uC9C0\uAE30\uC5D0\uC11C \uBAA8\uC640 \uB3C4\uAC00
+    \uB098\uC62C \uD655\uB960\uC774 \uAC01\uAC01 50%\uAC00 \uB41C\uB2E4."
   active_CooldownTurns: 3
+  active_SkillPointCost: 0
   passive_CooldownTurns: 0
   passive_Status: 1
   active_Status: 2
-  visualModelPrefab: {fileID: 0}
+  visualModelPrefab: {fileID: 919132149155446097, guid: 840cdb6268120174bbdbe5e7a374738f, type: 3}

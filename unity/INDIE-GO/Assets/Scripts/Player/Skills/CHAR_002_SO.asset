@@ -29,6 +29,7 @@ MonoBehaviour:
     \uC218 \uC788\uB2E4. (\uD654\uBA74\uC0C1\uC73C\uB85C 2\uBC88 \uC6C0\uC9C1\uC774\uC9C0\uB9CC,
     \uCD5C\uC885 \uC774\uB3D9\uCE78\uC758 \uBCC0\uC218\uB9CC \uC778\uC815)"
   active_CooldownTurns: 3
+  active_SkillPointCost: 0
   passive_CooldownTurns: 0
   passive_Status: 3
   active_Status: 4

@@ -3,10 +3,12 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
+using YutArena.InGame;
 using YutArena.Managers;
 
 /// <summary>
@@ -38,11 +40,17 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     private int targetPieceId = -1;
     private YutResult selectedYutResult = YutResult.None;
     private bool isSubscribed;
+    private bool isSelectingCaster;
+    private int casterSelectionStartedFrame = -1;
+    private DebugPieceView selectedCasterView;
+    private InGamePieceDebugController suspendedPieceController;
+    private bool suspendedPieceControllerWasEnabled;
 
     public event Action<CharacterActiveResult> SkillUseCompleted;
 
     public int CurrentCasterPieceId =>
         currentCharacter != null ? currentCharacter.PieceId : -1;
+    public bool IsSelectingCaster => isSelectingCaster;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureInGameActiveSkillButton()
@@ -165,7 +173,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         skillButton = GetComponent<Button>();
         canvasGroup = GetComponent<CanvasGroup>();
         skillLabel = GetComponentInChildren<Text>(true);
-        skillButton.onClick.AddListener(UseCurrentActiveSkill);
+        skillButton.onClick.AddListener(HandleActiveSkillButtonClicked);
 
         ResolveDependencies();
         SetButtonVisible(false);
@@ -187,8 +195,28 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void OnDestroy()
     {
+        EndCasterSelection(clearCaster: true, refresh: false);
         if (skillButton != null)
-            skillButton.onClick.RemoveListener(UseCurrentActiveSkill);
+            skillButton.onClick.RemoveListener(HandleActiveSkillButtonClicked);
+    }
+
+    private void Update()
+    {
+        if (!isSelectingCaster || Time.frameCount == casterSelectionStartedFrame)
+            return;
+
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            EndCasterSelection(clearCaster: true, refresh: true);
+            return;
+        }
+
+        if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+            return;
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
+        TrySelectCasterAtPointer();
     }
 
     /// <summary>
@@ -199,6 +227,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         preferredCasterPieceId = pieceId;
         RefreshForCurrentTurn();
+        UpdateButtonLabel(currentCharacter);
     }
 
     public void ClearCasterPiece()
@@ -309,6 +338,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void HandleTurnStarted(PlayerSlot player)
     {
+        EndCasterSelection(clearCaster: true, refresh: false);
         ResetSkillArguments();
         preferredCasterPieceId = -1;
         ShowButtonForPlayer((int)player);
@@ -329,6 +359,13 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         if (turn == null || (int)turn.currentPlayer != currentPlayerId)
             return;
+
+        if (isSelectingCaster &&
+            (turn.currentPhase == TurnPhase.TurnEnd ||
+             turn.currentPhase == TurnPhase.GameEnd))
+        {
+            EndCasterSelection(clearCaster: true, refresh: false);
+        }
 
         UpdateButtonLabel(currentCharacter);
         UpdateButtonCooldownState();
@@ -391,10 +428,37 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
                piece.State != PieceState.Goal;
     }
 
-    private void UseCurrentActiveSkill()
+    private void HandleActiveSkillButtonClicked()
+    {
+        //수정: 플레이어 전체에 적용되는 액티브는 말 선택 모드 없이 한 번의 클릭으로 사용합니다.
+        if (currentCharacter != null && !currentCharacter.RequiresCasterPieceSelection)
+        {
+            UseCurrentActiveSkill();
+            return;
+        }
+
+        if (!isSelectingCaster)
+        {
+            BeginCasterSelection();
+            return;
+        }
+
+        if (preferredCasterPieceId < 0 || currentCharacter == null)
+        {
+            UpdateButtonLabel(currentCharacter);
+            return;
+        }
+
+        if (UseCurrentActiveSkill())
+            EndCasterSelection(clearCaster: true, refresh: true);
+        else
+            UpdateButtonLabel(currentCharacter);
+    }
+
+    private bool UseCurrentActiveSkill()
     {
         if (currentCharacter == null || currentPlayerId <= 0 || turnManager == null)
-            return;
+            return false;
 
         TurnContext turn = turnManager.CurrentTurn;
         if (turn == null ||
@@ -403,7 +467,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             turn.currentPhase == TurnPhase.GameEnd)
         {
             RefreshForCurrentTurn();
-            return;
+            return false;
         }
 
         CharacterActiveRequest request = new CharacterActiveRequest(
@@ -414,8 +478,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             selectedYutResult);
 
         CharacterActiveResult result = CharacterSkillRegistry.TryUseActive(request);
-        if (!result.Succeeded && preferredCasterPieceId < 0)
-            result = TryOtherCasterCharacters(result);
         SkillUseCompleted?.Invoke(result);
 
         if (result.Succeeded)
@@ -427,37 +489,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             onSkillFailed?.Invoke(result.Message);
 
         RefreshForCurrentTurn();
-    }
-
-    private CharacterActiveResult TryOtherCasterCharacters(CharacterActiveResult firstFailure)
-    {
-        if (playerManager == null ||
-            !playerManager.TryGetPlayer(currentPlayerId, out PlayerController player))
-        {
-            return firstFailure;
-        }
-
-        foreach (CharacterStatusBehaviour character in
-                 player.GetComponentsInChildren<CharacterStatusBehaviour>(true))
-        {
-            if (character == currentCharacter ||
-                !TryGetEligiblePiece(player, character, out _))
-                continue;
-
-            var request = new CharacterActiveRequest(
-                currentPlayerId,
-                character.PieceId,
-                targetPlayerId,
-                targetPieceId,
-                selectedYutResult);
-            CharacterActiveResult result = CharacterSkillRegistry.TryUseActive(request);
-            if (!result.Succeeded) continue;
-
-            currentCharacter = character;
-            return result;
-        }
-
-        return firstFailure;
+        return result.Succeeded;
     }
 
     private void SetButtonVisible(bool visible)
@@ -481,6 +513,15 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         int remainingCooldown = character != null
             ? CharacterSkillRegistry.GetRemainingActiveCooldown(character.PlayerId, data)
             : 0;
+
+        if (isSelectingCaster)
+        {
+            skillLabel.text = preferredCasterPieceId >= 0
+                ? $"{activeName}\n말 {preferredCasterPieceId + 1} 선택 - 다시 눌러 사용"
+                : $"{activeName}\n사용할 말을 선택하세요";
+            return;
+        }
+
         skillLabel.text = remainingCooldown > 0
             ? $"{activeName} ({remainingCooldown} TURN)"
             : activeName;
@@ -507,6 +548,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void ResetTurnSelection()
     {
+        EndCasterSelection(clearCaster: true, refresh: false);
         currentCharacter = null;
         currentPlayerId = -1;
         preferredCasterPieceId = -1;
@@ -517,5 +559,102 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         ClearTarget();
         ClearSelectedYutResult();
+    }
+
+    private void BeginCasterSelection()
+    {
+        if (currentCharacter == null || currentPlayerId <= 0 || turnManager == null)
+            return;
+
+        TurnContext turn = turnManager.CurrentTurn;
+        if (turn == null || (int)turn.currentPlayer != currentPlayerId)
+            return;
+
+        preferredCasterPieceId = -1;
+        ClearSelectedCasterHighlight();
+        isSelectingCaster = true;
+        casterSelectionStartedFrame = Time.frameCount;
+        SuspendNormalPieceClickHandling();
+        ClearAllCasterHighlights();
+        UpdateButtonLabel(currentCharacter);
+    }
+
+    private void TrySelectCasterAtPointer()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null) return;
+
+        Vector2 screenPosition = Mouse.current.position.ReadValue();
+        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
+        Collider2D hit = Physics2D.OverlapPoint(worldPosition);
+        DebugPieceView view = hit != null
+            ? hit.GetComponentInParent<DebugPieceView>()
+            : null;
+        if (view == null || view.PlayerId != currentPlayerId)
+            return;
+        if (playerManager == null ||
+            !playerManager.TryGetPlayer(currentPlayerId, out PlayerController player) ||
+            !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+            piece.State == PieceState.Goal ||
+            !CharacterSkillRegistry.TryGet(
+                currentPlayerId,
+                view.PieceId,
+                out CharacterStatusBehaviour character) ||
+            !character.HasActiveSkill)
+        {
+            return;
+        }
+
+        ClearSelectedCasterHighlight();
+        selectedCasterView = view;
+        selectedCasterView.SetSelected(true);
+        SetCasterPiece(view.PieceId);
+    }
+
+    private void EndCasterSelection(bool clearCaster, bool refresh)
+    {
+        ClearSelectedCasterHighlight();
+        RestoreNormalPieceClickHandling();
+        isSelectingCaster = false;
+        casterSelectionStartedFrame = -1;
+        if (clearCaster)
+            preferredCasterPieceId = -1;
+
+        if (refresh && isActiveAndEnabled)
+            RefreshForCurrentTurn();
+    }
+
+    private void ClearSelectedCasterHighlight()
+    {
+        if (selectedCasterView != null)
+            selectedCasterView.SetSelected(false);
+        selectedCasterView = null;
+    }
+
+    private static void ClearAllCasterHighlights()
+    {
+        DebugPieceView[] views = FindObjectsByType<DebugPieceView>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
+        foreach (DebugPieceView view in views)
+            view.SetSelected(false);
+    }
+
+    private void SuspendNormalPieceClickHandling()
+    {
+        suspendedPieceController = FindFirstObjectByType<InGamePieceDebugController>();
+        if (suspendedPieceController == null) return;
+
+        suspendedPieceControllerWasEnabled = suspendedPieceController.enabled;
+        suspendedPieceController.enabled = false;
+    }
+
+    private void RestoreNormalPieceClickHandling()
+    {
+        if (suspendedPieceController != null)
+            suspendedPieceController.enabled = suspendedPieceControllerWasEnabled;
+
+        suspendedPieceController = null;
+        suspendedPieceControllerWasEnabled = false;
     }
 }

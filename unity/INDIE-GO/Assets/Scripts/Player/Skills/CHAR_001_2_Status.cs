@@ -3,6 +3,9 @@ using YutArena.Common;
 
 public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
 {
+    //수정: 한번 더는 특정 말이 아닌 현재 플레이어의 턴에 추가 던지기를 예약합니다.
+    public override bool RequiresCasterPieceSelection => false;
+
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)

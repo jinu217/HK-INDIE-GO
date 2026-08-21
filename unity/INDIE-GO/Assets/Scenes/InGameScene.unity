@@ -148,7 +148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  jobPiecePrefab: {fileID: 291523682463676895, guid: 4cac19b8f3fad594aad0d5c60f944146, type: 3}
+  jobPiecePrefab: {fileID: 0}
 --- !u!4 &10651888
 Transform:
   m_ObjectHideFlags: 0
@@ -257,7 +257,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  jobPiecePrefab: {fileID: 6495641510054543857, guid: 66f0b738eb68c0248b0a85f06c5768ac, type: 3}
+  jobPiecePrefab: {fileID: 0}
 --- !u!4 &527872497
 Transform:
   m_ObjectHideFlags: 0
@@ -302,7 +302,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  jobPiecePrefab: {fileID: 4574621072668645708, guid: a9933cfef42ec8f40ac5d73adfcdedfd, type: 3}
+  jobPiecePrefab: {fileID: 0}
 --- !u!4 &735841151
 Transform:
   m_ObjectHideFlags: 0
@@ -396,7 +396,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  jobPiecePrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}
+  jobPiecePrefab: {fileID: 0}
 --- !u!4 &1166113368
 Transform:
   m_ObjectHideFlags: 0
