@@ -256,15 +256,34 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 ? TurnPhase.WaitThrow
                 : TurnPhase.WaitAction;
 
+        int skillPointCost = skill.ActiveSkillPointCost;
+        int currentSkillPoints = CharacterSkillRegistry.GetSkillPoints(1);
+        if (currentSkillPoints < skillPointCost)
+            CharacterSkillRegistry.RequestSkillPoint(1, skillPointCost - currentSkillPoints);
+        int skillPointsBeforeUse = CharacterSkillRegistry.GetSkillPoints(1);
+
         CharacterActiveResult result = CharacterSkillRegistry.TryUseActive(
             new CharacterActiveRequest(1, 0, 2, 0, YutResult.Do));
         Check(characterId + " active succeeds", result.Succeeded, result.Message);
+        Check(characterId + " active spends configured SP",
+            CharacterSkillRegistry.GetSkillPoints(1) == skillPointsBeforeUse - skillPointCost);
         if (characterId == "CHAR_004")
         {
             CharacterCaptureDecision hiddenCapture = skill.EvaluateIncomingCapture(
                 new CharacterCaptureRequest(2, 0, 1, 0, 1, true));
             Check("CHAR_004 hide blocks ordinary landing capture",
                 !skill.IsTargetable && hiddenCapture == CharacterCaptureDecision.Prevent);
+        }
+        if (characterId == "CHAR_007")
+        {
+            Check("CHAR_007 uses SP instead of a turn cooldown",
+                skill.ActiveSkillPointCost == 3 && skill.ActiveCooldownTurns == 0);
+            CharacterActiveResult secondUse = CharacterSkillRegistry.TryUseActive(
+                new CharacterActiveRequest(1, 0, 2, 0, YutResult.Do));
+            Check("CHAR_007 cannot be reused without another 3 SP",
+                !secondUse.Succeeded &&
+                secondUse.Message.Contains("requires 3 skill point"),
+                secondUse.Message);
         }
         Check(characterId + " cooldown is isolated per player",
             CharacterSkillRegistry.GetRemainingActiveCooldown(2, skill.Data) == 0);

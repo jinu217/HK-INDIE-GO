@@ -494,7 +494,11 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         int remainingCooldown = CharacterSkillRegistry.GetRemainingActiveCooldown(
             currentCharacter.PlayerId,
             currentCharacter.Data);
+        int requiredSkillPoints = currentCharacter.ActiveSkillPointCost;
+        int currentSkillPoints = CharacterSkillRegistry.GetSkillPoints(
+            currentCharacter.PlayerId);
         bool canUse = remainingCooldown <= 0 &&
+                      currentSkillPoints >= requiredSkillPoints &&
                       currentCharacter.IsActiveUsableInCurrentPhase();
         canvasGroup.interactable = canUse;
         canvasGroup.blocksRaycasts = canUse;
