@@ -9,6 +9,12 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
 
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
+        // PieceMovementManager asks the target behaviour directly for ordinary
+        // landing captures, so IsTargetable alone protects only targeted skills.
+        // Hidden pieces must also reject the ordinary capture path here.
+        if (hiddenOwnerTurns > 0)
+            return CharacterCaptureDecision.Prevent;
+
         if (charmShieldAvailable && TryStartPassiveCooldown())
         {
             charmShieldAvailable = false;

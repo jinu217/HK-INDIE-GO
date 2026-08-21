@@ -12,6 +12,12 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
 
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
+        // Parts remain on their tile for revival checks but are not a board
+        // piece that can be captured again. In particular, do not refresh the
+        // three-turn parts timer when another piece lands on this tile.
+        if (isParts)
+            return CharacterCaptureDecision.Prevent;
+
         if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece) ||
             piece.State != PieceState.InBoard || !TryStartPassiveCooldown())
             return CharacterCaptureDecision.Proceed;
