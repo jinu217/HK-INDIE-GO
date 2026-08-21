@@ -42,9 +42,11 @@ namespace YutArena.InGame
 
             if (definition.backgroundPrefab != null)
             {
-                Transform backgroundParent = backgroundRoot != null ? backgroundRoot : transform;
-                loadedBackgroundInstance = Instantiate(definition.backgroundPrefab, backgroundParent);
+                loadedBackgroundInstance = backgroundRoot != null
+                    ? Instantiate(definition.backgroundPrefab, backgroundRoot)
+                    : Instantiate(definition.backgroundPrefab);
                 loadedBackgroundInstance.name = definition.backgroundPrefab.name;
+                loadedBackgroundInstance.transform.localPosition = Vector3.zero;
             }
 
             CurrentMap = definition;
@@ -58,9 +60,11 @@ namespace YutArena.InGame
             }
             // TEMP_ALLOW_BACKGROUND_WITHOUT_BOARD_END
 
-            Transform boardParent = boardRoot != null ? boardRoot : transform;
-            loadedBoardInstance = Instantiate(definition.boardPrefab, boardParent);
+            loadedBoardInstance = boardRoot != null
+                ? Instantiate(definition.boardPrefab, boardRoot)
+                : Instantiate(definition.boardPrefab);
             loadedBoardInstance.name = definition.boardPrefab.name;
+            loadedBoardInstance.transform.localPosition = Vector3.zero;
 
             CacheTileAnchors();
             return true;

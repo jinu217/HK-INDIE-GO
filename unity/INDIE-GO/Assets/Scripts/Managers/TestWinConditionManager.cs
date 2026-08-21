@@ -15,6 +15,7 @@ namespace YutArena.Managers
         [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private TestYutRuleManager yutRuleManager; // 동점 타이브레이커 던지기용
         [SerializeField] private PlayerManager playerManager; // Classic 모드가 말 상태 직접 확인할 때 필요
+        [SerializeField] private PieceMovementManager pieceMovementManager; // Escape 제한시간 거리 비교용
         // 모드별 승리 규칙 스크립트들을 인스펙터에서 드래그로 연결 (ClassicModeRule, EscapeModeRule 등)
         [SerializeField] private List<MonoBehaviour> modeRuleSources;
         // 위 목록을 "어느 모드가 어느 규칙인지" 바로 찾을 수 있게 정리해둔 표
@@ -268,13 +269,78 @@ namespace YutArena.Managers
                 Declare(topTeams[0], GameResultType.TimeOver);
                 return;
             }
-            // 2단계: 참먹이 거리 비교 - 보드 함수 없어서 지금은 건너뜀
-            Debug.LogWarning("TestWinConditionManager: 완주개수 동점(" + topCount + "개) 발생. " +
-                "참먹이 거리 비교는 아직 미구현(영서 함수 필요)이라 건너뛰고 바로 던지기 타이브레이커로 감");
-            var distanceTiedTeams = topTeams; // TODO: 여기서 거리 비교로 좁혀야 함
+            // 2단계: 각 팀의 InBoard 말 중 골인에 가장 가까운 말의 남은 칸 수를 비교한다.
+            List<TeamSlot> distanceTiedTeams = FindTeamsWithClosestInBoardPiece(topTeams);
+            if (distanceTiedTeams.Count == 1)
+            {
+                Declare(distanceTiedTeams[0], GameResultType.TimeOver);
+                return;
+            }
+
             // 3단계: 타이브레이커 던지기
             TeamSlot winner = ResolveTieByThrow(distanceTiedTeams);
             Declare(winner, GameResultType.TimeOver);
+        }
+
+        /// <summary>
+        /// 동점 팀들 중 보드 위 말 하나가 골인에 가장 가까운 팀만 남깁니다.
+        /// 보드 위 말이 없는 팀은 거리 비교에서 int.MaxValue(가장 멂)로 취급합니다.
+        /// </summary>
+        private List<TeamSlot> FindTeamsWithClosestInBoardPiece(IReadOnlyList<TeamSlot> teams)
+        {
+            if (pieceMovementManager == null)
+                pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
+
+            if (pieceMovementManager == null || playerManager == null)
+            {
+                Debug.LogWarning("TestWinConditionManager: 거리 비교에 필요한 PlayerManager 또는 PieceMovementManager가 없어 윷 타이브레이커로 진행합니다.");
+                return new List<TeamSlot>(teams);
+            }
+
+            int closestRemainingSteps = int.MaxValue;
+            var closestTeams = new List<TeamSlot>();
+
+            foreach (TeamSlot team in teams)
+            {
+                int teamClosestRemainingSteps = int.MaxValue;
+
+                foreach (PlayerController player in playerManager.ActivePlayers)
+                {
+                    TeamSlot playerTeam = MatchCompositionRule.GetTeamSlot(
+                        settings.matchComposition,
+                        (PlayerSlot)player.PlayerId);
+                    if (playerTeam != team || player.RuntimeData == null)
+                        continue;
+
+                    foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                    {
+                        if (pieceMovementManager.TryGetRemainingStepsToGoal(
+                                player.PlayerId,
+                                piece.PieceId,
+                                out int remainingSteps))
+                        {
+                            teamClosestRemainingSteps = Mathf.Min(teamClosestRemainingSteps, remainingSteps);
+                        }
+                    }
+                }
+
+                if (teamClosestRemainingSteps < closestRemainingSteps)
+                {
+                    closestRemainingSteps = teamClosestRemainingSteps;
+                    closestTeams.Clear();
+                    closestTeams.Add(team);
+                }
+                else if (teamClosestRemainingSteps == closestRemainingSteps)
+                {
+                    closestTeams.Add(team);
+                }
+            }
+
+            Debug.Log(
+                "TestWinConditionManager: 제한시간 동점 거리 비교 결과 - " +
+                "남은 칸 " + (closestRemainingSteps == int.MaxValue ? "없음" : closestRemainingSteps.ToString()) +
+                ", 팀 " + string.Join(", ", closestTeams));
+            return closestTeams;
         }
         // ===================================================================
         // 동점인 팀들끼리, 팀 소속 전원이 윷을 던져서 그 팀의 결과값을 합산한 뒤
