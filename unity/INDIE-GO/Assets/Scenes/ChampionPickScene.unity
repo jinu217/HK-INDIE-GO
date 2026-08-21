@@ -3483,7 +3483,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb5b8581f53079345842ebbb6f6d40a3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Managers.SceneBGM
-  bgmClip: {fileID: 8300000, guid: 4fd4f531de99c404a97a7949a12e1564, type: 3}
+  bgmClip: {fileID: 8300000, guid: ba0858675ee14014090eec282e4eb467, type: 3}
 --- !u!4 &1042180834
 Transform:
   m_ObjectHideFlags: 0
