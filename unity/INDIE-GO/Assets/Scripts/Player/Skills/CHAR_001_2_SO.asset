@@ -15,12 +15,15 @@ MonoBehaviour:
   char_ID: 1
   char_Name: "\uAE30\uBCF8\uD615(\uC5EC)"
   char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130(\uC5EC)\uC774\uB2E4."
-  char_Icon: {fileID: 0}
-  passive_Name: ""
-  passive_Desc: ""
-  active_Name: "한번 더"
-  active_Desc: "3턴마다 사용 가능, 윷을 던진 후 한 번 더 던질 기회 부여 (추가 던지기에 영향 없음)"
+  char_Icon: {fileID: 21300000, guid: 5a459c7a55a81b94f9fa027919829565, type: 3}
+  passive_Name: 
+  passive_Desc: 
+  active_Name: "\uD55C\uBC88 \uB354"
+  active_Desc: "3\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5, \uC737\uC744 \uB358\uC9C4
+    \uD6C4 \uD55C \uBC88 \uB354 \uB358\uC9C8 \uAE30\uD68C \uBD80\uC5EC (\uCD94\uAC00
+    \uB358\uC9C0\uAE30\uC5D0 \uC601\uD5A5 \uC5C6\uC74C)"
   active_CooldownTurns: 3
+  active_SkillPointCost: 0
   passive_CooldownTurns: 0
   passive_Status: 0
   active_Status: 0

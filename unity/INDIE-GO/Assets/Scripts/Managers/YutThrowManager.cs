@@ -26,7 +26,15 @@ namespace YutArena.Test
         [SerializeField, Min(0f)] private float edgePadding = 0.35f;
         [Tooltip("카메라가 -Z에 있으면 보통 음수 사용")]
         [SerializeField] private float surfaceOffset = -0.1f;
+        [Tooltip("게임 시작 시 일렬로 놓이는 윷 사이의 간격")]
+        [SerializeField, Min(0f)] private float startYutSpacing = 0.35f;
         [SerializeField, Min(0f)] private float minimumYutSpacing = 0.65f;
+
+        [Header("Board Placement")]
+        [Tooltip("원판을 X축 기준으로 위아래 기울이는 각도")]
+        [SerializeField, Range(-45f, 45f)] private float boardTiltX = 12f;
+        [Tooltip("Board Center 기준으로 원판 위 윷 배치 영역을 Y축 이동")]
+        [SerializeField] private float boardPositionY;
 
         [Header("Throw Animation")]
         [SerializeField, Min(0.1f)] private float throwDuration = 0.85f;
@@ -109,7 +117,7 @@ namespace YutArena.Test
                 body.detectCollisions = false;
             }
 
-            float x = (index - 1.5f) * minimumYutSpacing;
+            float x = (index - 1.5f) * startYutSpacing;
             float y = -boardRadius * 0.45f;
             instance.transform.SetPositionAndRotation(
                 BoardPoint(new Vector2(x, y), surfaceOffset),
@@ -154,8 +162,9 @@ namespace YutArena.Test
                 {
                     Transform yut = yuts[i];
                     Vector3 position = Vector3.Lerp(starts[i], targets[i], smoothT);
-                    position += boardCenter.up * (arcHeight * parabola);
-                    position -= boardCenter.forward * (depthHop * parabola);
+                    Quaternion boardFrame = GetBoardFrameRotation();
+                    position += boardFrame * Vector3.up * (arcHeight * parabola);
+                    position -= boardFrame * Vector3.forward * (depthHop * parabola);
                     yut.position = position;
 
                     Quaternion baseRotation = Quaternion.Slerp(startRotations[i], targetRotations[i], smoothT);
@@ -255,18 +264,29 @@ namespace YutArena.Test
 
         private Vector3 BoardPoint(Vector2 localPoint, float depth)
         {
-            return boardCenter.position
-                 + boardCenter.right * localPoint.x
-                 + boardCenter.up * localPoint.y
-                 + boardCenter.forward * depth;
+            Quaternion boardFrame = GetBoardFrameRotation();
+            return GetBoardOrigin()
+                 + boardFrame * Vector3.right * localPoint.x
+                 + boardFrame * Vector3.up * localPoint.y
+                 + boardFrame * Vector3.forward * depth;
         }
 
         private Quaternion BoardRotation(float angle, bool flipFace)
         {
-            return boardCenter.rotation
+            return GetBoardFrameRotation()
                  * Quaternion.AngleAxis(angle, Vector3.forward)
                  * Quaternion.Euler(flipFace ? faceFlipRotation : Vector3.zero)
                  * Quaternion.Euler(modelRotationOffset);
+        }
+
+        private Quaternion GetBoardFrameRotation()
+        {
+            return boardCenter.rotation * Quaternion.Euler(boardTiltX, 0f, 0f);
+        }
+
+        private Vector3 GetBoardOrigin()
+        {
+            return boardCenter.position + Vector3.up * boardPositionY;
         }
 
 #if UNITY_EDITOR
@@ -274,6 +294,7 @@ namespace YutArena.Test
         {
             boardRadius = Mathf.Max(0.1f, boardRadius);
             edgePadding = Mathf.Clamp(edgePadding, 0f, boardRadius - 0.05f);
+            startYutSpacing = Mathf.Max(0f, startYutSpacing);
             minimumYutSpacing = Mathf.Max(0f, minimumYutSpacing);
             throwDuration = Mathf.Max(0.1f, throwDuration);
             tumbleTurns.y = Mathf.Max(tumbleTurns.x, tumbleTurns.y);
@@ -282,16 +303,20 @@ namespace YutArena.Test
         private void OnDrawGizmosSelected()
         {
             Transform center = boardCenter != null ? boardCenter : transform;
+            Quaternion boardFrame = center.rotation * Quaternion.Euler(boardTiltX, 0f, 0f);
+            Vector3 boardOrigin = center.position + Vector3.up * boardPositionY;
             Gizmos.color = Color.yellow;
             const int segments = 48;
-            Vector3 previous = center.position + center.right * boardRadius + center.forward * surfaceOffset;
+            Vector3 previous = boardOrigin
+                             + boardFrame * Vector3.right * boardRadius
+                             + boardFrame * Vector3.forward * surfaceOffset;
             for (int i = 1; i <= segments; i++)
             {
                 float angle = i * Mathf.PI * 2f / segments;
-                Vector3 next = center.position
-                             + center.right * (Mathf.Cos(angle) * boardRadius)
-                             + center.up * (Mathf.Sin(angle) * boardRadius)
-                             + center.forward * surfaceOffset;
+                Vector3 next = boardOrigin
+                             + boardFrame * Vector3.right * (Mathf.Cos(angle) * boardRadius)
+                             + boardFrame * Vector3.up * (Mathf.Sin(angle) * boardRadius)
+                             + boardFrame * Vector3.forward * surfaceOffset;
                 Gizmos.DrawLine(previous, next);
                 previous = next;
             }
