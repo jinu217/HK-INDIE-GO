@@ -11,6 +11,70 @@ public sealed class PieceMovementManager : MonoBehaviour
 {
     [SerializeField] private PlayerManager playerManager;
 
+    /// <summary>
+    /// 현재 보드 위에 있는 지정 말의 골인까지 남은 칸 수를 반환합니다.
+    /// Escape 제한시간 동점 판정에서 사용합니다.
+    /// PieceId는 플레이어별로 다시 0부터 시작하므로 playerId와 함께 전달해야 합니다.
+    /// </summary>
+    public bool TryGetRemainingStepsToGoal(int playerId, int pieceId, out int remainingSteps)
+    {
+        remainingSteps = -1;
+
+        if (playerManager == null ||
+            !playerManager.TryGetPlayer(playerId, out PlayerController player) ||
+            !player.TryGetPieceData(pieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+            piece.State != PieceState.InBoard)
+        {
+            return false;
+        }
+
+        // Escape의 거리는 실제 이동 경로 길이가 아니라 기획에서 정의한 각 칸의 고정 점수입니다.
+        // 호출자는 말 ID만 전달하고, 현재 타일 조회와 값 매핑은 여기서 처리합니다.
+        switch (piece.CurrentTileId)
+        {
+            case BoardTileId.None:
+            case BoardTileId.Start:
+            case BoardTileId.Goal:
+                remainingSteps = 0;
+                return true;
+
+            case BoardTileId.Outer01: remainingSteps = 10; return true;
+            case BoardTileId.Outer02: remainingSteps = 9; return true;
+            case BoardTileId.Outer03: remainingSteps = 8; return true;
+            case BoardTileId.Outer04: remainingSteps = 7; return true;
+            case BoardTileId.Corner01: remainingSteps = 6; return true;
+
+            case BoardTileId.Outer05: remainingSteps = 10; return true;
+            case BoardTileId.Outer06: remainingSteps = 9; return true;
+            case BoardTileId.Outer07: remainingSteps = 8; return true;
+            case BoardTileId.Outer08: remainingSteps = 7; return true;
+            case BoardTileId.Corner02: remainingSteps = 6; return true;
+
+            case BoardTileId.Outer09: remainingSteps = 9; return true;
+            case BoardTileId.Outer10: remainingSteps = 8; return true;
+            case BoardTileId.Outer11: remainingSteps = 7; return true;
+            case BoardTileId.Outer12: remainingSteps = 6; return true;
+            case BoardTileId.Corner03: remainingSteps = 5; return true;
+
+            case BoardTileId.Outer13: remainingSteps = 4; return true;
+            case BoardTileId.Outer14: remainingSteps = 3; return true;
+            case BoardTileId.Outer15: remainingSteps = 2; return true;
+            case BoardTileId.Outer16: remainingSteps = 1; return true;
+
+            case BoardTileId.Center: remainingSteps = 3; return true;
+            case BoardTileId.Inner01: remainingSteps = 5; return true;
+            case BoardTileId.Inner02: remainingSteps = 4; return true;
+            case BoardTileId.Inner03: remainingSteps = 7; return true;
+            case BoardTileId.Inner04: remainingSteps = 6; return true;
+            case BoardTileId.Inner05: remainingSteps = 5; return true;
+            case BoardTileId.Inner06: remainingSteps = 4; return true;
+            case BoardTileId.Inner07: remainingSteps = 2; return true;
+            case BoardTileId.Inner08: remainingSteps = 1; return true;
+        }
+
+        return false;
+    }
+
     //수정: 일반 이동과 캐릭터 스킬 이동을 구분할 수 있도록 선택 인자를 추가했습니다.
     public bool TryMovePiece(
         int playerId,

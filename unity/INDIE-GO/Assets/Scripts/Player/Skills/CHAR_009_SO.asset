@@ -28,4 +28,5 @@ MonoBehaviour:
   passive_CooldownTurns: 0
   passive_Status: 0
   active_Status: 0
+  piecePrefab: {fileID: 4345676003328823085, guid: 470f666f1b388c04b84757c4c63791c7, type: 3}
   visualModelPrefab: {fileID: 0}

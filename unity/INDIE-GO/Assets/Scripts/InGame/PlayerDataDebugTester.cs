@@ -41,11 +41,29 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         {
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
+                string remainingStepsText = "-";
+                if (piece.State == PieceState.InBoard)
+                {
+                    if (pieceMovementManager != null &&
+                        pieceMovementManager.TryGetRemainingStepsToGoal(
+                            player.PlayerId,
+                            piece.PieceId,
+                            out int remainingSteps))
+                    {
+                        remainingStepsText = remainingSteps.ToString();
+                    }
+                    else
+                    {
+                        remainingStepsText = "조회 실패";
+                    }
+                }
+
                 Debug.Log(
                     $"[Player {player.PlayerId}] Piece {piece.PieceId + 1} | " +
                     $"Current: {piece.CurrentTileId} | " +
                     $"Previous: {piece.PreviousTileId} | " +
                     $"State: {piece.State} | " +
+                    $"Remaining To Goal: {remainingStepsText} | " +
                     $"StackGroup: {piece.StackGroupId} | " +
                     $"StackLeader: {piece.StackLeaderPieceId} | " +
                     $"Finished: {piece.IsFinished} | " +
@@ -71,5 +89,36 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         }
 
         pieceMovementManager.TryMovePiece(testPlayerId, testPieceId, testMoveCount);
+    }
+
+    [ContextMenu("Log Configured Piece Remaining Steps")]
+    public void LogConfiguredPieceRemainingSteps()
+    {
+        if (!Application.isPlaying)
+        {
+            Debug.LogWarning("이 테스트는 Play Mode에서 실행해야 합니다.", this);
+            return;
+        }
+
+        if (pieceMovementManager == null)
+        {
+            Debug.LogError("PieceMovementManager 참조를 Inspector에 연결하세요.", this);
+            return;
+        }
+
+        if (pieceMovementManager.TryGetRemainingStepsToGoal(
+                testPlayerId,
+                testPieceId,
+                out int remainingSteps))
+        {
+            Debug.Log(
+                $"[Remaining Steps] Player {testPlayerId}, Piece {testPieceId + 1}: {remainingSteps}",
+                this);
+            return;
+        }
+
+        Debug.LogWarning(
+            $"[Remaining Steps] Player {testPlayerId}, Piece {testPieceId + 1}은(는) InBoard 상태가 아니거나 찾을 수 없습니다.",
+            this);
     }
 }

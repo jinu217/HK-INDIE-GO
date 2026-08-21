@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ee1f0d4630a4c278030000000000022, type: 3}
+  m_Name: BasicMapDefinition
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
+  mapType: 0
+  backgroundPrefab: {fileID: 7174949109896036635, guid: a1a0f2b53a6b3da45a97cd5676d1a0c7, type: 3}
+  boardPrefab: {fileID: 4842533177795376041, guid: cadec29d01c0aba40a0ffce27fb0558f, type: 3}
+  specialTiles:
+  - tileId: 6
+    effect: 0
+    value: 0
+  - tileId: 11
+    effect: 0
+    value: 0
+  - tileId: 16
+    effect: 0
+    value: 0
+  - tileId: 22
+    effect: 0
+    value: 0

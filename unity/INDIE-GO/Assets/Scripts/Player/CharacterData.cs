@@ -60,6 +60,8 @@ public class CharacterData : ScriptableObject
     public CharacterSkillStatus active_Status = CharacterSkillStatus.None;
 
     [Header("# Modelling")]
+    [Tooltip("이 챔피언을 선택한 플레이어의 모든 말에 생성할 직업 말 프리팹입니다.")]
+    public GameObject piecePrefab;
     public GameObject visualModelPrefab;
 
     public bool HasPassiveStatus => passive_Status != CharacterSkillStatus.None;
