@@ -58,6 +58,17 @@ namespace YutArena.UI.CharacterScene
             CharacterSelectionResult.Clear();
             BuildRuntimeCharacterList();
             ResolvePlayers();
+
+            // TEMP_AUTO_CONFIRM_GAMEPAD_PLAYERS_START: 패드가 없는 로컬 테스트용입니다. P2 이상을 자동 선택 완료 처리합니다. 커밋 전 삭제하세요.
+            for (int playerIndex = 1; playerIndex < playerCount; playerIndex++)
+            {
+                cursorIndexes[playerIndex] = runtimeCharacters.Count > 0
+                    ? playerIndex % runtimeCharacters.Count
+                    : 0;
+                selectedPlayers[playerIndex] = true;
+            }
+            // TEMP_AUTO_CONFIRM_GAMEPAD_PLAYERS_END
+
             remainingTime = selectionTimeSeconds;
 
             if (startNowButton != null)
@@ -373,6 +384,9 @@ namespace YutArena.UI.CharacterScene
             isFinalized = true;
             int[] selectedIds = new int[playerCount];
 
+            // CHAMPION_PIECE_PREFAB_FLOW_START: InGameScene에서 플레이어별 챔피언 말 프리팹을 결정할 수 있도록 선택 CharacterData도 함께 전달합니다.
+            CharacterData[] selectedCharacters = new CharacterData[playerCount];
+
             for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
             {
                 if (randomizeUnselectedPlayers && !selectedPlayers[playerIndex])
@@ -381,10 +395,16 @@ namespace YutArena.UI.CharacterScene
                     selectedPlayers[playerIndex] = true;
                 }
 
-                selectedIds[playerIndex] = runtimeCharacters[cursorIndexes[playerIndex]].char_ID;
+                CharacterData selectedCharacter = runtimeCharacters[cursorIndexes[playerIndex]];
+                // 기존 구현: selectedIds[playerIndex] = runtimeCharacters[cursorIndexes[playerIndex]].char_ID;
+                selectedIds[playerIndex] = selectedCharacter.char_ID;
+                selectedCharacters[playerIndex] = selectedCharacter;
             }
 
-            CharacterSelectionResult.Set(selectedIds, playerCount);
+            // 기존 구현: 챔피언 ID만 전달했습니다.
+            // CharacterSelectionResult.Set(selectedIds, playerCount);
+            CharacterSelectionResult.Set(selectedIds, selectedCharacters, playerCount);
+            // CHAMPION_PIECE_PREFAB_FLOW_END
             RefreshUI();
 
             if (string.IsNullOrWhiteSpace(inGameSceneName))

@@ -20,14 +20,17 @@ namespace YutArena.InGame
     }
 
     /// <summary>
-    /// Inspector-authored data for one selectable map. The prefab contains its board, background,
-    /// visual tile objects, and BoardTileAnchor components.
+    /// Inspector-authored data for one selectable map. Background and board are separate so the
+    /// board can animate independently while its tile anchors keep tracking the board motion.
     /// </summary>
     [CreateAssetMenu(menuName = "YutArena/Map Definition", fileName = "MapDefinition")]
     public sealed class MapDefinition : ScriptableObject
     {
         public MapType mapType;
-        public GameObject mapPrefab;
+        [Tooltip("움직이지 않는 맵 배경 프리팹입니다.")]
+        public GameObject backgroundPrefab;
+        [Tooltip("보드 메시와 BoardTileAnchor를 포함하는 프리팹입니다.")]
+        public GameObject boardPrefab;
         public MapSpecialTileSetting[] specialTiles;
     }
 }

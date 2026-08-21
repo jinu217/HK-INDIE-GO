@@ -11,12 +11,25 @@ public sealed class PlayerController : MonoBehaviour
     [Tooltip("This player's selected job prefab. One instance is created for each piece.")]
     [SerializeField] private GameObject jobPiecePrefab;
 
+    [Header("Runtime Champion (Debug)")]
+    [Tooltip("ChampionPickScene에서 선택되어 이 PlayerSlot에 적용된 챔피언입니다.")]
+    [SerializeField] private CharacterData selectedCharacter;
+
     public int PlayerId => runtimeData != null ? runtimeData.PlayerId : -1;
     public bool IsInitialized { get; private set; }
     public PlayerRuntimeData RuntimeData => runtimeData;
     public GameObject JobPiecePrefab => jobPiecePrefab;
+    public CharacterData SelectedCharacter => selectedCharacter;
 
     private PlayerRuntimeData runtimeData;
+    private GameObject defaultJobPiecePrefab;
+    private bool hasCachedDefaultJobPiecePrefab;
+
+    private void Awake()
+    {
+        defaultJobPiecePrefab = jobPiecePrefab;
+        hasCachedDefaultJobPiecePrefab = true;
+    }
 
     public void Initialize(int playerId, string playerName, int pieceCount)
     {
@@ -39,6 +52,21 @@ public sealed class PlayerController : MonoBehaviour
     }
 
     /// <summary>
+    /// ChampionPickScene에서 선택된 챔피언을 이 플레이어 슬롯에 반영합니다.
+    /// 피스 생성기는 SelectedCharacter의 piecePrefab을 우선 사용합니다.
+    /// </summary>
+    public void SetSelectedCharacter(CharacterData characterData)
+    {
+        selectedCharacter = characterData;
+        jobPiecePrefab = characterData != null ? characterData.piecePrefab : defaultJobPiecePrefab;
+
+        Debug.Log(
+            $"{name}: 선택 챔피언 '{(characterData != null ? characterData.char_Name : "없음")}'의 Job Piece Prefab을 " +
+            $"'{(jobPiecePrefab != null ? jobPiecePrefab.name : "없음")}'으로 적용했습니다.",
+            this);
+    }
+
+    /// <summary>
     /// 턴/스킬 시스템이 말에 CC를 부여하거나 제거할 때 사용하는 진입점.
     /// </summary>
     public bool TrySetPieceCc(int pieceId, CcDefine ccType, int remainingTurns = 0)
@@ -58,5 +86,11 @@ public sealed class PlayerController : MonoBehaviour
     {
         runtimeData = null;
         IsInitialized = false;
+        selectedCharacter = null;
+
+        if (hasCachedDefaultJobPiecePrefab)
+        {
+            jobPiecePrefab = defaultJobPiecePrefab;
+        }
     }
 }

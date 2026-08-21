@@ -301,6 +301,8 @@ namespace YutArena.UI
 
         private bool CanStartGame(out string reason)
         {
+            // TEMP_SKIP_GAMEPAD_CHECK_START: 패드 없이 LobbyScene -> ChampionPickScene 흐름을 확인하기 위한 임시 우회입니다. 커밋 전 삭제하세요.
+            /*
             int connectedPlayerCount = GetConnectedRequiredPlayerCount();
 
             if (connectedPlayerCount < selectedPlayerCount)
@@ -308,6 +310,8 @@ namespace YutArena.UI
                 reason = $"컨트롤러 연결 대기 중 ({connectedPlayerCount}/{selectedPlayerCount})";
                 return false;
             }
+            */
+            // TEMP_SKIP_GAMEPAD_CHECK_END
 
             if (SelectedGameMode == GameMode.KillTheKing)
             {

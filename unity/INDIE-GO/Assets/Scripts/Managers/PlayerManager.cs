@@ -60,8 +60,34 @@ public sealed class PlayerManager : MonoBehaviour
 
             player.gameObject.SetActive(true);
             player.Initialize(playerId, playerName, pieceCountPerPlayer);
+            ApplySelectedCharacter(player, playerIndex);
             activePlayers.Add(player);
         }
+    }
+
+    private static void ApplySelectedCharacter(PlayerController player, int playerIndex)
+    {
+        if (!CharacterSelectionResult.TryGetCharacterData(playerIndex, out CharacterData characterData))
+        {
+            Debug.LogWarning($"Player {playerIndex + 1}: 챔피언 선택 정보가 없어 Inspector의 Job Piece Prefab을 사용합니다.", player);
+            return;
+        }
+
+        if (characterData.piecePrefab == null)
+        {
+            Debug.LogError($"Player {playerIndex + 1}: {characterData.name}에 Piece Prefab이 지정되지 않았습니다.", player);
+            return;
+        }
+
+        player.SetSelectedCharacter(characterData);
+
+        if (player.JobPiecePrefab != characterData.piecePrefab)
+        {
+            Debug.LogError($"Player {playerIndex + 1}: 선택된 말 프리팹을 PlayerSlot에 반영하지 못했습니다.", player);
+            return;
+        }
+
+        Debug.Log($"Player {playerIndex + 1}: {characterData.char_Name} -> {characterData.piecePrefab.name} 말 프리팹 적용", player);
     }
 
     public bool TryGetPlayer(int playerId, out PlayerController player)

@@ -45,7 +45,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         currentCharacter != null ? currentCharacter.PieceId : -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void EnsureInGameActiveSkillButton()
+    public static void EnsureInGameActiveSkillButton()
     {
         if (SceneManager.GetActiveScene().name != InGameSceneName) return;
 
@@ -176,6 +176,15 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         ResolveDependencies();
         SubscribeToTurnEvents();
         StartCoroutine(RefreshAfterRuntimeRegistration());
+    }
+
+    private void Update()
+    {
+        // 말 프리팹 생성이 UI 초기화보다 늦는 경우에도, 현재 턴의 활성 스킬 UI를 놓치지 않도록 재탐색한다.
+        if (currentCharacter == null)
+        {
+            RefreshForCurrentTurn();
+        }
     }
 
     private void OnDisable()

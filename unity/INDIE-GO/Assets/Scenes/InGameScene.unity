@@ -149,6 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   jobPiecePrefab: {fileID: 291523682463676895, guid: 4cac19b8f3fad594aad0d5c60f944146, type: 3}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &10651888
 Transform:
   m_ObjectHideFlags: 0
@@ -258,6 +259,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   jobPiecePrefab: {fileID: 6495641510054543857, guid: 66f0b738eb68c0248b0a85f06c5768ac, type: 3}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &527872497
 Transform:
   m_ObjectHideFlags: 0
@@ -348,6 +350,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   jobPiecePrefab: {fileID: 4574621072668645708, guid: a9933cfef42ec8f40ac5d73adfcdedfd, type: 3}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &735841151
 Transform:
   m_ObjectHideFlags: 0
@@ -412,6 +415,56 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1048523382
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1048523384}
+  - component: {fileID: 1048523383}
+  m_Layer: 0
+  m_Name: InGameMapManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1048523383
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1048523382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ee1f0d4630a4c278030000000000023, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapManager
+  mapDefinitions:
+  - {fileID: 11400000, guid: 8b6ab37936d3483c9ae1859eff2ade8c, type: 2}
+  - {fileID: 11400000, guid: f31c500b76174136a4e16b7059ea12e3, type: 2}
+  - {fileID: 11400000, guid: a5c426ad48e54d6a8ed0bf60401a63c9, type: 2}
+  backgroundRoot: {fileID: 0}
+  boardRoot: {fileID: 0}
+--- !u!4 &1048523384
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1048523382}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2336.067, y: 589.9024, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1166113366
 GameObject:
   m_ObjectHideFlags: 0
@@ -442,6 +495,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   jobPiecePrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &1166113368
 Transform:
   m_ObjectHideFlags: 0
@@ -780,3 +834,4 @@ SceneRoots:
   - {fileID: 1332604210}
   - {fileID: 1376455555}
   - {fileID: 671717252}
+  - {fileID: 1048523384}

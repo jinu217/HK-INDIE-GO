@@ -108,22 +108,24 @@ namespace YutArena.Managers
 
         private void StartGameWithSettings(GameStartSettings settings)
         {
-            if (mapManager == null)
-            {
-                Debug.LogError("TestGameManager: MapManager reference is missing.");
-                return;
-            }
-
             if (playerManager == null)
             {
                 Debug.LogError("TestGameManager: PlayerManager reference is missing.");
                 return;
             }
 
-            if (!mapManager.LoadMap(settings))
-                return;
+            if (mapManager == null)
+            {
+                // InGamePieceDebugController가 원형 디버그 보드를 생성하므로, 맵이 없는 테스트 씬도 게임을 시작할 수 있다.
+                Debug.LogWarning("TestGameManager: MapManager가 없어 원형 디버그 보드로 게임을 시작합니다.");
+            }
+            else if (!mapManager.LoadMap(settings))
+            {
+                Debug.LogWarning("TestGameManager: 선택한 맵을 불러오지 못해 원형 디버그 보드로 게임을 시작합니다.");
+            }
 
             // This must happen before turn and victory systems inspect players or piece data.
+            // MapManager 유무와 관계없이 PlayerSlot/말 프리팹 초기화는 반드시 진행한다.
             playerManager.SetupPlayers(settings);
 
             Session = new GameSessionData
@@ -137,6 +139,7 @@ namespace YutArena.Managers
             winConditionManager.Initialize(settings);
             turnManager.Initialize(settings);
             turnManager.StartFirstTurn();
+            ActiveSkillButtonController.EnsureInGameActiveSkillButton();
 
             // ===================================================================
             // Escape 승리조건 2번용 실시간 제한시간 타이머

@@ -12,14 +12,16 @@ namespace YutArena.InGame
     public sealed class MapManager : MonoBehaviour
     {
         [SerializeField] private MapDefinition[] mapDefinitions;
-        [SerializeField] private Transform mapRoot;
+        [SerializeField] private Transform backgroundRoot;
+        [SerializeField] private Transform boardRoot;
 
         private readonly Dictionary<BoardTileId, Vector3> tilePositions = new Dictionary<BoardTileId, Vector3>();
         private readonly Dictionary<BoardTileId, MapSpecialTileSetting> specialTileSettings = new Dictionary<BoardTileId, MapSpecialTileSetting>();
-        private GameObject loadedMapInstance;
+        private GameObject loadedBackgroundInstance;
+        private GameObject loadedBoardInstance;
 
         public MapDefinition CurrentMap { get; private set; }
-        public bool IsMapLoaded => CurrentMap != null;
+        public bool IsMapLoaded => loadedBoardInstance != null;
 
         public bool LoadMap(GameStartSettings settings)
         {
@@ -30,21 +32,37 @@ namespace YutArena.InGame
             }
 
             MapDefinition definition = FindDefinition(settings.mapType);
-            if (definition == null || definition.mapPrefab == null)
+            if (definition == null)
             {
-                Debug.LogError($"MapManager: no map prefab is registered for {settings.mapType}.", this);
+                Debug.LogError($"MapManager: no map definition is registered for {settings.mapType}.", this);
                 return false;
             }
 
             ClearLoadedMap();
 
-            Transform parent = mapRoot != null ? mapRoot : transform;
-            loadedMapInstance = Instantiate(definition.mapPrefab, parent);
-            loadedMapInstance.name = definition.mapPrefab.name;
+            if (definition.backgroundPrefab != null)
+            {
+                Transform backgroundParent = backgroundRoot != null ? backgroundRoot : transform;
+                loadedBackgroundInstance = Instantiate(definition.backgroundPrefab, backgroundParent);
+                loadedBackgroundInstance.name = definition.backgroundPrefab.name;
+            }
+
             CurrentMap = definition;
+            CacheSpecialTileSettings(definition);
+
+            // TEMP_ALLOW_BACKGROUND_WITHOUT_BOARD_START: 보드 프리팹 제작 전에도 배경과 원형 디버그 보드를 확인하기 위한 임시 처리입니다. 커밋 전 삭제하세요.
+            if (definition.boardPrefab == null)
+            {
+                Debug.LogWarning($"MapManager: {settings.mapType}에 Board Prefab이 없어 배경만 로드하고 원형 디버그 보드를 사용합니다.", this);
+                return false;
+            }
+            // TEMP_ALLOW_BACKGROUND_WITHOUT_BOARD_END
+
+            Transform boardParent = boardRoot != null ? boardRoot : transform;
+            loadedBoardInstance = Instantiate(definition.boardPrefab, boardParent);
+            loadedBoardInstance.name = definition.boardPrefab.name;
 
             CacheTileAnchors();
-            CacheSpecialTileSettings(definition);
             return true;
         }
 
@@ -68,7 +86,8 @@ namespace YutArena.InGame
                 var candidates = new List<MapDefinition>();
                 foreach (MapDefinition definition in mapDefinitions)
                 {
-                    if (definition != null && definition.mapType != MapType.Random && definition.mapPrefab != null)
+                    if (definition != null && definition.mapType != MapType.Random &&
+                        (definition.backgroundPrefab != null || definition.boardPrefab != null))
                         candidates.Add(definition);
                 }
 
@@ -87,7 +106,7 @@ namespace YutArena.InGame
         private void CacheTileAnchors()
         {
             tilePositions.Clear();
-            BoardTileAnchor[] anchors = loadedMapInstance.GetComponentsInChildren<BoardTileAnchor>(true);
+            BoardTileAnchor[] anchors = loadedBoardInstance.GetComponentsInChildren<BoardTileAnchor>(true);
             foreach (BoardTileAnchor anchor in anchors)
             {
                 if (anchor.TileId == BoardTileId.None || anchor.TileId == BoardTileId.Goal)
@@ -124,10 +143,13 @@ namespace YutArena.InGame
             specialTileSettings.Clear();
             CurrentMap = null;
 
-            if (loadedMapInstance != null)
-                Destroy(loadedMapInstance);
+            if (loadedBackgroundInstance != null)
+                Destroy(loadedBackgroundInstance);
+            if (loadedBoardInstance != null)
+                Destroy(loadedBoardInstance);
 
-            loadedMapInstance = null;
+            loadedBackgroundInstance = null;
+            loadedBoardInstance = null;
         }
 
         private static bool IsSpecialTileId(BoardTileId tileId)
