@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using YutArena.Common;
+using YutArena.Managers;
 
 namespace YutArena.Test
 {
@@ -13,6 +15,7 @@ namespace YutArena.Test
     {
         [Header("References")]
         [SerializeField] private Button throwButton;
+        [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private GameObject normalYutPrefab;
         [SerializeField] private GameObject backDoYutPrefab;
         [Tooltip("원판 중앙에 놓고 로컬 X/Y축이 원판 표면을 따르도록 설정")]
@@ -42,6 +45,11 @@ namespace YutArena.Test
 
         private void Awake()
         {
+            if (turnManager == null)
+            {
+                turnManager = FindFirstObjectByType<TestTurnManager>();
+            }
+
             if (boardCenter == null)
             {
                 boardCenter = transform;
@@ -52,12 +60,12 @@ namespace YutArena.Test
 
         private void OnEnable()
         {
-            if (throwButton != null) throwButton.onClick.AddListener(Throw);
+            if (turnManager != null) turnManager.OnTurnPhaseChanged += HandleTurnPhaseChanged;
         }
 
         private void OnDisable()
         {
-            if (throwButton != null) throwButton.onClick.RemoveListener(Throw);
+            if (turnManager != null) turnManager.OnTurnPhaseChanged -= HandleTurnPhaseChanged;
         }
 
         [ContextMenu("Create Yuts")]
@@ -73,9 +81,17 @@ namespace YutArena.Test
             CreateYut(backDoYutPrefab, "TestYut_BackDo", 3);
         }
 
-        public void Throw()
+        private void HandleTurnPhaseChanged(TurnContext turn)
         {
-            if (!isThrowing && yuts.Count > 0) StartCoroutine(ThrowRoutine());
+            if (turn != null && turn.currentPhase == TurnPhase.SaveThrowResult)
+            {
+                Throw(turn.lastYutResult);
+            }
+        }
+
+        public void Throw(YutResult result)
+        {
+            if (!isThrowing && yuts.Count > 0) StartCoroutine(ThrowRoutine(result));
         }
 
         private void CreateYut(GameObject prefab, string instanceName, int index)
@@ -101,7 +117,7 @@ namespace YutArena.Test
             yuts.Add(instance.transform);
         }
 
-        private IEnumerator ThrowRoutine()
+        private IEnumerator ThrowRoutine(YutResult result)
         {
             isThrowing = true;
             if (throwButton != null) throwButton.interactable = false;
@@ -114,14 +130,14 @@ namespace YutArena.Test
             var tumbleAxes = new Vector3[count];
             var tumbleAngles = new float[count];
             List<Vector2> landingPoints = CreateLandingPoints(count);
+            bool[] flippedFaces = CreateFaceResults(result, count);
 
             for (int i = 0; i < count; i++)
             {
                 starts[i] = yuts[i].position;
                 targets[i] = BoardPoint(landingPoints[i], surfaceOffset - i * 0.002f);
                 startRotations[i] = yuts[i].rotation;
-                bool showOppositeFace = Random.value < 0.5f;
-                targetRotations[i] = BoardRotation(Random.Range(0f, 360f), showOppositeFace);
+                targetRotations[i] = BoardRotation(Random.Range(0f, 360f), flippedFaces[i]);
                 tumbleAxes[i] = Random.onUnitSphere;
                 tumbleAngles[i] = 360f * Random.Range(tumbleTurns.x, tumbleTurns.y);
             }
@@ -155,7 +171,56 @@ namespace YutArena.Test
             }
 
             isThrowing = false;
-            if (throwButton != null) throwButton.interactable = true;
+            if (throwButton != null)
+            {
+                throwButton.interactable = turnManager == null
+                    || turnManager.CurrentTurn.currentPhase == TurnPhase.WaitThrow;
+            }
+        }
+
+        private static bool[] CreateFaceResults(YutResult result, int count)
+        {
+            // OBJ의 기본 방향이 결과 면을 보여주므로, true인 윷만 180도 돌려 반대 면을 보인다.
+            var flipped = new bool[count];
+            if (count == 0) return flipped;
+
+            // 생성 순서상 마지막 윷이 백도 윷이다.
+            int backDoIndex = count - 1;
+            if (result == YutResult.BackDo)
+            {
+                // 백도 윷만 OBJ 기본 면을 유지하고 나머지 일반 윷은 반대 면으로 돌린다.
+                for (int i = 0; i < count; i++) flipped[i] = i != backDoIndex;
+                return flipped;
+            }
+
+            int originalFaceCount;
+            switch (result)
+            {
+                case YutResult.Do: originalFaceCount = 1; break;
+                case YutResult.Gae: originalFaceCount = 2; break;
+                case YutResult.Geol: originalFaceCount = 3; break;
+                case YutResult.Yut: originalFaceCount = 4; break;
+                case YutResult.Mo: originalFaceCount = 0; break;
+                default: return flipped; // 낙, None은 현재 방향 유지
+            }
+
+            // 우선 전부 반대 면으로 돌린 뒤 결과에 필요한 개수만 OBJ 기본 면으로 되돌린다.
+            for (int i = 0; i < count; i++) flipped[i] = true;
+
+            var candidates = new List<int>(count);
+            for (int i = 0; i < count; i++) candidates.Add(i);
+
+            // 도는 백도 표시가 나오면 안 되므로 일반 윷 하나만 기본 면으로 남긴다.
+            if (result == YutResult.Do) candidates.Remove(backDoIndex);
+
+            for (int i = 0; i < originalFaceCount && candidates.Count > 0; i++)
+            {
+                int candidateIndex = Random.Range(0, candidates.Count);
+                flipped[candidates[candidateIndex]] = false;
+                candidates.RemoveAt(candidateIndex);
+            }
+
+            return flipped;
         }
 
         private List<Vector2> CreateLandingPoints(int count)
