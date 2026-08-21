@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using YutArena.Common;
 
 /// <summary>
 /// 미리 배치된 PlayerSlot들을 활성화하고, 현재 게임에 참가 중인 플레이어를 관리한다.
@@ -25,7 +26,23 @@ public sealed class PlayerManager : MonoBehaviour
     /// </summary>
     public void SetupPlayers(int playerCount, IReadOnlyList<string> playerNames = null)
     {
-        ValidateSetupRequest(playerCount, playerNames);
+        SetupPlayers(playerCount, piecesPerPlayer, playerNames);
+    }
+
+    /// <summary>
+    /// Creates the active player slots from the settings delivered by the lobby.
+    /// </summary>
+    public void SetupPlayers(GameStartSettings settings, IReadOnlyList<string> playerNames = null)
+    {
+        if (settings == null)
+            throw new ArgumentNullException(nameof(settings));
+
+        SetupPlayers(settings.playerCount, settings.pieceCountPerPlayer, playerNames);
+    }
+
+    private void SetupPlayers(int playerCount, int pieceCountPerPlayer, IReadOnlyList<string> playerNames)
+    {
+        ValidateSetupRequest(playerCount, pieceCountPerPlayer, playerNames);
         activePlayers.Clear();
 
         for (int slotIndex = 0; slotIndex < playerSlots.Length; slotIndex++)
@@ -42,7 +59,7 @@ public sealed class PlayerManager : MonoBehaviour
             PlayerController player = playerSlots[playerIndex];
 
             player.gameObject.SetActive(true);
-            player.Initialize(playerId, playerName, piecesPerPlayer);
+            player.Initialize(playerId, playerName, pieceCountPerPlayer);
             activePlayers.Add(player);
         }
     }
@@ -60,11 +77,11 @@ public sealed class PlayerManager : MonoBehaviour
         return false;
     }
 
-    private void ValidateSetupRequest(int playerCount, IReadOnlyList<string> playerNames)
+    private void ValidateSetupRequest(int playerCount, int pieceCountPerPlayer, IReadOnlyList<string> playerNames)
     {
         if (playerSlots == null || playerSlots.Length == 0)
             throw new InvalidOperationException("PlayerManager에 PlayerSlot이 등록되지 않았습니다.");
-        if (piecesPerPlayer <= 0)
+        if (pieceCountPerPlayer <= 0)
             throw new InvalidOperationException("말 수는 1 이상이어야 합니다.");
         if (playerCount < 1 || playerCount > playerSlots.Length)
             throw new ArgumentOutOfRangeException(nameof(playerCount),
@@ -77,11 +94,5 @@ public sealed class PlayerManager : MonoBehaviour
             if (playerSlots[i] == null)
                 throw new InvalidOperationException($"playerSlots[{i}]가 비어 있습니다.");
         }
-    }
-
-//실제로 게임 시작 한다면 아래 함수를 호출하여 플레이어 오브젝트를 활성화 시킴
-    private void Start()
-    {
-        SetupPlayers(4);
     }
 }

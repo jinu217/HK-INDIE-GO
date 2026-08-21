@@ -16,6 +16,7 @@ namespace YutArena.InGame
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private PlayerManager playerManager;
         private TestTurnManager turnManager;
+        private MapManager mapManager;
 
         private void Start() => StartCoroutine(InitializeAfterGameStarts());
 
@@ -24,13 +25,16 @@ namespace YutArena.InGame
             yield return null;
             playerManager = FindFirstObjectByType<PlayerManager>();
             turnManager = FindFirstObjectByType<TestTurnManager>();
+            mapManager = FindFirstObjectByType<MapManager>();
             if (playerManager == null || turnManager == null)
             {
                 Debug.LogError("InGamePieceDebugController requires PlayerManager and TestTurnManager.", this);
                 yield break;
             }
 
-            BuildBoard();
+            // Keep the old marker board only when no map prefab has been loaded.
+            if (mapManager == null || !mapManager.IsMapLoaded)
+                BuildBoard();
             foreach (PlayerController player in playerManager.ActivePlayers)
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
@@ -128,6 +132,9 @@ namespace YutArena.InGame
             if (piece.State == PieceState.Waiting) return GetHomePosition(playerId, pieceId);
             if (piece.State == PieceState.Goal) return new Vector3((playerId - 2.5f) * 1.2f, -4.7f) + GetOffset(pieceId);
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
+            if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
+                return mapTilePosition + GetOffset(pieceId);
+
             return boardPositions[tile] + GetOffset(pieceId);
         }
 

@@ -29,6 +29,8 @@ namespace YutArena.Common
         public GameMode gameMode;
         public MapType mapType;
         public MatchComposition matchComposition;
+        public bool isTeamMode;
+        public int[] playerTeams;
 
         public int playerCount;
         public int pieceCountPerPlayer;

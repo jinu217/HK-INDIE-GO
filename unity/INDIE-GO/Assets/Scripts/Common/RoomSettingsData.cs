@@ -21,6 +21,8 @@ namespace YutArena.Common
                 gameMode = (GameMode)gameMode,
                 mapType = (MapType)mapType,
                 matchComposition = (MatchComposition)matchComposition,
+                isTeamMode = isTeamMode,
+                playerTeams = playerTeams != null ? (int[])playerTeams.Clone() : null,
                 playerCount = playerCount,
                 pieceCountPerPlayer = GameRuleDefine.DefaultPieceCountPerPlayer,
                 targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount,

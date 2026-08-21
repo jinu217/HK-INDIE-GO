@@ -8,26 +8,40 @@ public class TestRunner : MonoBehaviour
 {
     public TestGameManager gameManager;
 
+    [Tooltip("Only creates hard-coded settings when the scene is opened directly without a lobby.")]
+    [SerializeField] private bool createFallbackSettingsWhenMissing = true;
+
     void Start()
     {
-        // 대기실이 하는 일: 설정값을 GameStartSettingsHolder.Current에 저장
-        GameStartSettingsHolder.Current = new GameStartSettings
+        // A lobby-provided setting always wins. This fallback is only for opening InGameScene directly.
+        if (GameStartSettingsHolder.Current == null && createFallbackSettingsWhenMissing)
         {
-            gameMode = GameMode.Escape,
-            mapType = MapType.Basic,
-            matchComposition = MatchComposition.TwoVsTwo,
-            playerCount = 4,
-            pieceCountPerPlayer = 4,
-            targetEscapeCount = 4,
-            timeLimitMinutes = 0,
-            maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
-            turnTimeMode = TurnTimeMode.Unlimited,
-            throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,
-            actionTimeSeconds = GameRuleDefine.DefaultActionTimeSeconds,
-            useSkill = true,
-            useItem = true,
-            useSpecialTile = true
-        };
+            GameStartSettingsHolder.Current = new GameStartSettings
+            {
+                gameMode = GameMode.Escape,
+                mapType = MapType.Basic,
+                matchComposition = MatchComposition.TwoVsTwo,
+                isTeamMode = true,
+                playerTeams = new[] { 1, 1, 2, 2 },
+                playerCount = 4,
+                pieceCountPerPlayer = 4,
+                targetEscapeCount = 4,
+                timeLimitMinutes = 0,
+                maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
+                turnTimeMode = TurnTimeMode.Unlimited,
+                throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,
+                actionTimeSeconds = GameRuleDefine.DefaultActionTimeSeconds,
+                useSkill = true,
+                useItem = true,
+                useSpecialTile = true
+            };
+        }
+
+        if (GameStartSettingsHolder.Current == null)
+        {
+            Debug.LogError("TestRunner: No lobby settings were provided.");
+            return;
+        }
 
         // 1단계: 캐릭터 선택 화면으로 전환 (진짜 게임은 아직 시작 안 됨)
         gameManager.EnterCharacterSelect();
