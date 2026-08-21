@@ -11,7 +11,7 @@ namespace YutArena.Test
     /// 원판의 로컬 XY 평면에서 윷 던지기를 연출하는 독립 2.5D 테스트.
     /// Rigidbody 중력이나 투명 벽 없이 윷을 항상 원판 내부에 착지시킨다.
     /// </summary>
-    public sealed class YutThrowTest : MonoBehaviour
+    public sealed class YutThrowManager : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private Button throwButton;

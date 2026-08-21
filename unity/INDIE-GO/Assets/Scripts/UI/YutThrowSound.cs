@@ -8,12 +8,10 @@ namespace YutArena.Test
     /// <summary>
     /// TestTurnManager의 실제 턴 단계에 맞춰 윷 던지기와 추가 던지기 확정 효과음을 재생한다.
     /// </summary>
-    [RequireComponent(typeof(AudioSource))]
-    public sealed class YutThrowSoundTest : MonoBehaviour
+    public sealed class YutThrowSound : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private TestTurnManager turnManager;
-        [SerializeField] private AudioSource audioSource;
 
         [Header("Clips")]
         [SerializeField] private AudioClip throwClip;
@@ -28,13 +26,6 @@ namespace YutArena.Test
 
         private void Awake()
         {
-            if (audioSource == null)
-            {
-                audioSource = GetComponent<AudioSource>();
-            }
-
-            audioSource.playOnAwake = false;
-
             if (turnManager == null)
             {
                 turnManager = FindFirstObjectByType<TestTurnManager>();
@@ -107,10 +98,18 @@ namespace YutArena.Test
 
         private void PlayOneShot(AudioClip clip)
         {
-            if (clip != null && audioSource != null)
+            if (clip == null)
             {
-                audioSource.PlayOneShot(clip);
+                return;
             }
+
+            if (AudioManager.Instance == null)
+            {
+                Debug.LogError("활성화된 AudioManager가 없어 윷 효과음을 재생할 수 없습니다.", this);
+                return;
+            }
+
+            AudioManager.Instance.PlayClickSound(clip);
         }
 
 #if UNITY_EDITOR
