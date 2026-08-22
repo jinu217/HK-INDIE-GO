@@ -1,49 +1,49 @@
-    using System.Collections;
-    using System.Collections.Generic;
-    using System.Linq;
-    using UnityEngine;
-    using YutArena.Common;
-    using YutArena.Managers.GameProgress;
-    using YutArena.InGame;
-    namespace YutArena.Managers
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using YutArena.Common;
+using YutArena.Managers.GameProgress;
+using YutArena.InGame;
+namespace YutArena.Managers
+{
+    // ===================================================================
+    // 전체 흐름: 턴 시작 -> 윷 던지기(윷/모면 반복, 최대 3회) -> 결과 묶음 중 원하는 순서로 말 이동 -> 잡기 보너스 던지기(있으면) -> 턴 종료 -> 다음 플레이어
+    // 아주 중요한 원칙:
+    // 보드 좌표/다음칸/갈림길/잡기/업기/완주 "판정"은 절대 이 클래스에서 하지 않는다.
+    // 영서의 PlayerManager/PieceMovementManager에게 "이동해줘"라고 요청만 하고, 처리된 결과
+    // (PlayerRuntimeData)를 직접 찾아가서 읽기만 한다. 이 클래스는 좌표를 아예 모른다.
+    // ( PlayerManager/ PieceMovementManager를 직접 호출하는 방식으로 전환함)
+    // ===================================================================
+    public class TestTurnManager : MonoBehaviour
     {
-        // ===================================================================
-        // 전체 흐름: 턴 시작 -> 윷 던지기(윷/모면 반복, 최대 3회) -> 결과 묶음 중 원하는 순서로 말 이동 -> 잡기 보너스 던지기(있으면) -> 턴 종료 -> 다음 플레이어
-        // 아주 중요한 원칙:
-        // 보드 좌표/다음칸/갈림길/잡기/업기/완주 "판정"은 절대 이 클래스에서 하지 않는다.
-        // 영서의 PlayerManager/PieceMovementManager에게 "이동해줘"라고 요청만 하고, 처리된 결과
-        // (PlayerRuntimeData)를 직접 찾아가서 읽기만 한다. 이 클래스는 좌표를 아예 모른다.
-        // ( PlayerManager/ PieceMovementManager를 직접 호출하는 방식으로 전환함)
-        // ===================================================================
-        public class TestTurnManager : MonoBehaviour
-        {
-            //inspector창에서 드래그 할 수 있는 칸 만들기
-            [Header("Dependencies")]
-            [SerializeField] private TestYutRuleManager yutRuleManager;
-            [SerializeField] private TestWinConditionManager winConditionManager;
-            [SerializeField] private PlayerManager playerManager;               // 영서 코드: 플레이어/말 데이터 보관
-            [SerializeField] private PieceMovementManager pieceMovementManager; // 영서 코드: 이동/잡기/업기/완주 실제 처리
-            // 외부에서 볼 수 있지만 코드 수정은 내부에서 가능
-            public TurnContext CurrentTurn { get; private set; } = new TurnContext();
-            // 이번 턴에 던져서 "아직 이동에 쓰지 않은" 윷 결과들을 쌓아두는 리스트
-            // 예: 윷-모-도 순서로 던졌다면 이 리스트에 [윷, 모, 도] 3개가 들어있다가 플레이어가 원하는 순서로 하나씩 골라서 꺼내 쓰게 됨
-            private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
-            // 잡기로 얻은 보너스 던지기 횟수 저장( 던진 윷 결과를 다 소모하고 보너스 던지기를 하니까)
-            private int pendingCaptureThrows = 0;
-            // 스킬로 얻은 보너스 던지기 횟수 저장 (예: 기본형 "한번더")
-            // 잡기(pendingCaptureThrows)랑 따로 관리하는 이유: 나중에 "왜 추가 던지기가 생겼는지"
-            // (잡아서인지 스킬 때문인지) UI에서 구분해서 보여줘야 할 수도 있어서.
-            private int pendingSkillThrows = 0;
-            // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
-            public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
-            private GameStartSettings settings;
-            private int throwCountInTurn = 0; // 이번 턴에서 몇 번째 던지기인지 (YutThrowData.throwIndexInTurn)
-            // ---- 외부(UI, GameManager 등)가 구독할 수 있는 이벤트들 ----
-            public System.Action<TurnContext> OnTurnPhaseChanged;      // 턴 단계가 바뀔 때마다
-            public System.Action<PlayerSlot> OnTurnStarted;            // 새 턴이 시작될 때
-            public System.Action<PlayerSlot> OnTurnEnded;              // 턴이 끝날 때
-            public System.Action<List<YutThrowData>> OnPendingResultsChanged; // 결과 묶음이 바뀔 때 (UI가 화면에 표시하려고 구독)
-            // GameManager.StartGame()에서 호출됨. 게임 시작 전 준비 작업
+        //inspector창에서 드래그 할 수 있는 칸 만들기
+        [Header("Dependencies")]
+        [SerializeField] private TestYutRuleManager yutRuleManager;
+        [SerializeField] private TestWinConditionManager winConditionManager;
+        [SerializeField] private PlayerManager playerManager;               // 영서 코드: 플레이어/말 데이터 보관
+        [SerializeField] private PieceMovementManager pieceMovementManager; // 영서 코드: 이동/잡기/업기/완주 실제 처리
+        // 외부에서 볼 수 있지만 코드 수정은 내부에서 가능
+        public TurnContext CurrentTurn { get; private set; } = new TurnContext();
+        // 이번 턴에 던져서 "아직 이동에 쓰지 않은" 윷 결과들을 쌓아두는 리스트
+        // 예: 윷-모-도 순서로 던졌다면 이 리스트에 [윷, 모, 도] 3개가 들어있다가 플레이어가 원하는 순서로 하나씩 골라서 꺼내 쓰게 됨
+        private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
+        // 잡기로 얻은 보너스 던지기 횟수 저장( 던진 윷 결과를 다 소모하고 보너스 던지기를 하니까)
+        private int pendingCaptureThrows = 0;
+        // 스킬로 얻은 보너스 던지기 횟수 저장 (예: 기본형 "한번더")
+        // 잡기(pendingCaptureThrows)랑 따로 관리하는 이유: 나중에 "왜 추가 던지기가 생겼는지"
+        // (잡아서인지 스킬 때문인지) UI에서 구분해서 보여줘야 할 수도 있어서.
+        private int pendingSkillThrows = 0;
+        // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
+        public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
+        private GameStartSettings settings;
+        private int throwCountInTurn = 0; // 이번 턴에서 몇 번째 던지기인지 (YutThrowData.throwIndexInTurn)
+                                          // ---- 외부(UI, GameManager 등)가 구독할 수 있는 이벤트들 ----
+        public System.Action<TurnContext> OnTurnPhaseChanged;      // 턴 단계가 바뀔 때마다
+        public System.Action<PlayerSlot> OnTurnStarted;            // 새 턴이 시작될 때
+        public System.Action<PlayerSlot> OnTurnEnded;              // 턴이 끝날 때
+        public System.Action<List<YutThrowData>> OnPendingResultsChanged; // 결과 묶음이 바뀔 때 (UI가 화면에 표시하려고 구독)
+                                                                          // GameManager.StartGame()에서 호출됨. 게임 시작 전 준비 작업
         public void Initialize(GameStartSettings gameSettings)
         {
             settings = gameSettings;
@@ -99,7 +99,7 @@
         private List<PlayerSlot> DetermineOrder(List<PlayerSlot> players)
         {
             if (players.Count <= 1) return new List<PlayerSlot>(players); // 1명 이하면 정할 것도 없음
-            // 이번 라운드에서 각 플레이어가 던진 결과를 기록
+                                                                          // 이번 라운드에서 각 플레이어가 던진 결과를 기록
             var resultByPlayer = new Dictionary<PlayerSlot, YutResult>();
             foreach (var p in players)
                 resultByPlayer[p] = yutRuleManager.ThrowForOrder();
@@ -125,10 +125,12 @@
         }
         // ===================================================================
         // 팀 단위로 순서를 정하는 함수
+        // "(1팀1P→2팀1P→1팀2P→2팀2P) 방식
         // 1단계: 팀별로 소속 플레이어를 모으고, 팀 내부 순서는 할당된 순서(PlayerSlot 오름차순, 1p->2p)로 고정
         // 2단계: 각 팀의 1p(대표)들끼리만 기존 DetermineOrder()(순서정하기 던지기+동점재던지기)로 "팀 순위"를 정함
-        // 3단계: 팀 순위대로, 그 팀의 고정된 내부 순서를 그대로 이어붙여서 최종 순서를 만듦
-        // (개인전처럼 모든 팀 인원이 1명씩이면, 대표=본인이라 자연스럽게 전원이 다 던지는 것과 동일해짐)
+        // 3단계: 팀 순위를 라운드(1P끼리, 2P끼리...) 단위로 번갈아가며 이어붙여서 최종 순서를 만듦
+        // (3팀 이상이면 "1팀2팀3팀 1팀2팀3팀"처럼 자동으로 확장됨. 개인전은 대표=본인이라
+        //  자연스럽게 예전 방식(전원이 다 던짐)과 동일해짐)
         // ===================================================================
         private List<PlayerSlot> DetermineTeamBasedOrder(List<PlayerSlot> players)
         {
@@ -138,13 +140,22 @@
 
             var representatives = playersByTeam.Select(kv => kv.Value[0]).ToList();
 
-            var representativeOrder = DetermineOrder(representatives);
+            // 팀 순위(어느 팀이 먼저인지)만 뽑아둠
+            var teamOrder = DetermineOrder(representatives)
+                .Select(rep => MatchCompositionRule.GetTeamSlot(settings.matchComposition, rep))
+                .ToList();
 
+            // 라운드(1P끼리, 2P끼리...) 단위로 팀 순위를 반복해서 번갈아가며 이어붙임
             var finalOrder = new List<PlayerSlot>();
-            foreach (var rep in representativeOrder)
+            int maxTeamSize = playersByTeam.Values.Max(list => list.Count);
+            for (int roundIndex = 0; roundIndex < maxTeamSize; roundIndex++)
             {
-                var team = MatchCompositionRule.GetTeamSlot(settings.matchComposition, rep);
-                finalOrder.AddRange(playersByTeam[team]);
+                foreach (var team in teamOrder)
+                {
+                    var teamPlayers = playersByTeam[team];
+                    if (roundIndex < teamPlayers.Count)
+                        finalOrder.Add(teamPlayers[roundIndex]);
+                }
             }
             return finalOrder;
         }
@@ -180,7 +191,9 @@
             SetPhase(TurnPhase.ApplyTurnStartRule);
             ApplyTurnStartCcRule(player); //  이 플레이어 말들의 CC 남은 턴수를 -1하고, 0되면 해제
             SetPhase(TurnPhase.WaitThrow);
-            StartThrowTimer(); // 던지기 제한시간 시작 (기본룰일 때만 실제로 작동함)
+            // 통합 타이머  던지기 따로 이동 따로가 아니라, 턴 시작할 때 한 번만
+            // 통합 타이머(45초, 던지기+이동+스킬 전부 포함)를 켬. 아래 StartTurnTimer() 참고
+            StartTurnTimer();
         }
         // ===================================================================
         // 턴 시작마다 이 플레이어 소유 말들의 CC(상태이상) 지속시간을 관리함
@@ -247,7 +260,7 @@
                 Debug.LogWarning("지금은 윷을 던질 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
                 return;
             }
-            StopPhaseTimer(); // 시간 안에 던졌으니, 흐르고 있던 던지기 타이머는 여기서 멈춤
+            // 통합 타이머 : 턴 시작할 때 한 번 켜지면 계속 흐르고, 턴이 끝날 때만 멈춤
             // 잡기 보너스를 먼저 소비하고, 없으면 스킬 보너스를 소비함 
             bool isCaptureBonusThrow = pendingCaptureThrows > 0;
             bool isSkillBonusThrow = !isCaptureBonusThrow && pendingSkillThrows > 0;
@@ -277,7 +290,7 @@
             OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
             SetPhase(TurnPhase.CheckExtraThrow);
 
-            //수정: 기본 윷 규칙을 계산한 뒤 Player 스킬 시스템이 최종 추가 던지기를 결정합니다.
+            // 기본 윷 규칙을 계산한 뒤 Player 스킬 시스템이 최종 추가 던지기를 결정합니다.
             bool grantsDefaultExtraThrow =
                 YutResultRule.IsExtraThrowResult(result) &&
                 CurrentTurn.extraThrowByYutMoCount < GameRuleDefine.MaxYutMoExtraThrowCount;
@@ -290,11 +303,12 @@
             {
                 CurrentTurn.extraThrowByYutMoCount++;
                 SetPhase(TurnPhase.WaitThrow);
-                StartThrowTimer(); // 다시 던질 기회 생겼으니 던지기 타이머 재시작 (보너스 초 반영됨)
+                //  타이머를 재시작하지 않고, 남은 시간에 보너스만 더함(추가 던지기 보너스 시간)
+                AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
                 return;
             }
             SetPhase(TurnPhase.WaitAction);
-            StartActionTimer(); // 이동 단계로 넘어가니 이동 제한시간 시작
+            //  이동 단계로 넘어가도 타이머는 이미 계속 흐르고 있어서 따로 시작 안 함
         }
         // UI에서 플레이어가 [결과 묶음] 중 하나를 골라(chosenResult), 어떤 말을 옮길지(pieceId) 정하면 호출됨
         // pieceId, chosenResult는 이 함수의 매개변수 - UI가 호출할 때 직접 넣어주는 값
@@ -315,7 +329,7 @@
                 return;
             }
             int playerId = (int)CurrentTurn.currentPlayer; // PlayerSlot(Player1=1..) 값 그대로 영서쪽 playerId(int)로 씀
-            // 검사 3: 상태이상(Stun)이나 업힌 말(리더 아님)이라 못 움직이는 상태는 아닌지 확인
+                                                           // 검사 3: 상태이상(Stun)이나 업힌 말(리더 아님)이라 못 움직이는 상태는 아닌지 확인
             if (!CanPieceMove(playerId, pieceId))
             {
                 Debug.LogWarning("상태이상 또는 업힌 말이라 이동할 수 없는 말: " + pieceId);
@@ -351,21 +365,31 @@
             }
             SetPhase(TurnPhase.ResolveTile); // 도착 칸 처리 단계로 표시 (특수효과는 아직 미구현)
             SetPhase(TurnPhase.ResolveBoardRule); // 잡기/업기/완주 결과 처리 단계로 표시
-            // 완주했는지 확인은 여기서 안 하고, WinConditionManager한테 결과를 넘겨서 대신 확인시킴
+                                                  // 완주했는지 확인은 여기서 안 하고, WinConditionManager한테 결과를 넘겨서 대신 확인시킴
             int finishedCountAfter = CountFinishedPieces(playerId);
             int newlyFinishedCount = finishedCountAfter - finishedCountBefore;
             bool isFinished = newlyFinishedCount > 0;
             winConditionManager.OnPieceMoveResolved(
                 CurrentTurn.currentPlayer, CurrentTurn.currentTeam, isFinished, newlyFinishedCount);
+
+            // ===================================================================
+            // Escape 모드 전용: 완주한 말은 재사용해야 하므로, 상태를 다시
+            // 대기(Waiting)로 되돌림. 영서 확인: "위치는 나중에 조정, 지금은 상태만 바꾸면 됨"
+            // ===================================================================
+            if (isFinished && settings.gameMode == GameMode.Escape)
+            {
+                ResetFinishedPiecesToWaiting(playerId);
+            }
             SetPhase(TurnPhase.CheckBonusThrow); // 잡기로 보너스 던지기 생겼는지 확인하는 단계로 표시
-            //  상대 말들의 CC(Kill/Retire)를
-            // 직접 훑어서 확인함. 윷/모(4~5칸)로 잡으면 Retire(추가턴 없음),
-            // 도~걸/뒷도(1~3칸,-1칸)로 잡으면 Kill(추가턴 있음)
+                                                 //  상대 말들의 CC(Kill/Retire)를
+                                                 // 직접 훑어서 확인함. 윷/모(4~5칸)로 잡으면 Retire(추가턴 없음),
+                                                 // 도~걸/뒷도(1~3칸,-1칸)로 잡으면 Kill(추가턴 있음)
             bool gotKillCapture = ConsumeCaptureResults(playerId);
             if (gotKillCapture) // 이번 이동으로 상대 말을 Kill로 잡았으면
             {
                 pendingCaptureThrows++;             // 나중에 쓸 보너스 던지기 개수 +1 (지금 바로 던지는 거 아님)
                 CurrentTurn.extraThrowByCaptureCount++;
+                AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  잡기 보너스도 시간 더해줌
             }
             // 아직 안 쓴 윷 결과가 남아있으면 -> 계속 말 이동시키는 단계로 돌아감
             if (pendingResults.Count > 0)
@@ -377,7 +401,7 @@
             if (pendingCaptureThrows > 0 || pendingSkillThrows > 0) // 스킬 보너스도 같이 확인
             {
                 SetPhase(TurnPhase.WaitThrow);
-                StartThrowTimer(); // 여기서 흐르던 이동 타이머는 멈추고, 던지기 타이머 새로 시작
+                // 타이머는 이미 계속 흐르고 있어서 여기서 다시 시작 안 함
                 return;
             }
             EndTurn(); // 쓸 결과도, 보너스 던지기도 없으면 이 턴은 여기서 끝
@@ -390,6 +414,21 @@
             foreach (var piece in player.RuntimeData.Pieces)
                 if (piece.IsFinished) count++;
             return count;
+        }
+        // ===================================================================
+        // Escape 모드 전용: 이번에 완주한 말(들)을 다시 Waiting 상태로 되돌림
+        // (재사용 가능하게). 위치는 영서가 나중에(UI 나오면) 조정 예정, 지금은 상태만 바꿔둠
+        // ===================================================================
+        private void ResetFinishedPiecesToWaiting(int playerId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return;
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                if (piece.State == PieceState.Goal)
+                {
+                    piece.State = PieceState.Waiting;
+                }
+            }
         }
         // ===================================================================
         // 이 플레이어 말 중 하나라도 보드 위에(State == InBoard) 있는지 확인하는 함수
@@ -424,7 +463,7 @@
         // 방금 이동으로 상대 말이 잡혔는지(Kill/Retire) 전체 상대 플레이어를 훑어서 확인.
         // 발견하면 그 즉시 CC를 지워서(ClearCc) "소비 완료" 처리함 (다음에 또 잡힌 걸로 착각 안 하게).
         // 반환값: Kill(추가턴 있는 잡기)이 하나라도 있었으면 true
-        //수정: 자폭 같은 스킬은 현재 플레이어 말의 Kill/Retire도 정리할 수 있습니다.
+        // 자폭 같은 스킬은 현재 플레이어 말의 Kill/Retire도 정리할 수 있습니다.
         private bool ConsumeCaptureResults(
             int movingPlayerId,
             bool includeMovingPlayer = false)
@@ -432,7 +471,7 @@
             bool gotKill = false;
             foreach (var otherPlayer in playerManager.ActivePlayers)
             {
-                //수정: 일반 이동은 기존처럼 상대 말만, 스킬은 필요할 때 모든 말을 검사합니다.
+                // 일반 이동은 기존처럼 상대 말만, 스킬은 필요할 때 모든 말을 검사합니다.
                 if (!includeMovingPlayer && otherPlayer.PlayerId == movingPlayerId)
                     continue;
 
@@ -453,7 +492,7 @@
         }
         private void EndTurn()
         {
-            StopPhaseTimer(); // 턴이 진짜로 끝나는 지점이니, 혹시 남아있는 타이머가 있으면 정리
+            StopTurnTimer(); // 턴이 진짜로 끝나는 지점이니, 흐르고 있던 통합 타이머 정리
             SetPhase(TurnPhase.TurnEnd);
             OnTurnEnded?.Invoke(CurrentTurn.currentPlayer);
             if (CurrentTurn.isGameEnded)
@@ -483,10 +522,12 @@
         //  (캐릭터/스킬) : 스킬 효과로 재던지기를 부여했을 때 호출할 함수
         // (예: 기본형 [한번더] 스킬 사용 시 캐릭터 코드가 이 함수를 부름)
         // 윷/모로 얻는 추가 던지기(최대 3회 제한)와는 별도 카운트라서, 여기 카운트는 제한 없음
+        //  스킬로 인한 추가 던지기도 통합 타이머에 시간 보너스를 더함
         // ===================================================================
         public void GrantSkillExtraThrow()
         {
             pendingSkillThrows++;
+            AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
         }
 
         /// <summary>
@@ -494,7 +535,7 @@
         /// The turn manager remains responsible for consuming capture markers and
         /// scheduling any capture bonus throw.
         /// </summary>
-        //수정: 액티브 스킬의 잡기 결과와 추가 던지기를 턴 흐름에 반영합니다.
+        // 액티브 스킬의 잡기 결과와 추가 던지기를 턴 흐름에 반영합니다.
         public void ResolveSkillResult(bool suppressExtraThrow)
         {
             if (CurrentTurn == null || CurrentTurn.currentPlayer == PlayerSlot.None)
@@ -508,6 +549,7 @@
 
             pendingCaptureThrows++;
             CurrentTurn.extraThrowByCaptureCount++;
+            AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  스킬로 인한 잡기 보너스도 시간 더해줌
         }
 
         // ===================================================================
@@ -558,51 +600,53 @@
             OnTurnPhaseChanged?.Invoke(CurrentTurn);
         }
         // ===================================================================
-        // 윷/이동 제한시간 타이머
-        //  던지기 기본 10초(+추가던지기 1회당 5초), 이동/스킬 기본 30초
-        //         (+추가 던지기로 얻은 이동 횟수만큼 10초). 시간 지나면 강제로 턴 넘김.
-        // settings.turnTimeMode가 Unlimited면 아예 타이머를 안 켬 ( 무제한 모드도 구현)
+        // 턴 전체(던지기+이동+스킬)를 하나의 타이머로 재는 방식
+        // "윷 던지기, 말 이동과 스킬 사용에 정해진 시간 45초 + 추가 던지기가 나오면 15초 추가"
+        // 그래서 턴 시작할 때 딱 한 번만 타이머를 켜고, 추가 던지기(윷/모/잡기/스킬)가 생길 때마다
+        // "시간을 더해주기"만 하고 타이머 자체는 절대 다시 시작하지 않음 (턴이 끝날 때만 멈춤)
+        // settings.turnTimeMode가 Unlimited면 아예 타이머를 안 켬
         // ===================================================================
-        private Coroutine phaseTimerCoroutine;
-        // 던지기 제한시간 시작. 보너스(잡기/윷모로 인한 추가던지기) 1회당 +5초
-        private void StartThrowTimer()
+        private Coroutine turnTimerCoroutine;
+        private float turnTimerRemainingSeconds; // 지금 이 턴에 남은 시간(초). 매 프레임 줄어들고, 보너스 생기면 더해짐
+
+        // 턴 시작마다 딱 한 번만 호출됨 (BeginTurnFor에서)
+        private void StartTurnTimer()
         {
             if (settings == null || settings.turnTimeMode != TurnTimeMode.Limited) return; // 무제한 모드면 시작 안 함
-            int bonusThrowCount = CurrentTurn.extraThrowByYutMoCount + CurrentTurn.extraThrowByCaptureCount;
-            float seconds = settings.throwTimeSeconds + bonusThrowCount * GameRuleDefine.ExtraThrowTimeBonusSeconds;
-            StopPhaseTimer(); // 혹시 이전 타이머가 남아있으면 정리하고 새로 시작
-            phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitThrow));
+            StopTurnTimer(); // 혹시 이전 턴 타이머가 안 꺼져있으면 정리하고 새로 시작
+            turnTimerRemainingSeconds = settings.throwTimeSeconds; // 기본 45초 (settings.throwTimeSeconds를 "턴 전체 기본시간"으로 사용)
+            turnTimerCoroutine = StartCoroutine(TurnTimeoutRoutine());
         }
-        // 이동/스킬 제한시간 시작. 이번 턴에 던진 횟수(=이동해야 할 횟수)가 많을수록 10초씩 추가
-        // (여러 번 이동하는 동안 하나로 이어지는 시간이라, RequestMovePiece 안에서는 다시 안 부름 -
-        //  한 번 시작하면 이 단계(WaitAction)를 벗어날 때까지 계속 흐름)
-        private void StartActionTimer()
+
+        // 추가 던지기(윷/모/잡기/스킬)가 생길 때마다 호출. 타이머를 다시 시작하지 않고, 남은 시간에
+        // 그냥 더해주기만 함 (이미 흐르고 있던 시간은 그대로 유지됨)
+        private void AddTurnTimerBonus(float bonusSeconds)
         {
-            if (settings == null || settings.turnTimeMode != TurnTimeMode.Limited) return;
-            int extraMoveCount = Mathf.Max(0, throwCountInTurn - 1); // 기본 1회는 기본시간에 포함, 그 이상만 보너스
-            float seconds = settings.actionTimeSeconds + extraMoveCount * GameRuleDefine.ExtraMoveTimeBonusSeconds;
-            StopPhaseTimer();
-            phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitAction));
+            if (turnTimerCoroutine == null) return; // 무제한 모드거나 타이머가 이미 꺼진 상태면 아무것도 안 함
+            turnTimerRemainingSeconds += bonusSeconds;
         }
-        // 지금 돌고 있는 타이머가 있으면 멈춤 (다른 단계로 넘어갈 때, 또는 새 타이머 시작 전에 호출)
-        private void StopPhaseTimer()
+
+        // 지금 돌고 있는 턴 타이머가 있으면 멈춤 (턴이 진짜로 끝날 때만 호출)
+        private void StopTurnTimer()
         {
-            if (phaseTimerCoroutine != null)
+            if (turnTimerCoroutine != null)
             {
-                StopCoroutine(phaseTimerCoroutine);
-                phaseTimerCoroutine = null;
+                StopCoroutine(turnTimerCoroutine);
+                turnTimerCoroutine = null;
             }
         }
-        // seconds만큼 기다렸다가, 그때도 여전히 phaseToCheck 단계에 머물러 있으면(=플레이어가 시간 안에
-        // 행동을 못 했으면) 강제로 턴을 끝냄. 그 전에 플레이어가 행동해서 단계가 바뀌었으면 아무 일도 안 함
-        private IEnumerator PhaseTimeoutRoutine(float seconds, TurnPhase phaseToCheck)
+
+        // 매 프레임마다 남은 시간을 깎다가, 0 이하가 되면 그 시점에 뭘 하고 있었든 강제로 턴 종료
+        private IEnumerator TurnTimeoutRoutine()
         {
-            yield return new WaitForSeconds(seconds);
-            if (CurrentTurn.currentPhase == phaseToCheck)
+            while (turnTimerRemainingSeconds > 0f)
             {
-                Debug.Log("[타이머] " + phaseToCheck + " 단계 제한시간(" + seconds + "초) 초과, 턴 강제 종료");
-                EndTurn();
+                yield return null; // 한 프레임 기다림
+                turnTimerRemainingSeconds -= Time.deltaTime;
             }
+            turnTimerCoroutine = null;
+            Debug.Log("[타이머] 턴 제한시간 초과, 턴 강제 종료");
+            EndTurn();
         }
     }
 }

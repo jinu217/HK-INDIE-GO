@@ -36,6 +36,20 @@ namespace YutArena.Managers
             (YutResult.BackDo, 100f / 6f),
         };
 
+        // ===================================================================
+        // Escape 승리조건2 타이브레이커 전용 확률표
+        // 낙(0.01%) 확률을 뒷도한테 합치고, 0~5까지 숫자로 매겨서 승부를 반드시 가릴 수 있게 함
+        // ===================================================================
+        private static readonly (YutResult result, float weight)[] TieBreakerTable =
+        {
+            (YutResult.BackDo, 3.60f),  // 원래 뒷도(3.59%) + 낙(0.01%) 합침
+            (YutResult.Do,     10.79f),
+            (YutResult.Gae,    33.89f),
+            (YutResult.Geol,   35.49f),
+            (YutResult.Yut,    13.94f),
+            (YutResult.Mo,      2.29f),
+        };
+
         // 캐릭터 패시브로 확률표를 통째로 바꿔야 할 때 쓰는 자리 (예: 사무라이 - 뒷도를 윷/모로 재분배)
         // 캐릭터 담장자가 함수를 만들어서 여기에 등록해두면 Throw()가 자동으로 그 확률표를 사용함
         // yutRuleManager.ProbabilityTableProvider = GetSamuraiTable; -> 예를들어 등록해야 되는 코드?
@@ -57,46 +71,62 @@ namespace YutArena.Managers
         // 순서 정하기 전용 던지기. 게임 시작 "전", 첫 턴 순서 정할 때만 씀 (Throw()와는 완전히 다른 상황)
         // 캐릭터 패시브 확률표(ProbabilityTableProvider)는 적용 안 함 - 이 시점엔 아직 캐릭터 선택 전이라서
         // ===================================================================
-            public YutResult ThrowForOrder()
+        public YutResult ThrowForOrder()
+        {
+            return ThrowFromTable(OrderDeterminationTable);
+        }
+
+        // ===================================================================
+        // Escape 승리조건2 타이브레이커 전용 던지기.
+        // 낙이 없는 표를 써서, 던지면 반드시 도~모 중 하나가 나오게 함 (무효 상황 방지)
+        // ===================================================================
+        public YutResult ThrowForTieBreaker()
+        {
+            return ThrowFromTable(TieBreakerTable);
+        }
+
+        // 실제 확률 계산 로직 (원래 Throw() 안에 있던 걸 공통 함수로 분리)
+        // Throw()와 ThrowForOrder()가 표(table)만 다르게 넣어서 이 함수를 같이 씀
+        private YutResult ThrowFromTable((YutResult, float)[] table)
+        {
+            // 혹시 등록된 표가 비어있는 등 오류 발생시 일단 기본표로 실행하고 오류 메시지를 남김
+            if (table == null || table.Length == 0)
             {
-                return ThrowFromTable(OrderDeterminationTable);
+                Debug.LogError("TestYutRuleManager: 확률표가 비어있음, 기본표로 대체");
+                table = DefaultProbabilityTable;
             }
 
-            // 실제 확률 계산 로직 (원래 Throw() 안에 있던 걸 공통 함수로 분리)
-            // Throw()와 ThrowForOrder()가 표(table)만 다르게 넣어서 이 함수를 같이 씀
-            private YutResult ThrowFromTable((YutResult, float)[] table)
+            // 표에 있는 확률(weight)을 전부 더해서 총합을 구함 (보통 100)
+            float totalWeight = 0f;
+            foreach (var entry in table) totalWeight += entry.Item2;
+
+            // 0~totalWeight 사이의 랜덤 숫자를 뽑고, 확률을 앞에서부터 누적해가며 그 랜덤 숫자를 처음 넘는 지점의 결과를 뽑음
+            // 예: 도10.79, 개33.89일 때 roll이 5면 "도", roll이 20이면 "개", roll이 55이면 "걸"
+            float roll = Random.Range(0f, totalWeight);
+            float cumulative = 0f;
+            foreach (var (result, weight) in table)
             {
-                // 혹시 등록된 표가 비어있는 등 오류 발생시 일단 기본표로 실행하고 오류 메시지를 남김
-                if (table == null || table.Length == 0)
-                {
-                    Debug.LogError("TestYutRuleManager: 확률표가 비어있음, 기본표로 대체");
-                    table = DefaultProbabilityTable;
-                }
-
-                // 표에 있는 확률(weight)을 전부 더해서 총합을 구함 (보통 100)
-                float totalWeight = 0f;
-                foreach (var entry in table) totalWeight += entry.Item2;
-
-                // 0~totalWeight 사이의 랜덤 숫자를 뽑고, 확률을 앞에서부터 누적해가며 그 랜덤 숫자를 처음 넘는 지점의 결과를 뽑음
-                // 예: 도10.79, 개33.89일 때 roll이 5면 "도", roll이 20이면 "개", roll이 55이면 "걸"
-                float roll = Random.Range(0f, totalWeight);
-                float cumulative = 0f;
-                foreach (var (result, weight) in table)
-                {
-                    cumulative += weight;
-                    if (roll <= cumulative)
-                        return result;
-                }
-
-                // 소수점 계산 오차로 아주 드물게 못 찾을 수 있을 것 같아서 마지막 결과 반환하게끔 설정
-                return table[table.Length - 1].Item1;
+                cumulative += weight;
+                if (roll <= cumulative)
+                    return result;
             }
 
-            // 테스트용: 인스펙터 우클릭으로 순서정하기 확률표가 잘 도는지 확인
-            [ContextMenu("테스트: 순서정하기 던지기")]
-            public void TestThrowForOrder()
-            {
-                Debug.Log("순서정하기 결과: " + ThrowForOrder());
-            }
+            // 소수점 계산 오차로 아주 드물게 못 찾을 수 있을 것 같아서 마지막 결과 반환하게끔 설정
+            return table[table.Length - 1].Item1;
+        }
+
+        // 테스트용: 인스펙터 우클릭으로 순서정하기 확률표가 잘 도는지 확인
+        [ContextMenu("테스트: 순서정하기 던지기")]
+        public void TestThrowForOrder()
+        {
+            Debug.Log("순서정하기 결과: " + ThrowForOrder());
+        }
+
+        // 테스트용: 인스펙터 우클릭으로 타이브레이커 확률표가 잘 도는지 확인
+        [ContextMenu("테스트: 타이브레이커 던지기")]
+        public void TestThrowForTieBreaker()
+        {
+            Debug.Log("타이브레이커 결과: " + ThrowForTieBreaker());
         }
     }
+}

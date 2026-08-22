@@ -15,7 +15,7 @@ namespace YutArena.Managers
         [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private TestYutRuleManager yutRuleManager; // 동점 타이브레이커 던지기용
         [SerializeField] private PlayerManager playerManager; // Classic 모드가 말 상태 직접 확인할 때 필요
-        [SerializeField] private PieceMovementManager pieceMovementManager; // Escape 제한시간 거리 비교용
+        [SerializeField] private PieceMovementManager pieceMovementManager; // 참먹이 거리 계산 호출용
         // 모드별 승리 규칙 스크립트들을 인스펙터에서 드래그로 연결 (ClassicModeRule, EscapeModeRule 등)
         [SerializeField] private List<MonoBehaviour> modeRuleSources;
         // 위 목록을 "어느 모드가 어느 규칙인지" 바로 찾을 수 있게 정리해둔 표
@@ -269,8 +269,9 @@ namespace YutArena.Managers
                 Declare(topTeams[0], GameResultType.TimeOver);
                 return;
             }
-            // 2단계: 각 팀의 InBoard 말 중 골인에 가장 가까운 말의 남은 칸 수를 비교한다.
-            List<TeamSlot> distanceTiedTeams = FindTeamsWithClosestInBoardPiece(topTeams);
+
+            // 2단계: 참먹이 거리 비교 
+            var distanceTiedTeams = FindClosestTeamsToGoal(topTeams);
             if (distanceTiedTeams.Count == 1)
             {
                 Declare(distanceTiedTeams[0], GameResultType.TimeOver);
@@ -282,69 +283,45 @@ namespace YutArena.Managers
             Declare(winner, GameResultType.TimeOver);
         }
 
-        /// <summary>
-        /// 동점 팀들 중 보드 위 말 하나가 골인에 가장 가까운 팀만 남깁니다.
-        /// 보드 위 말이 없는 팀은 거리 비교에서 int.MaxValue(가장 멂)로 취급합니다.
-        /// </summary>
-        private List<TeamSlot> FindTeamsWithClosestInBoardPiece(IReadOnlyList<TeamSlot> teams)
+        // ===================================================================
+        // 동점인 팀들 중, "참먹이(골)에 가장 가까운 말"이 있는 팀(들)만 추려냄
+        // 각 팀에서 "보드 위에 있는 말들 중 남은 칸수가 가장 작은 말"을 그 팀의 대표 거리로 삼고,
+        // 팀들끼리 그 대표 거리를 비교해서 제일 작은(가까운) 팀들만 남김 (동점이면 여러 팀 남을 수 있음)
+        // 보드 위에 말이 하나도 없는 팀은 비교 대상에서 제외
+        // ===================================================================
+        private List<TeamSlot> FindClosestTeamsToGoal(List<TeamSlot> teams)
         {
-            if (pieceMovementManager == null)
-                pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
+            var closestDistanceByTeam = new Dictionary<TeamSlot, int>();
 
-            if (pieceMovementManager == null || playerManager == null)
+            foreach (var team in teams)
             {
-                Debug.LogWarning("TestWinConditionManager: 거리 비교에 필요한 PlayerManager 또는 PieceMovementManager가 없어 윷 타이브레이커로 진행합니다.");
-                return new List<TeamSlot>(teams);
-            }
-
-            int closestRemainingSteps = int.MaxValue;
-            var closestTeams = new List<TeamSlot>();
-
-            foreach (TeamSlot team in teams)
-            {
-                int teamClosestRemainingSteps = int.MaxValue;
-
-                foreach (PlayerController player in playerManager.ActivePlayers)
+                int minDistance = int.MaxValue;
+                for (int i = 1; i <= settings.playerCount && i <= 8; i++)
                 {
-                    TeamSlot playerTeam = MatchCompositionRule.GetTeamSlot(
-                        settings.matchComposition,
-                        (PlayerSlot)player.PlayerId);
-                    if (playerTeam != team || player.RuntimeData == null)
-                        continue;
+                    var p = (PlayerSlot)i;
+                    if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
+                    if (!playerManager.TryGetPlayer(i, out var player)) continue;
 
-                    foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                    foreach (var piece in player.RuntimeData.Pieces)
                     {
-                        if (pieceMovementManager.TryGetRemainingStepsToGoal(
-                                player.PlayerId,
-                                piece.PieceId,
-                                out int remainingSteps))
+                        // 영서 함수: 보드 위에 있는 말만 성공(true), 나머지(대기중/완주/없음)는 false
+                        if (pieceMovementManager.TryGetRemainingStepsToGoal(i, piece.PieceId, out int remainingSteps))
                         {
-                            teamClosestRemainingSteps = Mathf.Min(teamClosestRemainingSteps, remainingSteps);
+                            if (remainingSteps < minDistance)
+                                minDistance = remainingSteps;
                         }
                     }
                 }
-
-                if (teamClosestRemainingSteps < closestRemainingSteps)
-                {
-                    closestRemainingSteps = teamClosestRemainingSteps;
-                    closestTeams.Clear();
-                    closestTeams.Add(team);
-                }
-                else if (teamClosestRemainingSteps == closestRemainingSteps)
-                {
-                    closestTeams.Add(team);
-                }
+                closestDistanceByTeam[team] = minDistance; // 말이 하나도 없으면 int.MaxValue로 남아서 자동으로 불리해짐
             }
 
-            Debug.Log(
-                "TestWinConditionManager: 제한시간 동점 거리 비교 결과 - " +
-                "남은 칸 " + (closestRemainingSteps == int.MaxValue ? "없음" : closestRemainingSteps.ToString()) +
-                ", 팀 " + string.Join(", ", closestTeams));
-            return closestTeams;
+            int bestDistance = closestDistanceByTeam.Values.Min();
+            return teams.Where(t => closestDistanceByTeam[t] == bestDistance).ToList();
         }
         // ===================================================================
         // 동점인 팀들끼리, 팀 소속 전원이 윷을 던져서 그 팀의 결과값을 합산한 뒤
-        // 합산값이 더 높은 팀을 찾음. 여러 팀이 또 동점이면, 그 팀들끼리만 다시 던짐(재귀)
+        // 합산값이 더 높은 팀을 찾음. 여러 팀이 또 동점이면, 그 팀들끼리만 다시 던짐
+        // 타이브레이커는 낙이 나오면 안 되므로, 일반 게임 확률표(yutRuleManager.Throw)가 아니라 낙이 없는 전용 확률표(ThrowForTieBreaker)를 쓰게 변경함
         // ===================================================================
         private TeamSlot ResolveTieByThrow(List<TeamSlot> tiedTeams)
         {
@@ -359,7 +336,7 @@ namespace YutArena.Managers
                 {
                     var p = (PlayerSlot)i;
                     if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
-                    YutResult result = yutRuleManager.Throw(p);
+                    YutResult result = yutRuleManager.ThrowForTieBreaker(); // 낙 없는 전용 확률표 사용
                     sum += YutResultRule.GetMoveCount(result); // 결과값을 칸수(숫자)로 바꿔서 합산
                 }
                 sumByTeam[team] = sum;
