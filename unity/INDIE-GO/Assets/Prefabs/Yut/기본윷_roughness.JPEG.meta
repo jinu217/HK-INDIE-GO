@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: e8f211a956d4a1d449a05904da0451ea
+guid: 91d72db424616fb499cefe1ebb6a2791
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 5879614101852539803
-    second: Meshy_AI_Triple_X_Wooden_Totem_0818093703_texture_0
+      213: -1620105170915456421
+    second: "\uAE30\uBCF8\uC737_roughness_0"
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Meshy_AI_Triple_X_Wooden_Totem_0818093703_texture_0
+      name: "\uAE30\uBCF8\uC737_roughness_0"
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 2048
-        height: 2048
+        width: 4096
+        height: 4096
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b9b4c45cfd5989150800000000000000
-      internalID: 5879614101852539803
+      spriteID: b5a8fc44eea3489e0800000000000000
+      internalID: -1620105170915456421
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Meshy_AI_Triple_X_Wooden_Totem_0818093703_texture_0: 5879614101852539803
+      "\uAE30\uBCF8\uC737_roughness_0": -1620105170915456421
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

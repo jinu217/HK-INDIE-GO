@@ -385,8 +385,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Test.YutThrowTest
   throwButton: {fileID: 1173854163}
   turnManager: {fileID: 1332604209}
-  normalYutPrefab: {fileID: 919132149155446097, guid: d10beee805d7580419a7c436edf7e7a5, type: 3}
-  backDoYutPrefab: {fileID: 919132149155446097, guid: a9d937be9943c8b4287cd7da356538cc, type: 3}
+  normalYutPrefab: {fileID: 919132149155446097, guid: 89323595ad72c3c4a8c95f041189acc9, type: 3}
+  backDoYutPrefab: {fileID: 919132149155446097, guid: c759ab32680f46b42afa179798dda2bd, type: 3}
   boardCenter: {fileID: 1133845951}
   boardRadius: 1.25
   edgePadding: 0.05
@@ -402,7 +402,7 @@ MonoBehaviour:
   tumbleTurns: {x: 1.5, y: 3}
   modelRotationOffset: {x: 0, y: 0, z: 0}
   faceFlipRotation: {x: 180, y: 0, z: 0}
-  modelScaleMultiplier: 1
+  modelScaleMultiplier: 3
 --- !u!4 &100287682
 Transform:
   m_ObjectHideFlags: 0
