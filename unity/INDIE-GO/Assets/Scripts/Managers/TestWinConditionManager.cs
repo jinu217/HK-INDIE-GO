@@ -137,9 +137,28 @@ namespace YutArena.Managers
             {
                 resultType = resultType,
                 winningTeam = winningTeam,
+                winningPlayer = FindSoloWinningPlayer(winningTeam), // winningTeam 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
                 finalRanking = finalRanking
             };
             gameManager.EndGame(result);
+        }
+        // ===================================================================
+        //  winningTeam 소속 플레이어를 세어봐서, 딱 1명이면 개인전으로 판단하고 그 사람을 반환.
+        // 팀전(소속 2명 이상)이면 PlayerSlot.None을 반환함 (winningPlayer는 개인전 전용 필드라서)
+        // UI가 결과창에서 "OO님 승리"(개인전) 표시를 할지 "TeamA 승리"(팀전) 표시를 할지 구분할 때 씀
+        // ===================================================================
+        private PlayerSlot FindSoloWinningPlayer(TeamSlot winningTeam)
+        {
+            PlayerSlot found = PlayerSlot.None;
+            int memberCount = 0;
+            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            {
+                var p = (PlayerSlot)i;
+                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != winningTeam) continue;
+                memberCount++;
+                found = p;
+            }
+            return memberCount == 1 ? found : PlayerSlot.None;
         }
         // ===================================================================
         //  항복/탈주 처리 
@@ -269,7 +288,6 @@ namespace YutArena.Managers
                 Declare(topTeams[0], GameResultType.TimeOver);
                 return;
             }
-
             // 2단계: 참먹이 거리 비교 
             var distanceTiedTeams = FindClosestTeamsToGoal(topTeams);
             if (distanceTiedTeams.Count == 1)
