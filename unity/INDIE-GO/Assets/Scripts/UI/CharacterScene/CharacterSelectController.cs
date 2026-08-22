@@ -101,7 +101,7 @@ namespace YutArena.UI.CharacterScene
             if (settings == null)
             {
                 SetText(gameModeText, "-");
-                SetText(playerCountText, $"{playerCount}명");
+                SetText(playerCountText, $"{playerCount} Players");
                 SetText(teamCompositionText, "-");
                 SetText(mapText, "-");
                 SetText(turnCountText, "-");
@@ -109,20 +109,32 @@ namespace YutArena.UI.CharacterScene
             }
 
             SetText(gameModeText, GetGameModeText(settings.gameMode));
-            SetText(playerCountText, $"{settings.playerCount}명");
+            SetText(playerCountText, $"{settings.playerCount} Players");
             SetText(teamCompositionText, GetTeamCompositionText(settings));
             SetText(mapText, GetMapText(settings.mapType));
-            SetText(turnCountText, settings.maxTurnCount.ToString());
+            SetText(turnCountText, $"{settings.maxTurnCount} Turns");
         }
 
         private static string GetGameModeText(GameMode gameMode)
         {
             return gameMode switch
             {
-                GameMode.Classic => "클래식",
-                GameMode.Escape => "탈출",
-                GameMode.KillTheKing => "왕을 잡아라",
+                GameMode.Classic => "Classic",
+                GameMode.Escape => "Escape",
+                GameMode.KillTheKing => "Kill The King",
                 _ => gameMode.ToString()
+            };
+        }
+
+        private static string GetMapText(MapType mapType)
+        {
+            return mapType switch
+            {
+                MapType.Random => "Random",
+                MapType.Basic => "Basic",
+                MapType.Grassland => "Grassland",
+                MapType.Korean => "Korean",
+                _ => mapType.ToString()
             };
         }
 
@@ -130,7 +142,7 @@ namespace YutArena.UI.CharacterScene
         {
             if (!settings.isTeamMode)
             {
-                return "개인전";
+                return "Solo";
             }
 
             return settings.matchComposition switch
@@ -140,19 +152,7 @@ namespace YutArena.UI.CharacterScene
                 MatchComposition.FourVsFour => "4:4",
                 MatchComposition.TwoVsTwoVsTwo => "2:2:2",
                 MatchComposition.TwoVsTwoVsTwoVsTwo => "2:2:2:2",
-                _ => "팀전"
-            };
-        }
-
-        private static string GetMapText(MapType mapType)
-        {
-            return mapType switch
-            {
-                MapType.Random => "랜덤",
-                MapType.Basic => "기본",
-                MapType.Grassland => "초원",
-                MapType.Korean => "한국",
-                _ => mapType.ToString()
+                _ => "Team"
             };
         }
 
