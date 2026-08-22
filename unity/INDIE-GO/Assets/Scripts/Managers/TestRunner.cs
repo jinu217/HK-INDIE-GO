@@ -28,7 +28,7 @@ public class TestRunner : MonoBehaviour
                 targetEscapeCount = 4,
                 timeLimitMinutes = 0,
                 maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
-                turnTimeMode = TurnTimeMode.Unlimited,
+                turnTimeMode = TurnTimeMode.Limited,
                 throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,
                 actionTimeSeconds = GameRuleDefine.DefaultActionTimeSeconds,
                 useSkill = true,
