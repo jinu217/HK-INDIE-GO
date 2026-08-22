@@ -14,20 +14,29 @@ namespace YutArena.Test
     public sealed class YutThrowManager : MonoBehaviour
     {
         [Header("References")]
+        [Tooltip("던지기 입력에 사용하는 UI 버튼입니다. 연출 중에는 자동으로 비활성화됩니다.")]
         [SerializeField] private Button throwButton;
+        [Tooltip("실제 윷 결과와 턴 상태를 전달하는 턴 매니저입니다.")]
         [SerializeField] private TestTurnManager turnManager;
+        [Tooltip("일반 윷가락 1개짜리 프리팹입니다. 실행 시 3개 생성됩니다.")]
         [SerializeField] private GameObject normalYutPrefab;
+        [Tooltip("백도 표시가 있는 윷가락 1개짜리 프리팹입니다. 실행 시 1개 생성됩니다.")]
         [SerializeField] private GameObject backDoYutPrefab;
         [Tooltip("원판 중앙에 놓고 로컬 X/Y축이 원판 표면을 따르도록 설정")]
         [SerializeField] private Transform boardCenter;
 
         [Header("Board Area (Local XY)")]
+        [Tooltip("윷이 착지할 수 있는 원형 영역의 반지름입니다.")]
         [SerializeField, Min(0.1f)] private float boardRadius = 2.5f;
+        [Tooltip("윷이 원판 가장자리에 걸치지 않도록 안쪽에 확보하는 여백입니다.")]
         [SerializeField, Min(0f)] private float edgePadding = 0.35f;
         [Tooltip("카메라가 -Z에 있으면 보통 음수 사용")]
         [SerializeField] private float surfaceOffset = -0.1f;
         [Tooltip("게임 시작 시 일렬로 놓이는 윷 사이의 간격")]
         [SerializeField, Min(0f)] private float startYutSpacing = 0.35f;
+        [Tooltip("시작 윷 4개의 중심 위치를 원판 로컬 X/Y축으로 이동합니다. X는 좌우, Y는 위아래입니다.")]
+        [SerializeField] private Vector2 startYutPositionOffset;
+        [Tooltip("던진 후 착지할 때 윷끼리 확보할 최소 간격입니다.")]
         [SerializeField, Min(0f)] private float minimumYutSpacing = 0.65f;
 
         [Header("Board Placement")]
@@ -37,15 +46,21 @@ namespace YutArena.Test
         [SerializeField] private float boardPositionY;
 
         [Header("Throw Animation")]
+        [Tooltip("윷 던지기 연출이 시작해서 착지할 때까지 걸리는 시간(초)입니다.")]
         [SerializeField, Min(0.1f)] private float throwDuration = 0.85f;
+        [Tooltip("던지는 동안 화면 위쪽으로 올라가는 포물선 높이입니다.")]
         [SerializeField, Min(0f)] private float arcHeight = 1.2f;
+        [Tooltip("던지는 동안 카메라 쪽으로 튀어나오는 깊이입니다.")]
         [SerializeField, Min(0f)] private float depthHop = 0.45f;
+        [Tooltip("던지는 동안 회전할 최소/최대 바퀴 수입니다. X는 최소, Y는 최대입니다.")]
         [SerializeField] private Vector2 tumbleTurns = new Vector2(1.5f, 3f);
 
         [Header("Model")]
+        [Tooltip("OBJ 모델의 기본 축 방향이 원판과 맞지 않을 때 사용하는 회전 보정값입니다.")]
         [SerializeField] private Vector3 modelRotationOffset;
         [Tooltip("윷의 반대 면을 보이게 하는 회전. 모델 축에 따라 (180,0,0) 또는 (0,180,0) 사용")]
         [SerializeField] private Vector3 faceFlipRotation = new Vector3(180f, 0f, 0f);
+        [Tooltip("생성되는 윷 OBJ의 크기 배율입니다. 1은 프리팹 원본 크기입니다.")]
         [SerializeField, Min(0.0001f)] private float modelScaleMultiplier = 1f;
 
         private readonly List<Transform> yuts = new List<Transform>();
@@ -117,8 +132,8 @@ namespace YutArena.Test
                 body.detectCollisions = false;
             }
 
-            float x = (index - 1.5f) * startYutSpacing;
-            float y = -boardRadius * 0.45f;
+            float x = startYutPositionOffset.x + (index - 1.5f) * startYutSpacing;
+            float y = -boardRadius * 0.45f + startYutPositionOffset.y;
             instance.transform.SetPositionAndRotation(
                 BoardPoint(new Vector2(x, y), surfaceOffset),
                 BoardRotation(index * 12f, false));
