@@ -36,6 +36,18 @@ namespace YutArena.UI.CharacterScene
         [Tooltip("바로 시작 버튼")]
         [SerializeField] private Button startNowButton;
 
+        [Header("Lobby Settings UI")]
+        [Tooltip("게임 모드 텍스트")]
+        [SerializeField] private TMP_Text gameModeText;
+        [Tooltip("플레이어 수 텍스트")]
+        [SerializeField] private TMP_Text playerCountText;
+        [Tooltip("팀 구성 텍스트")]
+        [SerializeField] private TMP_Text teamCompositionText;
+        [Tooltip("맵 텍스트")]
+        [SerializeField] private TMP_Text mapText;
+        [Tooltip("턴 수 텍스트")]
+        [SerializeField] private TMP_Text turnCountText;
+
         [Header("Character UI")]
         [Tooltip("캐릭터 카드 목록")]
         [SerializeField] private CharacterCardView[] cardViews;
@@ -58,6 +70,7 @@ namespace YutArena.UI.CharacterScene
             CharacterSelectionResult.Clear();
             BuildRuntimeCharacterList();
             ResolvePlayers();
+            RefreshLobbySettingsUI();
 
             // TEMP_AUTO_CONFIRM_GAMEPAD_PLAYERS_START: 패드가 없는 로컬 테스트용입니다. P2 이상을 자동 선택 완료 처리합니다. 커밋 전 삭제하세요.
             for (int playerIndex = 1; playerIndex < playerCount; playerIndex++)
@@ -79,6 +92,76 @@ namespace YutArena.UI.CharacterScene
             InitializeCards();
             InitializePlayerMarkers();
             RefreshUI();
+        }
+
+        private void RefreshLobbySettingsUI()
+        {
+            GameStartSettings settings = GameStartSettingsHolder.Current;
+
+            if (settings == null)
+            {
+                SetText(gameModeText, "-");
+                SetText(playerCountText, $"{playerCount}명");
+                SetText(teamCompositionText, "-");
+                SetText(mapText, "-");
+                SetText(turnCountText, "-");
+                return;
+            }
+
+            SetText(gameModeText, GetGameModeText(settings.gameMode));
+            SetText(playerCountText, $"{settings.playerCount}명");
+            SetText(teamCompositionText, GetTeamCompositionText(settings));
+            SetText(mapText, GetMapText(settings.mapType));
+            SetText(turnCountText, settings.maxTurnCount.ToString());
+        }
+
+        private static string GetGameModeText(GameMode gameMode)
+        {
+            return gameMode switch
+            {
+                GameMode.Classic => "클래식",
+                GameMode.Escape => "탈출",
+                GameMode.KillTheKing => "왕을 잡아라",
+                _ => gameMode.ToString()
+            };
+        }
+
+        private static string GetTeamCompositionText(GameStartSettings settings)
+        {
+            if (!settings.isTeamMode)
+            {
+                return "개인전";
+            }
+
+            return settings.matchComposition switch
+            {
+                MatchComposition.TwoVsTwo => "2:2",
+                MatchComposition.ThreeVsThree => "3:3",
+                MatchComposition.FourVsFour => "4:4",
+                MatchComposition.TwoVsTwoVsTwo => "2:2:2",
+                MatchComposition.TwoVsTwoVsTwoVsTwo => "2:2:2:2",
+                _ => "팀전"
+            };
+        }
+
+        private static string GetMapText(MapType mapType)
+        {
+            return mapType switch
+            {
+                MapType.Random => "랜덤",
+                MapType.Basic => "기본",
+                MapType.Grassland => "초원",
+                MapType.Korean => "한국",
+                _ => mapType.ToString()
+            };
+        }
+
+        private static void SetText(TMP_Text target, string value)
+        {
+            if (target != null)
+            {
+                target.text = value;
+            }
         }
 
         private void OnDestroy()
