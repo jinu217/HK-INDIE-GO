@@ -1,0 +1,16 @@
+# Blender 5.0.1 MTL File: 'None'
+# www.blender.org
+
+newmtl tripo_mat_da570198-2e4b-47a2-8858-c80a7eeb3027
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd 기본윷_x_basecolor.JPEG
+map_Ns 기본윷_x_roughness.JPEG
+map_Pr 기본윷_x_roughness.JPEG
+map_refl 기본윷_x_metallic.JPEG
+map_Pm 기본윷_x_metallic.JPEG
+map_Bump -bm 1.000000 기본윷_x_normal.JPEG

@@ -14,18 +14,12 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private Image characterIconImage;
         [Tooltip("캐릭터 이름 텍스트")]
         [SerializeField] private TMP_Text characterNameText;
-        [Tooltip("패시브 스킬 이름 텍스트")]
-        [SerializeField] private TMP_Text passiveSkillNameText;
-        [Tooltip("액티브 스킬 이름 텍스트")]
-        [SerializeField] private TMP_Text activeSkillNameText;
 
         public void Refresh(int playerIndex, CharacterData data, bool isSelected)
         {
             SetText(playerText, $"{playerIndex + 1}P");
             SetText(stateText, isSelected ? "선택 완료" : "선택 중");
             SetText(characterNameText, data != null ? data.char_Name : string.Empty);
-            SetText(passiveSkillNameText, data != null ? data.passive_Name : string.Empty);
-            SetText(activeSkillNameText, data != null ? data.active_Name : string.Empty);
 
             if (characterIconImage != null)
             {

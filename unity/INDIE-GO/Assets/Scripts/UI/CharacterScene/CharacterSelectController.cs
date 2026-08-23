@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -33,12 +34,10 @@ namespace YutArena.UI.CharacterScene
         [Header("Common UI")]
         [Tooltip("남은 시간 텍스트")]
         [SerializeField] private TMP_Text remainingTimeText;
-        [Tooltip("선택 완료 인원 텍스트")]
-        [SerializeField] private TMP_Text selectedCountText;
-        [Tooltip("바로 시작 버튼")]
-        [SerializeField] private Button startNowButton;
         [Tooltip("뒤로가기 버튼")]
         [SerializeField] private Button backButton;
+        [Tooltip("게임 시작 조건 충족 시 활성화할 이미지 오브젝트")]
+        [SerializeField] private GameObject gameStartImage;
 
         [Header("Lobby Settings UI")]
         [Tooltip("게임 모드 텍스트")]
@@ -88,11 +87,6 @@ namespace YutArena.UI.CharacterScene
 
             remainingTime = selectionTimeSeconds;
 
-            if (startNowButton != null)
-            {
-                startNowButton.onClick.AddListener(TryStartNow);
-            }
-
             if (backButton != null)
             {
                 backButton.onClick.AddListener(BackToLocalLobby);
@@ -100,6 +94,7 @@ namespace YutArena.UI.CharacterScene
 
             InitializeCards();
             InitializePlayerMarkers();
+            SetActive(gameStartImage, false);
             RefreshUI();
         }
 
@@ -175,11 +170,6 @@ namespace YutArena.UI.CharacterScene
 
         private void OnDestroy()
         {
-            if (startNowButton != null)
-            {
-                startNowButton.onClick.RemoveListener(TryStartNow);
-            }
-
             if (backButton != null)
             {
                 backButton.onClick.RemoveListener(BackToLocalLobby);
@@ -196,21 +186,19 @@ namespace YutArena.UI.CharacterScene
             remainingTime = Mathf.Max(0f, remainingTime - Time.unscaledDeltaTime);
             ProcessInputs();
 
+            if (AreAllPlayersSelected())
+            {
+                BeginGameStart(false);
+                return;
+            }
+
             if (remainingTime <= 0f)
             {
-                FinalizeSelection(true);
+                BeginGameStart(true);
                 return;
             }
 
             RefreshUI();
-        }
-
-        public void TryStartNow()
-        {
-            if (!isFinalized && AreAllPlayersSelected())
-            {
-                FinalizeSelection(false);
-            }
         }
 
         public void BackToLocalLobby()
@@ -347,11 +335,6 @@ namespace YutArena.UI.CharacterScene
             {
                 selectedPlayers[0] = false;
             }
-            else if ((keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame) &&
-                     AreAllPlayersSelected())
-            {
-                TryStartNow();
-            }
         }
 
         private void ProcessGamepadInput(int playerIndex, Gamepad gamepad)
@@ -405,21 +388,9 @@ namespace YutArena.UI.CharacterScene
 
         private void RefreshUI()
         {
-            int selectedCount = GetSelectedCount();
-
             if (remainingTimeText != null)
             {
                 remainingTimeText.text = $"남은 시간 {Mathf.CeilToInt(remainingTime)}";
-            }
-
-            if (selectedCountText != null)
-            {
-                selectedCountText.text = $"{selectedCount}/{playerCount} 선택 완료";
-            }
-
-            if (startNowButton != null)
-            {
-                startNowButton.interactable = AreAllPlayersSelected();
             }
 
             RefreshPlayerMarkers();
@@ -493,9 +464,20 @@ namespace YutArena.UI.CharacterScene
             }
         }
 
-        private void FinalizeSelection(bool randomizeUnselectedPlayers)
+        private void BeginGameStart(bool randomizeUnselectedPlayers)
         {
+            if (isFinalized) return;
+
             isFinalized = true;
+            SetActive(gameStartImage, true);
+            RefreshUI();
+            StartCoroutine(FinalizeSelectionAfterDelay(randomizeUnselectedPlayers));
+        }
+
+        private IEnumerator FinalizeSelectionAfterDelay(bool randomizeUnselectedPlayers)
+        {
+            yield return new WaitForSecondsRealtime(1f);
+
             int[] selectedIds = new int[playerCount];
 
             // CHAMPION_PIECE_PREFAB_FLOW_START: InGameScene에서 플레이어별 챔피언 말 프리팹을 결정할 수 있도록 선택 CharacterData도 함께 전달합니다.
@@ -525,22 +507,11 @@ namespace YutArena.UI.CharacterScene
             {
                 Debug.LogWarning("In-game scene name is empty.", this);
                 isFinalized = false;
-                return;
+                SetActive(gameStartImage, false);
+                yield break;
             }
 
             SceneManager.LoadScene(inGameSceneName);
-        }
-
-        private int GetSelectedCount()
-        {
-            int count = 0;
-
-            for (int i = 0; i < playerCount; i++)
-            {
-                if (selectedPlayers[i]) count++;
-            }
-
-            return count;
         }
 
         private bool AreAllPlayersSelected()
@@ -553,6 +524,11 @@ namespace YutArena.UI.CharacterScene
             }
 
             return true;
+        }
+
+        private static void SetActive(GameObject target, bool active)
+        {
+            if (target != null) target.SetActive(active);
         }
     }
 }
