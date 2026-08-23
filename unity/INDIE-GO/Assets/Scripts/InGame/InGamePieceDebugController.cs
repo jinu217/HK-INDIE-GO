@@ -12,6 +12,22 @@ namespace YutArena.InGame
     /// <summary>Temporary visible board and piece selection layer for InGameScene.</summary>
     public sealed class InGamePieceDebugController : MonoBehaviour
     {
+        [System.Serializable]
+        private sealed class DebugBoardTilePosition
+        {
+            [SerializeField] private BoardTileId tileId;
+            [SerializeField] private Vector3 position;
+
+            public BoardTileId TileId => tileId;
+            public Vector3 Position => position;
+
+            public DebugBoardTilePosition(BoardTileId tileId, Vector3 position)
+            {
+                this.tileId = tileId;
+                this.position = position;
+            }
+        }
+
         private static readonly Vector3[] DefaultHomePositions =
         {
             new Vector3(5.7f, -3.6f), new Vector3(5.7f, 3.6f),
@@ -43,7 +59,12 @@ namespace YutArena.InGame
         [Tooltip("Player 4의 Piece 0~3 초기 배치 오프셋입니다.")]
         [SerializeField] private Vector3[] player4HomePieceOffsets = CreateDefaultHomePieceOffsets();
 
+        [Header("Debug Board Tile Positions")]
+        [Tooltip("MapDefinition에 Board Prefab이 없을 때 생성되는 임시 원형 보드의 타일 좌표입니다. 각 Element의 Position X/Y/Z를 조절할 수 있습니다.")]
+        [SerializeField] private DebugBoardTilePosition[] debugBoardTilePositions = CreateDefaultDebugBoardTilePositions();
+
         private readonly Dictionary<BoardTileId, Vector3> boardPositions = new Dictionary<BoardTileId, Vector3>();
+        private readonly Dictionary<BoardTileId, Transform> debugBoardTileAnchors = new Dictionary<BoardTileId, Transform>();
         private readonly List<DebugPieceView> pieceViews = new List<DebugPieceView>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private PlayerManager playerManager;
@@ -64,7 +85,7 @@ namespace YutArena.InGame
                 yield break;
             }
 
-            // Keep the old marker board only when no map prefab has been loaded.
+            // 실제 보드 프리팹이 없을 때만 공통 Anchor 위에 원형 디버그 마커를 표시한다.
             if (mapManager == null || !mapManager.IsMapLoaded)
                 BuildBoard();
             foreach (PlayerController player in playerManager.ActivePlayers)
@@ -132,17 +153,42 @@ namespace YutArena.InGame
 
         private void BuildBoard()
         {
-            foreach (KeyValuePair<BoardTileId, Vector3> entry in CreateBoardLayout())
+            boardPositions.Clear();
+            debugBoardTileAnchors.Clear();
+
+            if (debugBoardTilePositions == null || debugBoardTilePositions.Length == 0)
+                debugBoardTilePositions = CreateDefaultDebugBoardTilePositions();
+
+            foreach (DebugBoardTilePosition entry in debugBoardTilePositions)
             {
-                boardPositions.Add(entry.Key, entry.Value);
-                var marker = new GameObject(entry.Key.ToString());
-                marker.transform.SetParent(transform);
-                marker.transform.position = entry.Value;
+                if (entry == null || entry.TileId == BoardTileId.None || entry.TileId == BoardTileId.Goal)
+                    continue;
+
+                if (debugBoardTileAnchors.ContainsKey(entry.TileId))
+                {
+                    Debug.LogWarning($"Duplicate debug board tile position: {entry.TileId}", this);
+                    continue;
+                }
+
+                var marker = new GameObject(entry.TileId.ToString());
+                if (mapManager != null && mapManager.TryGetTileAnchor(entry.TileId, out Transform commonTileAnchor))
+                {
+                    marker.transform.SetParent(commonTileAnchor, false);
+                    marker.transform.localPosition = Vector3.zero;
+                }
+                else
+                {
+                    marker.transform.SetParent(transform);
+                    marker.transform.position = entry.Position;
+                }
                 marker.transform.localScale = Vector3.one * 0.62f;
                 var renderer = marker.AddComponent<SpriteRenderer>();
                 renderer.sprite = CreateCircleSprite();
-                renderer.color = entry.Key == BoardTileId.Start ? new Color(0.8f, 0.9f, 1f) : new Color(0.85f, 0.85f, 0.85f);
+                renderer.color = entry.TileId == BoardTileId.Start ? new Color(0.8f, 0.9f, 1f) : new Color(0.85f, 0.85f, 0.85f);
                 renderer.sortingOrder = 1;
+
+                boardPositions.Add(entry.TileId, marker.transform.position);
+                debugBoardTileAnchors.Add(entry.TileId, marker.transform);
             }
         }
 
@@ -167,6 +213,9 @@ namespace YutArena.InGame
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
             if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
                 return mapTilePosition + GetOffset(pieceId);
+
+            if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugTileAnchor))
+                return debugTileAnchor.position + GetOffset(pieceId);
 
             return boardPositions[tile] + GetOffset(pieceId);
         }
@@ -210,6 +259,19 @@ namespace YutArena.InGame
                 new Vector3(-.58f, .58f, 0f), new Vector3(.58f, .58f, 0f),
                 new Vector3(-.58f, -.58f, 0f), new Vector3(.58f, -.58f, 0f)
             };
+        }
+
+        private static DebugBoardTilePosition[] CreateDefaultDebugBoardTilePositions()
+        {
+            Dictionary<BoardTileId, Vector3> defaultLayout = CreateBoardLayout();
+            var positions = new DebugBoardTilePosition[defaultLayout.Count];
+            int index = 0;
+            foreach (KeyValuePair<BoardTileId, Vector3> entry in defaultLayout)
+            {
+                positions[index++] = new DebugBoardTilePosition(entry.Key, entry.Value);
+            }
+
+            return positions;
         }
 
         private static Vector3 GetOffset(int pieceId)
