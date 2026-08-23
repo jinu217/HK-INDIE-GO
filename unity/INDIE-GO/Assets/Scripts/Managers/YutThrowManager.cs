@@ -99,7 +99,11 @@ namespace YutArena.Test
 
         private void OnEnable()
         {
-            if (turnManager != null) turnManager.OnTurnPhaseChanged += HandleTurnPhaseChanged;
+            if (turnManager != null)
+            {
+                turnManager.OnTurnPhaseChanged += HandleTurnPhaseChanged;
+                RefreshThrowButton(turnManager.CurrentTurn);
+            }
         }
 
         private void OnDisable()
@@ -122,10 +126,24 @@ namespace YutArena.Test
 
         private void HandleTurnPhaseChanged(TurnContext turn)
         {
-            if (turn != null && turn.currentPhase == TurnPhase.SaveThrowResult)
+            if (turn == null) return;
+
+            if (turn.currentPhase == TurnPhase.SaveThrowResult)
             {
                 Throw(turn.lastYutResult);
             }
+
+            RefreshThrowButton(turn);
+        }
+
+        private void RefreshThrowButton(TurnContext turn)
+        {
+            if (throwButton == null) return;
+
+            throwButton.interactable =
+                !isThrowing &&
+                turn != null &&
+                turn.currentPhase == TurnPhase.WaitThrow;
         }
 
         public void Throw(YutResult result)
@@ -336,11 +354,7 @@ namespace YutArena.Test
             }
 
             isThrowing = false;
-            if (throwButton != null)
-            {
-                throwButton.interactable = turnManager == null
-                    || turnManager.CurrentTurn.currentPhase == TurnPhase.WaitThrow;
-            }
+            RefreshThrowButton(turnManager != null ? turnManager.CurrentTurn : null);
         }
 
         private static bool[] CreateFaceResults(YutResult result, int count)

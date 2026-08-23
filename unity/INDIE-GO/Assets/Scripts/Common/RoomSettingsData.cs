@@ -11,6 +11,8 @@ namespace YutArena.Common
         public int matchComposition;
         public int playerCount;
         public int maxTurnCount;
+        public int gameTimeMinutes;
+        public int turnTimeSeconds;
         public bool isTeamMode;
         public int[] playerTeams;
 
@@ -26,11 +28,11 @@ namespace YutArena.Common
                 playerCount = playerCount,
                 pieceCountPerPlayer = GameRuleDefine.DefaultPieceCountPerPlayer,
                 targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount,
-                timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
+                timeLimitMinutes = gameTimeMinutes,
                 maxTurnCount = maxTurnCount,
-                turnTimeMode = TurnTimeMode.Unlimited,
-                throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,
-                actionTimeSeconds = GameRuleDefine.DefaultActionTimeSeconds,
+                turnTimeMode = TurnTimeMode.Limited,
+                throwTimeSeconds = turnTimeSeconds,
+                actionTimeSeconds = turnTimeSeconds,
                 useSkill = true,
                 useItem = true,
                 useSpecialTile = true

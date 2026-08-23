@@ -23,6 +23,13 @@ namespace YutArena.Managers
 
         // 지금 게임 세션(단계 + 설정값) 정보, 처음엔 게임 시작 전이니 MainMenu로 초기화
         public GameSessionData Session { get; private set; } = new GameSessionData { phase = GamePhase.MainMenu };
+        public GameStartSettings Settings => Session != null ? Session.settings : null;
+        public bool IsGameTimerLimited => Settings != null &&
+                                          Settings.timeLimitMinutes != GameRuleDefine.UnlimitedTimeMinutes;
+        public float RemainingGameSeconds =>
+            IsGameTimerLimited && gameTimerEndsAt >= 0f
+                ? Mathf.Max(0f, gameTimerEndsAt - Time.time)
+                : 0f;
 
         public System.Action<GamePhase> OnGamePhaseChanged;  // 게임 단계가 바뀔 때마다 방송
         public System.Action<GameResultData> OnGameEnded;    // 게임이 끝났을 때 방송 (승자 정보 포함)
@@ -153,12 +160,15 @@ namespace YutArena.Managers
 
         //  위 타이머용 필드+코루틴
         private Coroutine timeLimitCoroutine;
+        private float gameTimerEndsAt = -1f;
 
         private IEnumerator TimeLimitRoutine(float totalSeconds)
         {
             Debug.Log("[제한시간] " + (totalSeconds / 60f) + "분 타이머 시작");
+            gameTimerEndsAt = Time.time + totalSeconds;
             yield return new WaitForSeconds(totalSeconds);
             timeLimitCoroutine = null;
+            gameTimerEndsAt = -1f;
             winConditionManager.HandleTimeLimitReached(); // 시간 다 됐으니 지금까지 점수로 승부 결정
         }
 
@@ -170,6 +180,7 @@ namespace YutArena.Managers
                 StopCoroutine(timeLimitCoroutine);
                 timeLimitCoroutine = null;
             }
+            gameTimerEndsAt = -1f;
             SetPhase(GamePhase.Result); // 결과화면으로 전환
             OnGameEnded?.Invoke(result); // 결과화면 UI에 승자 정보 전달
         }

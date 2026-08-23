@@ -633,7 +633,7 @@ GameObject:
   - component: {fileID: 253013780}
   - component: {fileID: 253013781}
   m_Layer: 5
-  m_Name: OnlineCreateGameButton
+  m_Name: OnlineCreateGameBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1378,7 +1378,7 @@ GameObject:
   - component: {fileID: 548579127}
   - component: {fileID: 548579128}
   m_Layer: 5
-  m_Name: LocalPlayButton
+  m_Name: LocalPlayBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2489,7 +2489,7 @@ GameObject:
   - component: {fileID: 738130228}
   - component: {fileID: 738130229}
   m_Layer: 5
-  m_Name: StartGameButton
+  m_Name: StartGameBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2969,7 +2969,7 @@ GameObject:
   m_Component:
   - component: {fileID: 870588361}
   m_Layer: 5
-  m_Name: OnlineGameButtons
+  m_Name: OnlineGameBtns
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3946,7 +3946,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1072635891}
   m_Layer: 5
-  m_Name: MainButtons
+  m_Name: MainBtns
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4313,7 +4313,7 @@ GameObject:
   - component: {fileID: 1095292569}
   - component: {fileID: 1095292570}
   m_Layer: 5
-  m_Name: QuitButton
+  m_Name: QuitBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4553,7 +4553,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1121373856}
   m_Layer: 5
-  m_Name: HelpButtons
+  m_Name: HelpBtns
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5161,7 +5161,7 @@ GameObject:
   - component: {fileID: 1264309866}
   - component: {fileID: 1264309867}
   m_Layer: 5
-  m_Name: CharacterHelpButton
+  m_Name: CharacterHelpBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5492,7 +5492,7 @@ GameObject:
   - component: {fileID: 1367690284}
   - component: {fileID: 1367690285}
   m_Layer: 5
-  m_Name: OnlinePlayButton
+  m_Name: OnlinePlayBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6080,7 +6080,7 @@ GameObject:
   - component: {fileID: 1579908485}
   - component: {fileID: 1579908488}
   m_Layer: 5
-  m_Name: YutRuleHelpButton
+  m_Name: YutRuleHelpBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6702,7 +6702,7 @@ GameObject:
   - component: {fileID: 1699687464}
   - component: {fileID: 1699687465}
   m_Layer: 5
-  m_Name: SettingsButton
+  m_Name: SettingsBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7294,7 +7294,7 @@ GameObject:
   - component: {fileID: 1755590535}
   - component: {fileID: 1755590536}
   m_Layer: 5
-  m_Name: MapHelpButton
+  m_Name: MapHelpBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7610,7 +7610,7 @@ GameObject:
   - component: {fileID: 1796509947}
   - component: {fileID: 1796509948}
   m_Layer: 5
-  m_Name: HelpButton
+  m_Name: HelpBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8146,7 +8146,7 @@ GameObject:
   - component: {fileID: 1903770691}
   - component: {fileID: 1903770692}
   m_Layer: 5
-  m_Name: OnlineJoinGameButton
+  m_Name: OnlineJoinGameBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8705,7 +8705,7 @@ GameObject:
   - component: {fileID: 2011349461}
   - component: {fileID: 2011349462}
   m_Layer: 5
-  m_Name: ModeHelpButton
+  m_Name: ModeHelpBtn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9141,7 +9141,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2102620080}
   m_Layer: 5
-  m_Name: PlayModeButtons
+  m_Name: PlayModeBtns
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

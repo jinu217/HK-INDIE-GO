@@ -37,6 +37,14 @@
             // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
             public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
             private GameStartSettings settings;
+            private float phaseTimerEndsAt = -1f;
+
+            public GameStartSettings Settings => settings;
+            public bool IsTurnTimerLimited => settings != null && settings.turnTimeMode == TurnTimeMode.Limited;
+            public float RemainingTurnSeconds =>
+                IsTurnTimerLimited && phaseTimerEndsAt >= 0f
+                    ? Mathf.Max(0f, phaseTimerEndsAt - Time.time)
+                    : 0f;
             private int throwCountInTurn = 0; // 이번 턴에서 몇 번째 던지기인지 (YutThrowData.throwIndexInTurn)
             // ---- 외부(UI, GameManager 등)가 구독할 수 있는 이벤트들 ----
             public System.Action<TurnContext> OnTurnPhaseChanged;      // 턴 단계가 바뀔 때마다
@@ -571,6 +579,7 @@
             int bonusThrowCount = CurrentTurn.extraThrowByYutMoCount + CurrentTurn.extraThrowByCaptureCount;
             float seconds = settings.throwTimeSeconds + bonusThrowCount * GameRuleDefine.ExtraThrowTimeBonusSeconds;
             StopPhaseTimer(); // 혹시 이전 타이머가 남아있으면 정리하고 새로 시작
+            phaseTimerEndsAt = Time.time + seconds;
             phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitThrow));
         }
         // 이동/스킬 제한시간 시작. 이번 턴에 던진 횟수(=이동해야 할 횟수)가 많을수록 10초씩 추가
@@ -582,6 +591,7 @@
             int extraMoveCount = Mathf.Max(0, throwCountInTurn - 1); // 기본 1회는 기본시간에 포함, 그 이상만 보너스
             float seconds = settings.actionTimeSeconds + extraMoveCount * GameRuleDefine.ExtraMoveTimeBonusSeconds;
             StopPhaseTimer();
+            phaseTimerEndsAt = Time.time + seconds;
             phaseTimerCoroutine = StartCoroutine(PhaseTimeoutRoutine(seconds, TurnPhase.WaitAction));
         }
         // 지금 돌고 있는 타이머가 있으면 멈춤 (다른 단계로 넘어갈 때, 또는 새 타이머 시작 전에 호출)
@@ -592,12 +602,15 @@
                 StopCoroutine(phaseTimerCoroutine);
                 phaseTimerCoroutine = null;
             }
+            phaseTimerEndsAt = -1f;
         }
         // seconds만큼 기다렸다가, 그때도 여전히 phaseToCheck 단계에 머물러 있으면(=플레이어가 시간 안에
         // 행동을 못 했으면) 강제로 턴을 끝냄. 그 전에 플레이어가 행동해서 단계가 바뀌었으면 아무 일도 안 함
         private IEnumerator PhaseTimeoutRoutine(float seconds, TurnPhase phaseToCheck)
         {
             yield return new WaitForSeconds(seconds);
+            phaseTimerCoroutine = null;
+            phaseTimerEndsAt = -1f;
             if (CurrentTurn.currentPhase == phaseToCheck)
             {
                 Debug.Log("[타이머] " + phaseToCheck + " 단계 제한시간(" + seconds + "초) 초과, 턴 강제 종료");
