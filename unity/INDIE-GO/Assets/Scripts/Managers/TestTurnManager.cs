@@ -37,6 +37,7 @@ namespace YutArena.Managers
         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
         private GameStartSettings settings;
+        public GameStartSettings Settings => settings;
         private int throwCountInTurn = 0; // 이번 턴에서 몇 번째 던지기인지 (YutThrowData.throwIndexInTurn)
                                           // ---- 외부(UI, GameManager 등)가 구독할 수 있는 이벤트들 ----
         public System.Action<TurnContext> OnTurnPhaseChanged;      // 턴 단계가 바뀔 때마다
@@ -608,6 +609,14 @@ namespace YutArena.Managers
         // ===================================================================
         private Coroutine turnTimerCoroutine;
         private float turnTimerRemainingSeconds; // 지금 이 턴에 남은 시간(초). 매 프레임 줄어들고, 보너스 생기면 더해짐
+
+        public bool IsTurnTimerLimited =>
+            settings != null && settings.turnTimeMode == TurnTimeMode.Limited;
+
+        public float RemainingTurnSeconds =>
+            IsTurnTimerLimited && turnTimerCoroutine != null
+                ? Mathf.Max(0f, turnTimerRemainingSeconds)
+                : 0f;
 
         // 턴 시작마다 딱 한 번만 호출됨 (BeginTurnFor에서)
         private void StartTurnTimer()
