@@ -1882,6 +1882,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.SkillTooltipTrigger
   detailPanel: {fileID: 907757823}
+  hoverDelaySeconds: 1
 --- !u!1 &404756573
 GameObject:
   m_ObjectHideFlags: 0
@@ -3350,6 +3351,7 @@ MonoBehaviour:
   currentTurnHighlight: {fileID: 1367129871}
   nextTurnHighlight: {fileID: 1922911473}
   skillDetailPanel: {fileID: 1573103392}
+  hoverDelaySeconds: 1
 --- !u!1 &758938201
 GameObject:
   m_ObjectHideFlags: 0
@@ -3410,6 +3412,7 @@ MonoBehaviour:
   currentTurnHighlight: {fileID: 1174421670}
   nextTurnHighlight: {fileID: 2062653905}
   skillDetailPanel: {fileID: 1573103392}
+  hoverDelaySeconds: 1
 --- !u!1 &831461643
 GameObject:
   m_ObjectHideFlags: 0
@@ -4325,6 +4328,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.SkillTooltipTrigger
   detailPanel: {fileID: 907757823}
+  hoverDelaySeconds: 1
 --- !u!1 &1048523382
 GameObject:
   m_ObjectHideFlags: 0
@@ -5323,6 +5327,7 @@ MonoBehaviour:
   currentTurnHighlight: {fileID: 1480090008}
   nextTurnHighlight: {fileID: 1813658075}
   skillDetailPanel: {fileID: 1573103392}
+  hoverDelaySeconds: 1
 --- !u!1 &1312933191
 GameObject:
   m_ObjectHideFlags: 0
@@ -7988,6 +7993,7 @@ MonoBehaviour:
   currentTurnHighlight: {fileID: 1126984778}
   nextTurnHighlight: {fileID: 1898219904}
   skillDetailPanel: {fileID: 1573103392}
+  hoverDelaySeconds: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
