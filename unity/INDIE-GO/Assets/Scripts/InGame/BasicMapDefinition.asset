@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: BasicMapDefinition
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
   mapType: 0
-  backgroundPrefab: {fileID: 7174949109896036635, guid: a1a0f2b53a6b3da45a97cd5676d1a0c7, type: 3}
+  backgroundPrefab: {fileID: 7257135953520947148, guid: 8dbe797096687784e843a59994bfda32, type: 3}
   boardPrefab: {fileID: 4842533177795376041, guid: cadec29d01c0aba40a0ffce27fb0558f, type: 3}
   specialTiles:
   - tileId: 6

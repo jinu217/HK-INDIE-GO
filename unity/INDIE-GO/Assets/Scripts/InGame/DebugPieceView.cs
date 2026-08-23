@@ -35,6 +35,16 @@ namespace YutArena.InGame
             gameObject.name = $"Piece_P{playerId}_{pieceId + 1}";
         }
 
+        /// <summary>
+        /// InGamePieceDebugController의 Inspector 배율을 말 프리팹에 적용합니다.
+        /// 이후 선택 강조가 발생해도 이 크기를 기준으로 유지됩니다.
+        /// </summary>
+        public void SetBaseScaleMultiplier(float multiplier)
+        {
+            initialScale *= Mathf.Max(0.01f, multiplier);
+            transform.localScale = initialScale;
+        }
+
         public void SetSelected(bool selected)
         {
             transform.localScale = initialScale * (selected ? 1.1f : 1f);

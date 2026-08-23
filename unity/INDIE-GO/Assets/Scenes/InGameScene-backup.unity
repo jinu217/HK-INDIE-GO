@@ -604,7 +604,7 @@ MonoBehaviour:
   edgePadding: 0.05
   surfaceOffset: -1.5
   startYutSpacing: 0.5
-  startYutPositionOffset: {x: -0.15, y: 0.5}
+  startYutPositionOffset: {x: -0.15, y: 0.3}
   minimumYutSpacing: 0.65
   enableOverlapStacking: 1
   yutFootprintLength: 1.6
@@ -5659,6 +5659,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ee1f0d4630a4c278030000000000012, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.InGamePieceDebugController
+  playerHomeAnchors:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  pieceScaleMultiplier: 1
+  player1HomePieceOffsets:
+  - {x: -0.58, y: 0.58, z: 0}
+  - {x: 0.58, y: 0.58, z: 0}
+  - {x: -0.58, y: -0.58, z: 0}
+  - {x: 0.58, y: -0.58, z: 0}
+  player2HomePieceOffsets:
+  - {x: -0.58, y: 0.58, z: 0}
+  - {x: 0.58, y: 0.58, z: 0}
+  - {x: -0.58, y: -0.58, z: 0}
+  - {x: 0.58, y: -0.58, z: 0}
+  player3HomePieceOffsets:
+  - {x: -0.58, y: 0.58, z: 0}
+  - {x: 0.58, y: 0.58, z: 0}
+  - {x: -0.58, y: -0.58, z: 0}
+  - {x: 0.58, y: -0.58, z: 0}
+  player4HomePieceOffsets:
+  - {x: -0.58, y: 0.58, z: 0}
+  - {x: 0.58, y: 0.58, z: 0}
+  - {x: -0.58, y: -0.58, z: 0}
+  - {x: 0.58, y: -0.58, z: 0}
 --- !u!4 &1376455555
 Transform:
   m_ObjectHideFlags: 0

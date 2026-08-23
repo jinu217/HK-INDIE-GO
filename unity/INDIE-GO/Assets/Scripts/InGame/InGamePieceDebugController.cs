@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 using YutArena.Common;
 using YutArena.Managers;
 using YutArena.Managers.GameProgress;
@@ -11,6 +12,37 @@ namespace YutArena.InGame
     /// <summary>Temporary visible board and piece selection layer for InGameScene.</summary>
     public sealed class InGamePieceDebugController : MonoBehaviour
     {
+        private static readonly Vector3[] DefaultHomePositions =
+        {
+            new Vector3(5.7f, -3.6f), new Vector3(5.7f, 3.6f),
+            new Vector3(-5.7f, 3.6f), new Vector3(-5.7f, -3.6f)
+        };
+
+        [Header("Piece Home Position Anchors")]
+        [Tooltip("Player 1~4 말의 초기 대기 위치입니다. 빈 오브젝트를 씬에서 원하는 위치로 옮긴 뒤 순서대로 연결하세요.")]
+        [SerializeField] private Transform[] playerHomeAnchors = new Transform[4];
+
+        [Header("Piece Visual and Home Formation")]
+        [Tooltip("생성되는 모든 말 프리팹의 기본 크기 배율입니다.")]
+        [SerializeField, Min(0.01f)] private float pieceScaleMultiplier = 1f;
+
+        [Header("Player 1 Home Formation")]
+        [Tooltip("Player 1의 Piece 0~3 초기 배치 오프셋입니다.")]
+        [FormerlySerializedAs("homePieceOffsets")]
+        [SerializeField] private Vector3[] player1HomePieceOffsets = CreateDefaultHomePieceOffsets();
+
+        [Header("Player 2 Home Formation")]
+        [Tooltip("Player 2의 Piece 0~3 초기 배치 오프셋입니다.")]
+        [SerializeField] private Vector3[] player2HomePieceOffsets = CreateDefaultHomePieceOffsets();
+
+        [Header("Player 3 Home Formation")]
+        [Tooltip("Player 3의 Piece 0~3 초기 배치 오프셋입니다.")]
+        [SerializeField] private Vector3[] player3HomePieceOffsets = CreateDefaultHomePieceOffsets();
+
+        [Header("Player 4 Home Formation")]
+        [Tooltip("Player 4의 Piece 0~3 초기 배치 오프셋입니다.")]
+        [SerializeField] private Vector3[] player4HomePieceOffsets = CreateDefaultHomePieceOffsets();
+
         private readonly Dictionary<BoardTileId, Vector3> boardPositions = new Dictionary<BoardTileId, Vector3>();
         private readonly List<DebugPieceView> pieceViews = new List<DebugPieceView>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
@@ -49,6 +81,7 @@ namespace YutArena.InGame
                 if (view == null)
                     view = pieceObject.AddComponent<DebugPieceView>();
                 view.Configure(player.PlayerId, piece.PieceId, GetPlayerColor(player.PlayerId));
+                view.SetBaseScaleMultiplier(pieceScaleMultiplier);
                 pieceViews.Add(view);
             }
 
@@ -138,10 +171,45 @@ namespace YutArena.InGame
             return boardPositions[tile] + GetOffset(pieceId);
         }
 
-        private static Vector3 GetHomePosition(int playerId, int pieceId)
+        private Vector3 GetHomePosition(int playerId, int pieceId)
         {
-            Vector3[] homes = { new Vector3(5.7f, -3.6f), new Vector3(5.7f, 3.6f), new Vector3(-5.7f, 3.6f), new Vector3(-5.7f, -3.6f) };
-            return homes[playerId - 1] + GetOffset(pieceId);
+            int playerIndex = playerId - 1;
+            if (playerHomeAnchors != null &&
+                playerIndex >= 0 &&
+                playerIndex < playerHomeAnchors.Length &&
+                playerHomeAnchors[playerIndex] != null)
+            {
+                return playerHomeAnchors[playerIndex].position + GetHomePieceOffset(playerId, pieceId);
+            }
+
+            // Anchor를 아직 연결하지 않은 기존 씬도 이전 대기 위치를 유지합니다.
+            return DefaultHomePositions[playerIndex] + GetHomePieceOffset(playerId, pieceId);
+        }
+
+        private Vector3 GetHomePieceOffset(int playerId, int pieceId)
+        {
+            Vector3[] offsets = playerId switch
+            {
+                1 => player1HomePieceOffsets,
+                2 => player2HomePieceOffsets,
+                3 => player3HomePieceOffsets,
+                4 => player4HomePieceOffsets,
+                _ => null
+            };
+
+            if (offsets != null && offsets.Length > 0)
+                return offsets[pieceId % offsets.Length];
+
+            return GetOffset(pieceId);
+        }
+
+        private static Vector3[] CreateDefaultHomePieceOffsets()
+        {
+            return new[]
+            {
+                new Vector3(-.58f, .58f, 0f), new Vector3(.58f, .58f, 0f),
+                new Vector3(-.58f, -.58f, 0f), new Vector3(.58f, -.58f, 0f)
+            };
         }
 
         private static Vector3 GetOffset(int pieceId)
