@@ -21,7 +21,7 @@ namespace YutArena.UI.CharacterScene
 
         public void Refresh(int playerIndex, CharacterData data, bool isSelected)
         {
-            SetText(playerText, $"P{playerIndex + 1}");
+            SetText(playerText, $"{playerIndex + 1}P");
             SetText(stateText, isSelected ? "선택 완료" : "선택 중");
             SetText(characterNameText, data != null ? data.char_Name : string.Empty);
             SetText(passiveSkillNameText, data != null ? data.passive_Name : string.Empty);

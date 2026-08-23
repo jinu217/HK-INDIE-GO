@@ -27,6 +27,8 @@ namespace YutArena.UI.CharacterScene
         [SerializeField, Min(0f)] private float sameCardPlayerObjectSpacing = 36f;
         [Tooltip("인게임 씬 이름")]
         [SerializeField] private string inGameSceneName = "InGameScene";
+        [Tooltip("로컬 로비 씬 이름")]
+        [SerializeField] private string localLobbySceneName = "LocalLobbyScene";
 
         [Header("Common UI")]
         [Tooltip("남은 시간 텍스트")]
@@ -35,6 +37,8 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private TMP_Text selectedCountText;
         [Tooltip("바로 시작 버튼")]
         [SerializeField] private Button startNowButton;
+        [Tooltip("뒤로가기 버튼")]
+        [SerializeField] private Button backButton;
 
         [Header("Lobby Settings UI")]
         [Tooltip("게임 모드 텍스트")]
@@ -87,6 +91,11 @@ namespace YutArena.UI.CharacterScene
             if (startNowButton != null)
             {
                 startNowButton.onClick.AddListener(TryStartNow);
+            }
+
+            if (backButton != null)
+            {
+                backButton.onClick.AddListener(BackToLocalLobby);
             }
 
             InitializeCards();
@@ -170,6 +179,11 @@ namespace YutArena.UI.CharacterScene
             {
                 startNowButton.onClick.RemoveListener(TryStartNow);
             }
+
+            if (backButton != null)
+            {
+                backButton.onClick.RemoveListener(BackToLocalLobby);
+            }
         }
 
         private void Update()
@@ -197,6 +211,23 @@ namespace YutArena.UI.CharacterScene
             {
                 FinalizeSelection(false);
             }
+        }
+
+        public void BackToLocalLobby()
+        {
+            if (isFinalized)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(localLobbySceneName))
+            {
+                Debug.LogWarning("Local lobby scene name is empty.", this);
+                return;
+            }
+
+            CharacterSelectionResult.Clear();
+            SceneManager.LoadScene(localLobbySceneName);
         }
 
         private void BuildRuntimeCharacterList()
