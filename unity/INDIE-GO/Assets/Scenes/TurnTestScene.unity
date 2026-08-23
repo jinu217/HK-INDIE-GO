@@ -148,6 +148,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  jobPiecePrefab: {fileID: 0}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &3041119
 Transform:
   m_ObjectHideFlags: 0
@@ -192,6 +194,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  jobPiecePrefab: {fileID: 0}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &529964289
 Transform:
   m_ObjectHideFlags: 0
@@ -246,6 +250,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TestRunner
   gameManager: {fileID: 658950554}
+  createFallbackSettingsWhenMissing: 1
 --- !u!114 &658950551
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -288,6 +293,7 @@ MonoBehaviour:
   turnManager: {fileID: 658950555}
   yutRuleManager: {fileID: 658950552}
   playerManager: {fileID: 658950560}
+  pieceMovementManager: {fileID: 658950559}
   modeRuleSources:
   - {fileID: 658950558}
   - {fileID: 658950557}
@@ -303,6 +309,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 66cb2e4e5966a9440babc8788fcbb3dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Managers.TestGameManager
+  mapManager: {fileID: 0}
+  playerManager: {fileID: 0}
   turnManager: {fileID: 658950555}
   yutRuleManager: {fileID: 658950552}
   winConditionManager: {fileID: 658950553}
@@ -559,6 +567,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  jobPiecePrefab: {fileID: 0}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &1034673133
 Transform:
   m_ObjectHideFlags: 0
@@ -603,6 +613,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b555bdba1385b942bf8f5e82e967da6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  jobPiecePrefab: {fileID: 0}
+  selectedCharacter: {fileID: 0}
 --- !u!4 &1432653838
 Transform:
   m_ObjectHideFlags: 0

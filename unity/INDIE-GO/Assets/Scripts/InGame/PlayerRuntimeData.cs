@@ -19,7 +19,7 @@ public sealed class PlayerRuntimeData
         public int PieceId { get; private set; }
         public BoardTileId CurrentTileId { get; private set; }
         public BoardTileId PreviousTileId { get; private set; }
-        public PieceState State { get; private set; }
+        public PieceState State { get; set; }
         public bool IsFinished => State == PieceState.Goal;
 
         // -1 means this piece is not stacked with another piece.

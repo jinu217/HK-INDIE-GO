@@ -15,7 +15,7 @@ namespace YutArena.Managers
         [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private TestYutRuleManager yutRuleManager; // 동점 타이브레이커 던지기용
         [SerializeField] private PlayerManager playerManager; // Classic 모드가 말 상태 직접 확인할 때 필요
-        [SerializeField] private PieceMovementManager pieceMovementManager; // Escape 제한시간 거리 비교용
+        [SerializeField] private PieceMovementManager pieceMovementManager; // 참먹이 거리 계산 호출용
         // 모드별 승리 규칙 스크립트들을 인스펙터에서 드래그로 연결 (ClassicModeRule, EscapeModeRule 등)
         [SerializeField] private List<MonoBehaviour> modeRuleSources;
         // 위 목록을 "어느 모드가 어느 규칙인지" 바로 찾을 수 있게 정리해둔 표
@@ -137,9 +137,28 @@ namespace YutArena.Managers
             {
                 resultType = resultType,
                 winningTeam = winningTeam,
+                winningPlayer = FindSoloWinningPlayer(winningTeam), // winningTeam 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
                 finalRanking = finalRanking
             };
             gameManager.EndGame(result);
+        }
+        // ===================================================================
+        // winningTeam 소속 플레이어를 세어봐서, 딱 1명이면 개인전으로 판단하고 그 사람을 반환.
+        // 팀전(소속 2명 이상)이면 PlayerSlot.None을 반환함 (winningPlayer는 개인전 전용 필드라서)
+        // UI가 결과창에서 "OO님 승리"(개인전) 표시를 할지 "TeamA 승리"(팀전) 표시를 할지 구분할 때 씀
+        // ===================================================================
+        private PlayerSlot FindSoloWinningPlayer(TeamSlot winningTeam)
+        {
+            PlayerSlot found = PlayerSlot.None;
+            int memberCount = 0;
+            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            {
+                var p = (PlayerSlot)i;
+                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != winningTeam) continue;
+                memberCount++;
+                found = p;
+            }
+            return memberCount == 1 ? found : PlayerSlot.None;
         }
         // ===================================================================
         //  항복/탈주 처리 
@@ -247,7 +266,8 @@ namespace YutArena.Managers
                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 제한시간X");
                 return;
             }
-            // 1단계: 완주 개수가 가장 많은 팀들을 다 모음 (동점이면 여러 팀 나올 수 있음)
+            Debug.Log("[승리조건2] 제한시간 도달, 동점 판정 시작"); // 확인용 로그
+                                                    // 1단계: 완주 개수가 가장 많은 팀들을 다 모음 (동점이면 여러 팀 나올 수 있음)
             int topCount = -1;
             var topTeams = new List<TeamSlot>();
             foreach (var team in activeTeams)
@@ -266,110 +286,165 @@ namespace YutArena.Managers
             }
             if (topTeams.Count == 1)
             {
+                Debug.Log("[승리조건2] 1단계에서 승자 확정: " + topTeams[0]); //
                 Declare(topTeams[0], GameResultType.TimeOver);
                 return;
             }
-            // 2단계: 각 팀의 InBoard 말 중 골인에 가장 가까운 말의 남은 칸 수를 비교한다.
-            List<TeamSlot> distanceTiedTeams = FindTeamsWithClosestInBoardPiece(topTeams);
+            // 2단계: 참먹이 거리 비교 
+            Debug.Log("[승리조건2] 완주개수 동점(" + topCount + "개), 참먹이 거리 비교 진행"); //
+            var distanceTiedTeams = FindClosestTeamsToGoal(topTeams);
             if (distanceTiedTeams.Count == 1)
             {
+                Debug.Log("[승리조건2] 2단계에서 승자 확정: " + distanceTiedTeams[0]); //
                 Declare(distanceTiedTeams[0], GameResultType.TimeOver);
                 return;
             }
 
-            // 3단계: 타이브레이커 던지기
-            TeamSlot winner = ResolveTieByThrow(distanceTiedTeams);
-            Declare(winner, GameResultType.TimeOver);
+            // 3단계: 타이브레이커 던지기 - 자동 계산이 아니라 대상 팀 플레이어들이 실제로
+            // [던지기] 버튼을 눌러서 진행함. 여기서는 "누가 던져야 하는지" 세팅만 하고 끝냄.
+            // 결과 계산은 아래 RequestTieBreakerThrow()에서, 전원 다 던진 시점에 이루어짐
+            StartTieBreakerRound(distanceTiedTeams);
         }
 
-        /// <summary>
-        /// 동점 팀들 중 보드 위 말 하나가 골인에 가장 가까운 팀만 남깁니다.
-        /// 보드 위 말이 없는 팀은 거리 비교에서 int.MaxValue(가장 멂)로 취급합니다.
-        /// </summary>
-        private List<TeamSlot> FindTeamsWithClosestInBoardPiece(IReadOnlyList<TeamSlot> teams)
+        // ===================================================================
+        // 타이브레이커 진행 상태
+        // isTieBreakerActive     = 지금 타이브레이커 진행 중인지
+        // tieBreakerPendingPlayers = 이번 라운드에서 아직 안 던진 사람들
+        // tieBreakerResults      = 이번 라운드에서 이미 던진 사람들의 결과
+        // tieBreakerTeams        = 지금 겨루고 있는 팀들 (동점이면 다음 라운드에 이 중 일부로 좁혀짐)
+        // ===================================================================
+        private bool isTieBreakerActive = false;
+        private List<PlayerSlot> tieBreakerPendingPlayers = new List<PlayerSlot>();
+        private Dictionary<PlayerSlot, YutResult> tieBreakerResults = new Dictionary<PlayerSlot, YutResult>();
+        private List<TeamSlot> tieBreakerTeams = new List<TeamSlot>();
+
+        // UI가 구독: 타이브레이커가 시작될 때(또는 재던지기로 다음 라운드 시작될 때) 방송
+        // 매개변수: 지금 겨루는 팀들, 이번 라운드에 던져야 할 사람들
+        public System.Action<List<TeamSlot>, List<PlayerSlot>> OnTieBreakerRoundStarted;
+
+        // 동점팀들을 받아서, 그 팀 소속 플레이어 전원을 "던져야 할 사람" 목록으로 세팅하고 대기 상태로 만듦
+        private void StartTieBreakerRound(List<TeamSlot> tiedTeams)
         {
-            if (pieceMovementManager == null)
-                pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
-
-            if (pieceMovementManager == null || playerManager == null)
+            isTieBreakerActive = true;
+            tieBreakerTeams = tiedTeams;
+            tieBreakerResults.Clear();
+            tieBreakerPendingPlayers = new List<PlayerSlot>();
+            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
-                Debug.LogWarning("TestWinConditionManager: 거리 비교에 필요한 PlayerManager 또는 PieceMovementManager가 없어 윷 타이브레이커로 진행합니다.");
-                return new List<TeamSlot>(teams);
+                var p = (PlayerSlot)i;
+                if (tiedTeams.Contains(MatchCompositionRule.GetTeamSlot(settings.matchComposition, p)))
+                    tieBreakerPendingPlayers.Add(p);
             }
-
-            int closestRemainingSteps = int.MaxValue;
-            var closestTeams = new List<TeamSlot>();
-
-            foreach (TeamSlot team in teams)
-            {
-                int teamClosestRemainingSteps = int.MaxValue;
-
-                foreach (PlayerController player in playerManager.ActivePlayers)
-                {
-                    TeamSlot playerTeam = MatchCompositionRule.GetTeamSlot(
-                        settings.matchComposition,
-                        (PlayerSlot)player.PlayerId);
-                    if (playerTeam != team || player.RuntimeData == null)
-                        continue;
-
-                    foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
-                    {
-                        if (pieceMovementManager.TryGetRemainingStepsToGoal(
-                                player.PlayerId,
-                                piece.PieceId,
-                                out int remainingSteps))
-                        {
-                            teamClosestRemainingSteps = Mathf.Min(teamClosestRemainingSteps, remainingSteps);
-                        }
-                    }
-                }
-
-                if (teamClosestRemainingSteps < closestRemainingSteps)
-                {
-                    closestRemainingSteps = teamClosestRemainingSteps;
-                    closestTeams.Clear();
-                    closestTeams.Add(team);
-                }
-                else if (teamClosestRemainingSteps == closestRemainingSteps)
-                {
-                    closestTeams.Add(team);
-                }
-            }
-
-            Debug.Log(
-                "TestWinConditionManager: 제한시간 동점 거리 비교 결과 - " +
-                "남은 칸 " + (closestRemainingSteps == int.MaxValue ? "없음" : closestRemainingSteps.ToString()) +
-                ", 팀 " + string.Join(", ", closestTeams));
-            return closestTeams;
+            Debug.Log("[타이브레이커] 시작됨! 대상 팀: " + string.Join(", ", tiedTeams) +
+                " / 던져야 할 사람: " + string.Join(", ", tieBreakerPendingPlayers));
+            OnTieBreakerRoundStarted?.Invoke(tiedTeams, new List<PlayerSlot>(tieBreakerPendingPlayers));
         }
-        // ===================================================================
-        // 동점인 팀들끼리, 팀 소속 전원이 윷을 던져서 그 팀의 결과값을 합산한 뒤
-        // 합산값이 더 높은 팀을 찾음. 여러 팀이 또 동점이면, 그 팀들끼리만 다시 던짐(재귀)
-        // ===================================================================
-        private TeamSlot ResolveTieByThrow(List<TeamSlot> tiedTeams)
-        {
-            if (tiedTeams.Count == 1) return tiedTeams[0];
 
+        // 테스트용: 인스펙터 우클릭으로, 지금 타이브레이커에서 "아직 안 던진 사람 중 첫 번째"를 대신 던지게 함
+        // 우클릭 여러 번 누르면 한 명씩 순서대로 다 던져지고, 전원 다 던지면 자동으로 결과까지 나옴
+        [ContextMenu("테스트: 타이브레이커 던지기 (다음 사람)")]
+        public void TestRequestTieBreakerThrow()
+        {
+            if (!isTieBreakerActive || tieBreakerPendingPlayers.Count == 0)
+            {
+                Debug.LogWarning("지금 타이브레이커 진행 중이 아니거나, 던질 사람이 없음");
+                return;
+            }
+            RequestTieBreakerThrow(tieBreakerPendingPlayers[0]);
+        }
+
+        // ===================================================================
+        // UI '던지기' 버튼이 타이브레이커 중에 호출하는 함수. 지금 던져야 할 사람 목록에
+        // 있는 사람만 던질 수 있음. 전원 다 던지면 자동으로 팀별 합산 -> 승자 판정 (또는 재던지기)까지 진행
+        // ===================================================================
+        public void RequestTieBreakerThrow(PlayerSlot player)
+        {
+            if (!isTieBreakerActive)
+            {
+                Debug.LogWarning("TestWinConditionManager: 타이브레이커 진행 중이 아닌데 던지기 요청이 옴");
+                return;
+            }
+            if (!tieBreakerPendingPlayers.Contains(player))
+            {
+                Debug.LogWarning("TestWinConditionManager: " + player + "는 지금 타이브레이커에서 던질 차례가 아님");
+                return;
+            }
+
+            YutResult result = yutRuleManager.ThrowForTieBreaker(); // 낙 없는 전용 확률표 사용
+            tieBreakerResults[player] = result;
+            tieBreakerPendingPlayers.Remove(player);
+            Debug.Log("[타이브레이커] " + player + " 던짐 → " + result +
+                " (남은 사람: " + tieBreakerPendingPlayers.Count + "명)");
+
+            if (tieBreakerPendingPlayers.Count > 0) return; // 아직 다른 사람이 안 던졌으면 여기서 대기
+
+            // 전원 다 던졌으니 팀별로 합산해서 비교
             var sumByTeam = new Dictionary<TeamSlot, int>();
-            foreach (var team in tiedTeams)
+            foreach (var team in tieBreakerTeams)
             {
                 int sum = 0;
-                // 이 팀 소속 플레이어 전원이 각자 던져서, 나온 결과값(이동칸수 기준)을 다 더함
                 for (int i = 1; i <= settings.playerCount && i <= 8; i++)
                 {
                     var p = (PlayerSlot)i;
                     if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
-                    YutResult result = yutRuleManager.Throw(p);
-                    sum += YutResultRule.GetMoveCount(result); // 결과값을 칸수(숫자)로 바꿔서 합산
+                    if (tieBreakerResults.TryGetValue(p, out var r))
+                        sum += YutResultRule.GetMoveCount(r);
                 }
                 sumByTeam[team] = sum;
             }
+            foreach (var kv in sumByTeam)
+                Debug.Log("[타이브레이커] " + kv.Key + " 합산 결과: " + kv.Value);
 
             int bestSum = sumByTeam.Values.Max();
-            var stillTied = tiedTeams.Where(t => sumByTeam[t] == bestSum).ToList();
+            var stillTied = tieBreakerTeams.Where(t => sumByTeam[t] == bestSum).ToList();
 
-            if (stillTied.Count == 1) return stillTied[0];
-            return ResolveTieByThrow(stillTied); // 그래도 동점이면 재귀로 재던지기
+            if (stillTied.Count == 1)
+            {
+                isTieBreakerActive = false;
+                Debug.Log("[타이브레이커] 종료! 승자: " + stillTied[0]);
+                Declare(stillTied[0], GameResultType.TimeOver);
+            }
+            else
+            {
+                Debug.Log("[타이브레이커] 또 동점(" + bestSum + ") 발생, 재던지기 라운드 시작");
+                StartTieBreakerRound(stillTied); // 그래도 동점이면 그 팀들끼리만 다시 라운드 시작
+            }
+        }
+
+        // ===================================================================
+        // 동점인 팀들 중, "참먹이(골)에 가장 가까운 말"이 있는 팀(들)만 추려냄
+        // 각 팀에서 "보드 위에 있는 말들 중 남은 칸수가 가장 작은 말"을 그 팀의 대표 거리로 삼고,
+        // 팀들끼리 그 대표 거리를 비교해서 제일 작은(가까운) 팀들만 남김 (동점이면 여러 팀 남을 수 있음)
+        // 보드 위에 말이 하나도 없는 팀은 비교 대상에서 제외
+        // ===================================================================
+        private List<TeamSlot> FindClosestTeamsToGoal(List<TeamSlot> teams)
+        {
+            var closestDistanceByTeam = new Dictionary<TeamSlot, int>();
+
+            foreach (var team in teams)
+            {
+                int minDistance = int.MaxValue;
+                for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+                {
+                    var p = (PlayerSlot)i;
+                    if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
+                    if (!playerManager.TryGetPlayer(i, out var player)) continue;
+
+                    foreach (var piece in player.RuntimeData.Pieces)
+                    {
+                        // 영서 함수: 보드 위에 있는 말만 성공(true), 나머지(대기중/완주/없음)는 false
+                        if (pieceMovementManager.TryGetRemainingStepsToGoal(i, piece.PieceId, out int remainingSteps))
+                        {
+                            if (remainingSteps < minDistance)
+                                minDistance = remainingSteps;
+                        }
+                    }
+                }
+                closestDistanceByTeam[team] = minDistance; // 말이 하나도 없으면 int.MaxValue로 남아서 자동으로 불리해짐
+            }
+
+            int bestDistance = closestDistanceByTeam.Values.Min();
+            return teams.Where(t => closestDistanceByTeam[t] == bestDistance).ToList();
         }
     }
 }

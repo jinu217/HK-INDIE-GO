@@ -26,11 +26,11 @@ namespace YutArena.Common
         public const int MinTimeLimitMinutes = 1;
         public const int MaxTimeLimitMinutes = 60;
 
-        public const int DefaultThrowTimeSeconds = 10;
-        public const int DefaultActionTimeSeconds = 30;
+        public const int DefaultThrowTimeSeconds = 45;
+        public const int DefaultActionTimeSeconds = 30; // 사용 x
 
-        public const int ExtraThrowTimeBonusSeconds = 5;
-        public const int ExtraMoveTimeBonusSeconds = 10;
+        public const int ExtraThrowTimeBonusSeconds = 15;
+        public const int ExtraMoveTimeBonusSeconds = 10; // 사용 x
 
         public const int MaxYutMoExtraThrowCount = 3;
     }
