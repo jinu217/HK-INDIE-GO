@@ -14,56 +14,72 @@ namespace YutArena.Test
     public sealed class YutThrowManager : MonoBehaviour
     {
         [Header("References")]
-        [Tooltip("던지기 입력에 사용하는 UI 버튼입니다. 연출 중에는 자동으로 비활성화됩니다.")]
+        [Tooltip("던지기 입력 UI 버튼")]
         [SerializeField] private Button throwButton;
-        [Tooltip("실제 윷 결과와 턴 상태를 전달하는 턴 매니저입니다.")]
+        [Tooltip("윷 결과 및 턴 상태 관리 객체")]
         [SerializeField] private TestTurnManager turnManager;
-        [Tooltip("일반 윷가락 1개짜리 프리팹입니다. 실행 시 3개 생성됩니다.")]
+        [Tooltip("일반 윷가락 프리팹")]
         [SerializeField] private GameObject normalYutPrefab;
-        [Tooltip("백도 표시가 있는 윷가락 1개짜리 프리팹입니다. 실행 시 1개 생성됩니다.")]
+        [Tooltip("백도 표시 윷가락 프리팹")]
         [SerializeField] private GameObject backDoYutPrefab;
-        [Tooltip("원판 중앙에 놓고 로컬 X/Y축이 원판 표면을 따르도록 설정")]
+        [Tooltip("원판 중앙 및 로컬 X/Y축 기준점")]
         [SerializeField] private Transform boardCenter;
 
         [Header("Board Area (Local XY)")]
-        [Tooltip("윷이 착지할 수 있는 원형 영역의 반지름입니다.")]
+        [Tooltip("윷 착지 원형 영역 반지름")]
         [SerializeField, Min(0.1f)] private float boardRadius = 2.5f;
-        [Tooltip("윷이 원판 가장자리에 걸치지 않도록 안쪽에 확보하는 여백입니다.")]
+        [Tooltip("원판 가장자리 안쪽 착지 여백")]
         [SerializeField, Min(0f)] private float edgePadding = 0.35f;
-        [Tooltip("카메라가 -Z에 있으면 보통 음수 사용")]
+        [Tooltip("원판 표면 기준 카메라 방향 깊이 오프셋")]
         [SerializeField] private float surfaceOffset = -0.1f;
-        [Tooltip("게임 시작 시 일렬로 놓이는 윷 사이의 간격")]
+        [Tooltip("게임 시작 시 윷 정렬 간격")]
         [SerializeField, Min(0f)] private float startYutSpacing = 0.35f;
-        [Tooltip("시작 윷 4개의 중심 위치를 원판 로컬 X/Y축으로 이동합니다. X는 좌우, Y는 위아래입니다.")]
+        [Tooltip("시작 윷 중심 위치 X/Y 오프셋")]
         [SerializeField] private Vector2 startYutPositionOffset;
-        [Tooltip("던진 후 착지할 때 윷끼리 확보할 최소 간격입니다.")]
+        [Tooltip("착지 윷 사이 최소 중심 간격")]
         [SerializeField, Min(0f)] private float minimumYutSpacing = 0.65f;
 
+        [Header("Automatic Overlap Stacking")]
+        [Tooltip("윷 몸체 교차 시 자동 위층 배치 여부")]
+        [SerializeField] private bool enableOverlapStacking = true;
+        [Tooltip("원판 평면 기준 윷 길이")]
+        [SerializeField, Min(0.01f)] private float yutFootprintLength = 1.6f;
+        [Tooltip("원판 평면 기준 윷 폭")]
+        [SerializeField, Min(0.01f)] private float yutFootprintWidth = 0.35f;
+        [Tooltip("자동 측정 모델 두께 기준 최소 층 높이")]
+        [SerializeField, Min(0.001f)] private float stackLayerHeight = 0.12f;
+        [Tooltip("윷 층 사이 추가 여백")]
+        [SerializeField, Min(0f)] private float stackClearance = 0.02f;
+        [Tooltip("OBJ 긴 방향 로컬 Y축 여부")]
+        [SerializeField] private bool modelLongAxisIsY = true;
+        [Tooltip("겹친 윷 최대 기울기 각도")]
+        [SerializeField, Range(0f, 30f)] private float maximumStackTilt = 12f;
         [Header("Board Placement")]
-        [Tooltip("원판을 X축 기준으로 위아래 기울이는 각도")]
+        [Tooltip("원판 X축 위아래 기울기 각도")]
         [SerializeField, Range(-45f, 45f)] private float boardTiltX = 12f;
-        [Tooltip("Board Center 기준으로 원판 위 윷 배치 영역을 Y축 이동")]
+        [Tooltip("Board Center 기준 윷 배치 영역 Y축 위치")]
         [SerializeField] private float boardPositionY;
 
         [Header("Throw Animation")]
-        [Tooltip("윷 던지기 연출이 시작해서 착지할 때까지 걸리는 시간(초)입니다.")]
+        [Tooltip("윷 던지기부터 착지까지의 연출 시간")]
         [SerializeField, Min(0.1f)] private float throwDuration = 0.85f;
-        [Tooltip("던지는 동안 화면 위쪽으로 올라가는 포물선 높이입니다.")]
+        [Tooltip("던지기 포물선 높이")]
         [SerializeField, Min(0f)] private float arcHeight = 1.2f;
-        [Tooltip("던지는 동안 카메라 쪽으로 튀어나오는 깊이입니다.")]
+        [Tooltip("던지기 카메라 방향 깊이")]
         [SerializeField, Min(0f)] private float depthHop = 0.45f;
-        [Tooltip("던지는 동안 회전할 최소/최대 바퀴 수입니다. X는 최소, Y는 최대입니다.")]
-        [SerializeField] private Vector2 tumbleTurns = new Vector2(1.5f, 3f);
+        [Tooltip("던지기 최소 및 최대 회전 바퀴 수")]
+        [SerializeField] private Vector2 tumbleTurns = new Vector2(2f, 3f);
 
         [Header("Model")]
-        [Tooltip("OBJ 모델의 기본 축 방향이 원판과 맞지 않을 때 사용하는 회전 보정값입니다.")]
+        [Tooltip("OBJ 모델 기본 축 회전 보정값")]
         [SerializeField] private Vector3 modelRotationOffset;
-        [Tooltip("윷의 반대 면을 보이게 하는 회전. 모델 축에 따라 (180,0,0) 또는 (0,180,0) 사용")]
+        [Tooltip("윷 반대 면 표시 회전값")]
         [SerializeField] private Vector3 faceFlipRotation = new Vector3(180f, 0f, 0f);
-        [Tooltip("생성되는 윷 OBJ의 크기 배율입니다. 1은 프리팹 원본 크기입니다.")]
+        [Tooltip("생성 윷 OBJ 크기 배율")]
         [SerializeField, Min(0.0001f)] private float modelScaleMultiplier = 1f;
 
         private readonly List<Transform> yuts = new List<Transform>();
+        private readonly List<float> yutVisualThicknesses = new List<float>();
         private bool isThrowing;
 
         private void Awake()
@@ -122,22 +138,85 @@ namespace YutArena.Test
             if (prefab == null) return;
 
             GameObject instance = Instantiate(prefab, transform);
-            instance.name = instanceName;
+            instance.name = instanceName + "_Model";
             instance.transform.localScale *= modelScaleMultiplier;
 
-            Rigidbody body = instance.GetComponent<Rigidbody>();
-            if (body != null)
+            Rigidbody[] bodies = instance.GetComponentsInChildren<Rigidbody>();
+            foreach (Rigidbody body in bodies)
             {
                 body.isKinematic = true;
                 body.detectCollisions = false;
             }
 
+            // OBJ 원본 피벗 위치와 관계없이 렌더링되는 윷의 정중앙을 회전축으로 사용한다.
+            Vector3 visualCenter = GetVisualCenter(instance);
+            GameObject pivotObject = new GameObject(instanceName);
+            Transform pivot = pivotObject.transform;
+            pivot.SetParent(transform);
+            pivot.SetPositionAndRotation(visualCenter, Quaternion.identity);
+            instance.transform.SetParent(pivot, true);
+
             float x = startYutPositionOffset.x + (index - 1.5f) * startYutSpacing;
             float y = -boardRadius * 0.45f + startYutPositionOffset.y;
-            instance.transform.SetPositionAndRotation(
+            pivot.SetPositionAndRotation(
                 BoardPoint(new Vector2(x, y), surfaceOffset),
                 BoardRotation(index * 12f, false));
-            yuts.Add(instance.transform);
+            yuts.Add(pivot);
+            Vector3 boardNormal = GetBoardFrameRotation() * Vector3.forward;
+            yutVisualThicknesses.Add(GetProjectedVisualSize(instance, boardNormal));
+        }
+
+        private static Vector3 GetVisualCenter(GameObject instance)
+        {
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+            {
+                return instance.transform.position;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+
+            return bounds.center;
+        }
+
+        private static float GetProjectedVisualSize(GameObject instance, Vector3 direction)
+        {
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return 0f;
+
+            direction.Normalize();
+            float minimum = float.PositiveInfinity;
+            float maximum = float.NegativeInfinity;
+
+            foreach (Renderer renderer in renderers)
+            {
+                Bounds localBounds = renderer.localBounds;
+                Vector3 center = localBounds.center;
+                Vector3 extents = localBounds.extents;
+
+                for (int x = -1; x <= 1; x += 2)
+                {
+                    for (int y = -1; y <= 1; y += 2)
+                    {
+                        for (int z = -1; z <= 1; z += 2)
+                        {
+                            Vector3 localCorner = center + Vector3.Scale(
+                                extents,
+                                new Vector3(x, y, z));
+                            Vector3 worldCorner = renderer.transform.TransformPoint(localCorner);
+                            float projection = Vector3.Dot(worldCorner, direction);
+                            minimum = Mathf.Min(minimum, projection);
+                            maximum = Mathf.Max(maximum, projection);
+                        }
+                    }
+                }
+            }
+
+            return Mathf.Max(0f, maximum - minimum);
         }
 
         private IEnumerator ThrowRoutine(YutResult result)
@@ -154,15 +233,77 @@ namespace YutArena.Test
             var tumbleAngles = new float[count];
             List<Vector2> landingPoints = CreateLandingPoints(count);
             bool[] flippedFaces = CreateFaceResults(result, count);
+            var landingAngles = new float[count];
+            var stackLevels = new int[count];
+            var stackContactOffsets = new float[count];
+            Quaternion boardFrame = GetBoardFrameRotation();
+            int minimumTurns = Mathf.Max(1, Mathf.CeilToInt(tumbleTurns.x));
+            int maximumTurns = Mathf.Max(minimumTurns, Mathf.FloorToInt(tumbleTurns.y));
+            float effectiveStackHeight = stackLayerHeight;
+            for (int i = 0; i < yutVisualThicknesses.Count; i++)
+            {
+                effectiveStackHeight = Mathf.Max(effectiveStackHeight, yutVisualThicknesses[i]);
+            }
+            effectiveStackHeight += stackClearance;
+
+            for (int i = 0; i < count; i++)
+            {
+                landingAngles[i] = Random.Range(0f, 360f);
+                if (!enableOverlapStacking) continue;
+
+                for (int j = 0; j < i; j++)
+                {
+                    if (DoYutFootprintsOverlap(
+                            landingPoints[i], landingAngles[i],
+                            landingPoints[j], landingAngles[j]))
+                    {
+                        int candidateLevel = stackLevels[j] + 1;
+                        if (candidateLevel >= stackLevels[i])
+                        {
+                            stackLevels[i] = candidateLevel;
+                            stackContactOffsets[i] = GetContactOffsetOnTopYut(
+                                landingPoints[i], landingAngles[i],
+                                landingPoints[j], landingAngles[j]);
+                        }
+                    }
+                }
+            }
 
             for (int i = 0; i < count; i++)
             {
                 starts[i] = yuts[i].position;
-                targets[i] = BoardPoint(landingPoints[i], surfaceOffset - i * 0.002f);
+                float layerDepth = surfaceOffset - stackLevels[i] * effectiveStackHeight - i * 0.002f;
                 startRotations[i] = yuts[i].rotation;
-                targetRotations[i] = BoardRotation(Random.Range(0f, 360f), flippedFaces[i]);
-                tumbleAxes[i] = Random.onUnitSphere;
-                tumbleAngles[i] = 360f * Random.Range(tumbleTurns.x, tumbleTurns.y);
+                Quaternion landingRotation = BoardRotation(landingAngles[i], flippedFaces[i]);
+                float appliedTilt = 0f;
+                if (stackLevels[i] > 0 && Mathf.Abs(stackContactOffsets[i]) > 0.001f)
+                {
+                    GetFootprintAxes(landingAngles[i], out Vector2 longAxis2D, out Vector2 shortAxis2D);
+                    Vector3 longAxis3D = boardFrame * new Vector3(longAxis2D.x, longAxis2D.y, 0f);
+                    Vector3 shortAxis3D = boardFrame * new Vector3(shortAxis2D.x, shortAxis2D.y, 0f);
+                    Vector3 boardNormal = boardFrame * Vector3.forward;
+                    float crossSign = Mathf.Sign(Vector3.Dot(
+                        Vector3.Cross(shortAxis3D, longAxis3D),
+                        boardNormal));
+                    float contactRatio = Mathf.Clamp01(
+                        Mathf.Abs(stackContactOffsets[i]) / (yutFootprintLength * 0.4f));
+                    appliedTilt = -Mathf.Sign(stackContactOffsets[i])
+                                * crossSign
+                                * maximumStackTilt
+                                * contactRatio;
+                    landingRotation = Quaternion.AngleAxis(appliedTilt, shortAxis3D)
+                                    * landingRotation;
+                }
+                float tiltDepth = Mathf.Sin(Mathf.Abs(appliedTilt) * Mathf.Deg2Rad)
+                                * yutFootprintLength * 0.5f;
+                targets[i] = BoardPoint(landingPoints[i], layerDepth - tiltDepth);
+                targetRotations[i] = landingRotation;
+                Vector3 localTumbleAxis = new Vector3(
+                    Random.Range(0.65f, 1f),
+                    Random.Range(-1f, 1f),
+                    Random.Range(-0.25f, 0.25f)).normalized;
+                tumbleAxes[i] = boardFrame * localTumbleAxis;
+                tumbleAngles[i] = 360f * Random.Range(minimumTurns, maximumTurns + 1);
             }
 
             float elapsed = 0f;
@@ -172,18 +313,18 @@ namespace YutArena.Test
                 float t = Mathf.Clamp01(elapsed / throwDuration);
                 float smoothT = t * t * (3f - 2f * t);
                 float parabola = 4f * t * (1f - t);
+                float spinProgress = 1f - (1f - t) * (1f - t);
 
                 for (int i = 0; i < count; i++)
                 {
                     Transform yut = yuts[i];
                     Vector3 position = Vector3.Lerp(starts[i], targets[i], smoothT);
-                    Quaternion boardFrame = GetBoardFrameRotation();
                     position += boardFrame * Vector3.up * (arcHeight * parabola);
                     position -= boardFrame * Vector3.forward * (depthHop * parabola);
                     yut.position = position;
 
                     Quaternion baseRotation = Quaternion.Slerp(startRotations[i], targetRotations[i], smoothT);
-                    yut.rotation = Quaternion.AngleAxis(tumbleAngles[i] * t, tumbleAxes[i]) * baseRotation;
+                    yut.rotation = Quaternion.AngleAxis(tumbleAngles[i] * spinProgress, tumbleAxes[i]) * baseRotation;
                 }
 
                 yield return null;
@@ -277,6 +418,74 @@ namespace YutArena.Test
             return points;
         }
 
+        private bool DoYutFootprintsOverlap(
+            Vector2 centerA, float angleA,
+            Vector2 centerB, float angleB)
+        {
+            GetFootprintAxes(angleA, out Vector2 longA, out Vector2 shortA);
+            GetFootprintAxes(angleB, out Vector2 longB, out Vector2 shortB);
+            Vector2 centerDelta = centerB - centerA;
+            float halfLength = yutFootprintLength * 0.5f;
+            float halfWidth = yutFootprintWidth * 0.5f;
+
+            return OverlapsOnAxis(centerDelta, longA, longA, shortA, longB, shortB, halfLength, halfWidth)
+                && OverlapsOnAxis(centerDelta, shortA, longA, shortA, longB, shortB, halfLength, halfWidth)
+                && OverlapsOnAxis(centerDelta, longB, longA, shortA, longB, shortB, halfLength, halfWidth)
+                && OverlapsOnAxis(centerDelta, shortB, longA, shortA, longB, shortB, halfLength, halfWidth);
+        }
+
+        private float GetContactOffsetOnTopYut(
+            Vector2 topCenter, float topAngle,
+            Vector2 bottomCenter, float bottomAngle)
+        {
+            GetFootprintAxes(topAngle, out Vector2 topLong, out _);
+            GetFootprintAxes(bottomAngle, out Vector2 bottomLong, out _);
+            Vector2 centerDelta = bottomCenter - topCenter;
+            float denominator = Cross2D(topLong, bottomLong);
+            float halfLength = yutFootprintLength * 0.5f;
+
+            if (Mathf.Abs(denominator) > 0.001f)
+            {
+                float intersectionOffset = Cross2D(centerDelta, bottomLong) / denominator;
+                return Mathf.Clamp(intersectionOffset, -halfLength, halfLength);
+            }
+
+            // 거의 평행한 경우에는 아래 윷 중심을 위 윷의 긴 축에 투영해 접촉 방향을 정한다.
+            return Mathf.Clamp(Vector2.Dot(centerDelta, topLong), -halfLength, halfLength);
+        }
+
+        private static float Cross2D(Vector2 a, Vector2 b)
+        {
+            return a.x * b.y - a.y * b.x;
+        }
+
+        private void GetFootprintAxes(float angle, out Vector2 longAxis, out Vector2 shortAxis)
+        {
+            float radians = angle * Mathf.Deg2Rad;
+            Vector2 localX = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians));
+            Vector2 localY = new Vector2(-Mathf.Sin(radians), Mathf.Cos(radians));
+            longAxis = modelLongAxisIsY ? localY : localX;
+            shortAxis = modelLongAxisIsY ? localX : localY;
+        }
+
+        private static bool OverlapsOnAxis(
+            Vector2 centerDelta,
+            Vector2 testAxis,
+            Vector2 longA,
+            Vector2 shortA,
+            Vector2 longB,
+            Vector2 shortB,
+            float halfLength,
+            float halfWidth)
+        {
+            float centerDistance = Mathf.Abs(Vector2.Dot(centerDelta, testAxis));
+            float radiusA = halfLength * Mathf.Abs(Vector2.Dot(longA, testAxis))
+                          + halfWidth * Mathf.Abs(Vector2.Dot(shortA, testAxis));
+            float radiusB = halfLength * Mathf.Abs(Vector2.Dot(longB, testAxis))
+                          + halfWidth * Mathf.Abs(Vector2.Dot(shortB, testAxis));
+            return centerDistance <= radiusA + radiusB;
+        }
+
         private Vector3 BoardPoint(Vector2 localPoint, float depth)
         {
             Quaternion boardFrame = GetBoardFrameRotation();
@@ -311,6 +520,11 @@ namespace YutArena.Test
             edgePadding = Mathf.Clamp(edgePadding, 0f, boardRadius - 0.05f);
             startYutSpacing = Mathf.Max(0f, startYutSpacing);
             minimumYutSpacing = Mathf.Max(0f, minimumYutSpacing);
+            yutFootprintLength = Mathf.Max(0.01f, yutFootprintLength);
+            yutFootprintWidth = Mathf.Max(0.01f, yutFootprintWidth);
+            stackLayerHeight = Mathf.Max(0.001f, stackLayerHeight);
+            stackClearance = Mathf.Max(0f, stackClearance);
+            maximumStackTilt = Mathf.Clamp(maximumStackTilt, 0f, 30f);
             throwDuration = Mathf.Max(0.1f, throwDuration);
             tumbleTurns.y = Mathf.Max(tumbleTurns.x, tumbleTurns.y);
         }
