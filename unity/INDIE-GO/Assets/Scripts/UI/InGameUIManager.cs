@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using YutArena.Common;
 using YutArena.Managers;
 
@@ -28,6 +29,18 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text gameTimeText;
         [SerializeField] private TMP_Text turnTimeText;
         [SerializeField] private TMP_Text turnCountText;
+
+        [Header("Current Player Skills")]
+        [Tooltip("현재 턴 플레이어 캐릭터의 패시브 스킬 이미지")]
+        [SerializeField] private Image passiveSkillImage;
+        [Tooltip("현재 턴 플레이어 캐릭터의 액티브 스킬 이미지")]
+        [SerializeField] private Image activeSkillImage;
+        [Tooltip("씬에 직접 만든 공용 액티브 스킬 버튼")]
+        [SerializeField] private ActiveSkillButtonController activeSkillButtonController;
+        [Tooltip("패시브 스킬 이미지에 붙인 Hover 트리거")]
+        [SerializeField] private SkillTooltipTrigger passiveSkillTooltip;
+        [Tooltip("액티브 스킬 버튼에 붙인 Hover 트리거")]
+        [SerializeField] private SkillTooltipTrigger activeSkillTooltip;
 
         private void Awake()
         {
@@ -68,6 +81,7 @@ namespace YutArena.UI
             RefreshPlayerPanels();
             RefreshTurnInfo();
             RefreshTimers();
+            RefreshCurrentPlayerSkills();
         }
 
         private void HandleTurnStarted(PlayerSlot player)
@@ -77,6 +91,7 @@ namespace YutArena.UI
             RefreshPlayerPanels();
             RefreshTurnHighlights(player);
             RefreshTurnInfo();
+            RefreshCurrentPlayerSkills(player);
         }
 
         private void HandleTurnPhaseChanged(TurnContext turn)
@@ -188,6 +203,46 @@ namespace YutArena.UI
                 : TurnCountPrefix + current + "/" + UnlimitedText;
         }
 
+        private void RefreshCurrentPlayerSkills()
+        {
+            PlayerSlot currentPlayer = turnManager != null && turnManager.CurrentTurn != null
+                ? turnManager.CurrentTurn.currentPlayer
+                : PlayerSlot.None;
+            RefreshCurrentPlayerSkills(currentPlayer);
+        }
+
+        private void RefreshCurrentPlayerSkills(PlayerSlot currentPlayer)
+        {
+            CharacterData character = null;
+            if (playerManager != null &&
+                playerManager.TryGetPlayer((int)currentPlayer, out PlayerController player))
+            {
+                character = player.SelectedCharacter;
+            }
+
+            SetSkillImage(passiveSkillImage, character != null ? character.passive_Icon : null);
+            SetSkillImage(activeSkillImage, character != null ? character.active_Icon : null);
+
+            if (passiveSkillTooltip != null)
+            {
+                passiveSkillTooltip.Configure(
+                    character != null ? character.passive_Icon : null,
+                    character != null ? character.passive_Name : string.Empty,
+                    character != null ? character.passive_Desc : string.Empty);
+            }
+
+            if (activeSkillTooltip != null)
+            {
+                activeSkillTooltip.Configure(
+                    character != null ? character.active_Icon : null,
+                    character != null ? character.active_Name : string.Empty,
+                    character != null ? character.active_Desc : string.Empty);
+            }
+
+            if (activeSkillButtonController != null)
+                activeSkillButtonController.RefreshForCurrentTurn();
+        }
+
         private void RefreshTimers()
         {
             if (gameTimeText != null)
@@ -217,6 +272,14 @@ namespace YutArena.UI
         {
             int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));
             return string.Format("{0:00}:{1:00}", totalSeconds / 60, totalSeconds % 60);
+        }
+
+        private static void SetSkillImage(Image target, Sprite sprite)
+        {
+            if (target == null) return;
+
+            target.sprite = sprite;
+            target.enabled = sprite != null;
         }
     }
 }

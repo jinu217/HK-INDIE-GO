@@ -4,8 +4,6 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
 using YutArena.InGame;
@@ -20,8 +18,6 @@ using YutArena.Managers;
 [RequireComponent(typeof(CanvasGroup))]
 public sealed class ActiveSkillButtonController : MonoBehaviour
 {
-    private const string InGameSceneName = "InGameScene";
-
     [Header("Dependencies (Auto Find If Empty)")]
     [SerializeField] private TestTurnManager turnManager;
     [SerializeField] private PlayerManager playerManager;
@@ -32,7 +28,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private Button skillButton;
     private CanvasGroup canvasGroup;
-    private Text skillLabel;
     private CharacterStatusBehaviour currentCharacter;
     private int currentPlayerId = -1;
     private int preferredCasterPieceId = -1;
@@ -52,127 +47,10 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         currentCharacter != null ? currentCharacter.PieceId : -1;
     public bool IsSelectingCaster => isSelectingCaster;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    public static void EnsureInGameActiveSkillButton()
-    {
-        if (SceneManager.GetActiveScene().name != InGameSceneName) return;
-
-        ActiveSkillButtonController[] existingControllers =
-            FindObjectsByType<ActiveSkillButtonController>(
-                FindObjectsInactive.Include,
-                FindObjectsSortMode.None);
-
-        foreach (ActiveSkillButtonController controller in existingControllers)
-        {
-            if (controller.GetComponentInParent<Canvas>(true) != null)
-                return;
-
-            // A controller previously attached to a non-UI manager object must
-            // not compete with the automatically generated button.
-            controller.enabled = false;
-        }
-
-        Canvas canvas = FindFirstObjectByType<Canvas>();
-        if (canvas == null)
-            canvas = CreateInGameCanvas();
-
-        EnsureEventSystem();
-        CreateActiveSkillButton(canvas.transform);
-    }
-
-    private static Canvas CreateInGameCanvas()
-    {
-        var canvasObject = new GameObject(
-            "InGameSkillCanvas",
-            typeof(RectTransform),
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster));
-
-        Canvas canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 100;
-
-        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
-        return canvas;
-    }
-
-    private static void EnsureEventSystem()
-    {
-        if (FindFirstObjectByType<EventSystem>() != null) return;
-
-        var eventSystemObject = new GameObject(
-            "EventSystem",
-            typeof(EventSystem));
-        InputSystemUIInputModule inputModule =
-            eventSystemObject.AddComponent<InputSystemUIInputModule>();
-        inputModule.AssignDefaultActions();
-    }
-
-    private static void CreateActiveSkillButton(Transform parent)
-    {
-        var buttonObject = new GameObject(
-            "ActiveSkillButton",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Image),
-            typeof(Button),
-            typeof(CanvasGroup));
-        buttonObject.transform.SetParent(parent, false);
-
-        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
-        buttonRect.anchorMin = new Vector2(1f, 0f);
-        buttonRect.anchorMax = new Vector2(1f, 0f);
-        buttonRect.pivot = new Vector2(1f, 0f);
-        buttonRect.anchoredPosition = new Vector2(-48f, 48f);
-        buttonRect.sizeDelta = new Vector2(280f, 84f);
-
-        Image image = buttonObject.GetComponent<Image>();
-        image.color = new Color(0.16f, 0.34f, 0.58f, 0.96f);
-
-        Button button = buttonObject.GetComponent<Button>();
-        button.targetGraphic = image;
-        ColorBlock colors = button.colors;
-        colors.normalColor = Color.white;
-        colors.highlightedColor = new Color(1f, 0.9f, 0.55f, 1f);
-        colors.pressedColor = new Color(0.72f, 0.78f, 0.9f, 1f);
-        colors.disabledColor = new Color(0.45f, 0.45f, 0.45f, 0.55f);
-        button.colors = colors;
-
-        var labelObject = new GameObject(
-            "Label",
-            typeof(RectTransform),
-            typeof(CanvasRenderer),
-            typeof(Text));
-        labelObject.transform.SetParent(buttonObject.transform, false);
-
-        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(16f, 8f);
-        labelRect.offsetMax = new Vector2(-16f, -8f);
-
-        Text label = labelObject.GetComponent<Text>();
-        label.text = "ACTIVE SKILL";
-        label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        label.fontSize = 26;
-        label.fontStyle = FontStyle.Bold;
-        label.alignment = TextAnchor.MiddleCenter;
-        label.color = Color.white;
-        label.raycastTarget = false;
-
-        buttonObject.AddComponent<ActiveSkillButtonController>();
-    }
-
     private void Awake()
     {
         skillButton = GetComponent<Button>();
         canvasGroup = GetComponent<CanvasGroup>();
-        skillLabel = GetComponentInChildren<Text>(true);
         skillButton.onClick.AddListener(HandleActiveSkillButtonClicked);
 
         ResolveDependencies();
@@ -233,7 +111,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         preferredCasterPieceId = pieceId;
         RefreshForCurrentTurn();
-        UpdateButtonLabel(currentCharacter);
     }
 
     public void ClearCasterPiece()
@@ -373,7 +250,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             EndCasterSelection(clearCaster: true, refresh: false);
         }
 
-        UpdateButtonLabel(currentCharacter);
         UpdateButtonCooldownState();
     }
 
@@ -391,7 +267,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         }
 
         currentCharacter = FindCasterCharacter(player);
-        UpdateButtonLabel(currentCharacter);
         SetButtonVisible(currentCharacter != null);
         UpdateButtonCooldownState();
     }
@@ -451,14 +326,11 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
         if (preferredCasterPieceId < 0 || currentCharacter == null)
         {
-            UpdateButtonLabel(currentCharacter);
             return;
         }
 
         if (UseCurrentActiveSkill())
             EndCasterSelection(clearCaster: true, refresh: true);
-        else
-            UpdateButtonLabel(currentCharacter);
     }
 
     private bool UseCurrentActiveSkill()
@@ -508,31 +380,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         skillButton.interactable = visible;
     }
 
-    private void UpdateButtonLabel(CharacterStatusBehaviour character)
-    {
-        if (skillLabel == null) return;
-
-        CharacterData data = character != null ? character.Data : null;
-        string activeName = data != null && !string.IsNullOrWhiteSpace(data.active_Name)
-            ? data.active_Name
-            : "ACTIVE SKILL";
-        int remainingCooldown = character != null
-            ? CharacterSkillRegistry.GetRemainingActiveCooldown(character.PlayerId, data)
-            : 0;
-
-        if (isSelectingCaster)
-        {
-            skillLabel.text = preferredCasterPieceId >= 0
-                ? $"{activeName}\n말 {preferredCasterPieceId + 1} 선택 - 다시 눌러 사용"
-                : $"{activeName}\n사용할 말을 선택하세요";
-            return;
-        }
-
-        skillLabel.text = remainingCooldown > 0
-            ? $"{activeName} ({remainingCooldown} TURN)"
-            : activeName;
-    }
-
     private void UpdateButtonCooldownState()
     {
         if (currentCharacter == null || skillButton == null || canvasGroup == null)
@@ -548,7 +395,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
                       currentSkillPoints >= requiredSkillPoints &&
                       currentCharacter.IsActiveUsableInCurrentPhase();
         canvasGroup.interactable = canUse;
-        canvasGroup.blocksRaycasts = canUse;
+        // 사용할 수 없는 상태에서도 Hover 상세 설명은 볼 수 있어야 합니다.
+        canvasGroup.blocksRaycasts = true;
         skillButton.interactable = canUse;
     }
 
@@ -582,7 +430,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         casterSelectionStartedFrame = Time.frameCount;
         SuspendNormalPieceClickHandling();
         ClearAllCasterHighlights();
-        UpdateButtonLabel(currentCharacter);
     }
 
     private void TrySelectCasterAtPointer()

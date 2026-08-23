@@ -32,10 +32,14 @@ public class CharacterData : ScriptableObject
     
     public Sprite char_Icon;
     [Header("# Skills")]
+    [Tooltip("인게임 UI에 표시할 패시브 스킬 이미지")]
+    public Sprite passive_Icon;
     public string passive_Name;
     [TextArea]
     public string passive_Desc;
     
+    [Tooltip("인게임 액티브 스킬 버튼에 표시할 이미지")]
+    public Sprite active_Icon;
     public string active_Name;
     [TextArea]
     public string active_Desc;

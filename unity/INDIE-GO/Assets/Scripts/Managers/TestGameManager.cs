@@ -146,7 +146,6 @@ namespace YutArena.Managers
             winConditionManager.Initialize(settings);
             turnManager.Initialize(settings);
             turnManager.StartFirstTurn();
-            ActiveSkillButtonController.EnsureInGameActiveSkillButton();
 
             // ===================================================================
             // Escape 승리조건 2번용 실시간 제한시간 타이머
