@@ -29,8 +29,8 @@ namespace YutArena.InGame
         public MapType mapType;
         [Tooltip("움직이지 않는 맵 배경 프리팹입니다.")]
         public GameObject backgroundPrefab;
-        [Tooltip("기존 전체 보드 외형 프리팹입니다. 타일별 프리팹을 지정하지 않은 기존 맵과의 호환을 위해 유지합니다.")]
-        public GameObject boardPrefab;
+        // [Tooltip("기존 전체 보드 외형 프리팹입니다. 타일별 프리팹을 지정하지 않은 기존 맵과의 호환을 위해 유지합니다.")]
+        // public GameObject boardPrefab;
 
         [Header("Tile Visual Prefabs")]
         [Tooltip("Start/Goal 타일의 화면용 프리팹입니다. 비어 있으면 논리 Anchor만 생성됩니다.")]
@@ -57,6 +57,6 @@ namespace YutArena.InGame
             corner04TilePrefab != null ||
             centerTilePrefab != null;
 
-        public bool HasBoardVisual => boardPrefab != null || HasTileVisualPrefab;
+        //public bool HasBoardVisual => boardPrefab != null || HasTileVisualPrefab;
     }
 }

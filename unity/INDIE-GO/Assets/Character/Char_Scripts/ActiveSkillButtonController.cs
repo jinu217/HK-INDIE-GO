@@ -438,12 +438,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         if (mainCamera == null) return;
 
         Vector2 screenPosition = Mouse.current.position.ReadValue();
-        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
-        Collider2D hit = Physics2D.OverlapPoint(worldPosition);
-        DebugPieceView view = hit != null
-            ? hit.GetComponentInParent<DebugPieceView>()
-            : null;
-        if (view == null || view.PlayerId != currentPlayerId)
+        if (!DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view) ||
+            view.PlayerId != currentPlayerId)
             return;
         if (playerManager == null ||
             !playerManager.TryGetPlayer(currentPlayerId, out PlayerController player) ||

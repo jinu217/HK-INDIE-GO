@@ -33,6 +33,7 @@ namespace YutArena.InGame
             new Vector3(5.7f, -3.6f), new Vector3(5.7f, 3.6f),
             new Vector3(-5.7f, 3.6f), new Vector3(-5.7f, -3.6f)
         };
+        private static readonly Vector3 BoardPiecePositionAdjustment = new Vector3(0f, 0.098f, -0.15f);
 
         [Header("Piece Home Position Anchors")]
         [Tooltip("Player 1~4 말의 초기 대기 위치입니다. 빈 오브젝트를 씬에서 원하는 위치로 옮긴 뒤 순서대로 연결하세요.")]
@@ -70,6 +71,7 @@ namespace YutArena.InGame
         private PlayerManager playerManager;
         private TestTurnManager turnManager;
         private MapManager mapManager;
+        private FixedFootholdCatalog footholdCatalog;
 
         private void Start() => StartCoroutine(InitializeAfterGameStarts());
 
@@ -79,11 +81,14 @@ namespace YutArena.InGame
             playerManager = FindFirstObjectByType<PlayerManager>();
             turnManager = FindFirstObjectByType<TestTurnManager>();
             mapManager = FindFirstObjectByType<MapManager>();
+            footholdCatalog = Resources.Load<FixedFootholdCatalog>(FixedFootholdCatalog.ResourcePath);
             if (playerManager == null || turnManager == null)
             {
                 Debug.LogError("InGamePieceDebugController requires PlayerManager and TestTurnManager.", this);
                 yield break;
             }
+            if (footholdCatalog == null)
+                Debug.LogError("FixedFootholdCatalog resource is missing. The existing 2D foothold will be used.", this);
 
             // 실제 보드 프리팹이 없을 때만 공통 Anchor 위에 원형 디버그 마커를 표시한다.
             if (mapManager == null || !mapManager.IsMapLoaded)
@@ -101,12 +106,30 @@ namespace YutArena.InGame
                 DebugPieceView view = pieceObject.GetComponent<DebugPieceView>();
                 if (view == null)
                     view = pieceObject.AddComponent<DebugPieceView>();
-                view.Configure(player.PlayerId, piece.PieceId, GetPlayerColor(player.PlayerId));
+                AttachFixedFoothold(view, pieceObject.transform, player.PlayerId);
+                view.Configure(player.PlayerId, piece.PieceId);
                 view.SetBaseScaleMultiplier(pieceScaleMultiplier);
                 pieceViews.Add(view);
             }
 
             turnManager.OnPendingResultsChanged += HandlePendingResultsChanged;
+        }
+
+        private void AttachFixedFoothold(DebugPieceView view, Transform pieceTransform, int playerId)
+        {
+            GameObject footholdPrefab = footholdCatalog != null
+                ? footholdCatalog.GetForPlayer(playerId)
+                : null;
+            if (footholdPrefab == null)
+                return;
+
+            GameObject foothold = Instantiate(footholdPrefab, pieceTransform);
+            foothold.name = $"P{playerId}_{footholdPrefab.name}";
+            foothold.transform.SetLocalPositionAndRotation(
+                new Vector3(0.05f, 0.07f, -0.07f),
+                Quaternion.Euler(90f, 0f, 0f));
+            foothold.transform.localScale = Vector3.one;
+            view.AttachFoothold(foothold);
         }
 
         private void Update()
@@ -136,13 +159,12 @@ namespace YutArena.InGame
 
         private void TrySelectPieceAtPointer()
         {
-            if (Camera.main == null) return;
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null) return;
 
             Vector2 screenPosition = Mouse.current.position.ReadValue();
-            Vector3 worldPosition = Camera.main.ScreenToWorldPoint(screenPosition);
-            Collider2D hit = Physics2D.OverlapPoint(worldPosition);
-            DebugPieceView view = hit != null ? hit.GetComponent<DebugPieceView>() : null;
-            if (view != null) HandlePieceClicked(view);
+            if (DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view))
+                HandlePieceClicked(view);
         }
 
         private void HandlePendingResultsChanged(List<YutThrowData> results)
@@ -199,10 +221,11 @@ namespace YutArena.InGame
                 if (!playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
                     !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece)) continue;
                 view.transform.position = GetDisplayPosition(piece, view.PlayerId, view.PieceId);
+                if (TryGetHomeAnchor(view.PlayerId, out Transform homeAnchor))
+                    view.transform.rotation = homeAnchor.rotation;
                 bool canSelect = turnManager.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
                                  view.PlayerId == (int)turnManager.CurrentTurn.currentPlayer;
                 view.SetSelected(canSelect);
-                view.RefreshColor(canSelect);
             }
         }
 
@@ -211,16 +234,27 @@ namespace YutArena.InGame
             if (piece.State == PieceState.Waiting) return GetHomePosition(playerId, pieceId);
             if (piece.State == PieceState.Goal) return new Vector3((playerId - 2.5f) * 1.2f, -4.7f) + GetOffset(pieceId);
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
+            // Permanent: apply one shared 3D height/depth adjustment to every board piece.
             if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
-                return mapTilePosition + GetOffset(pieceId);
+                return mapTilePosition + BoardPiecePositionAdjustment;
 
             if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugTileAnchor))
-                return debugTileAnchor.position + GetOffset(pieceId);
+                return debugTileAnchor.position + BoardPiecePositionAdjustment;
 
-            return boardPositions[tile] + GetOffset(pieceId);
+            return boardPositions[tile] + BoardPiecePositionAdjustment;
         }
 
         private Vector3 GetHomePosition(int playerId, int pieceId)
+        {
+            int playerIndex = playerId - 1;
+            if (TryGetHomeAnchor(playerId, out Transform homeAnchor))
+                return homeAnchor.TransformPoint(GetHomePieceOffset(playerId, pieceId));
+
+            // Anchor를 아직 연결하지 않은 기존 씬도 이전 대기 위치를 유지합니다.
+            return DefaultHomePositions[playerIndex] + GetHomePieceOffset(playerId, pieceId);
+        }
+
+        private bool TryGetHomeAnchor(int playerId, out Transform homeAnchor)
         {
             int playerIndex = playerId - 1;
             if (playerHomeAnchors != null &&
@@ -228,11 +262,12 @@ namespace YutArena.InGame
                 playerIndex < playerHomeAnchors.Length &&
                 playerHomeAnchors[playerIndex] != null)
             {
-                return playerHomeAnchors[playerIndex].position + GetHomePieceOffset(playerId, pieceId);
+                homeAnchor = playerHomeAnchors[playerIndex];
+                return true;
             }
 
-            // Anchor를 아직 연결하지 않은 기존 씬도 이전 대기 위치를 유지합니다.
-            return DefaultHomePositions[playerIndex] + GetHomePieceOffset(playerId, pieceId);
+            homeAnchor = null;
+            return false;
         }
 
         private Vector3 GetHomePieceOffset(int playerId, int pieceId)
@@ -288,12 +323,6 @@ namespace YutArena.InGame
             { BoardTileId.Outer13, new Vector3(-2.4f, -4) }, { BoardTileId.Outer14, new Vector3(-.8f, -4) }, { BoardTileId.Outer15, new Vector3(.8f, -4) }, { BoardTileId.Outer16, new Vector3(2.4f, -4) },
             { BoardTileId.Inner01, new Vector3(2.65f, 2.65f) }, { BoardTileId.Inner02, new Vector3(1.3f, 1.3f) }, { BoardTileId.Center, Vector3.zero }, { BoardTileId.Inner03, new Vector3(-1.3f, -1.3f) }, { BoardTileId.Inner04, new Vector3(-2.65f, -2.65f) },
             { BoardTileId.Inner05, new Vector3(-2.65f, 2.65f) }, { BoardTileId.Inner06, new Vector3(-1.3f, 1.3f) }, { BoardTileId.Inner07, new Vector3(1.3f, -1.3f) }, { BoardTileId.Inner08, new Vector3(2.65f, -2.65f) }
-        };
-
-        private static Color GetPlayerColor(int playerId) => playerId switch
-        {
-            1 => new Color(.92f, .18f, .18f), 2 => new Color(1f, .52f, .08f),
-            3 => new Color(.95f, .85f, .08f), 4 => new Color(.16f, .7f, .3f), _ => Color.white
         };
 
         private static Sprite CreateCircleSprite()

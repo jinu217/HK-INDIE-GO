@@ -335,6 +335,10 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         }
 
         spawnedVisualModel = Instantiate(characterData.visualModelPrefab, transform);
-        spawnedVisualModel.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+        spawnedVisualModel.transform.SetLocalPositionAndRotation(
+            Vector3.zero,
+            Quaternion.Euler(40f, 180f, 0f));
+        spawnedVisualModel.transform.localScale = Vector3.one * 2f;
+        DebugPieceView.EnsureSelectionCollider(spawnedVisualModel);
     }
 }

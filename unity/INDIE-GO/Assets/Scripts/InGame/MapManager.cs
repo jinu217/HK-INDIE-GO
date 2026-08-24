@@ -61,14 +61,15 @@ namespace YutArena.InGame
             CurrentMap = definition;
             CacheSpecialTileSettings(definition);
 
-            if (definition.boardPrefab != null)
+            /*if (definition.boardPrefab != null)
             {
                 loadedBoardInstance = boardRoot != null
                     ? Instantiate(definition.boardPrefab, boardRoot)
                     : Instantiate(definition.boardPrefab);
                 loadedBoardInstance.name = definition.boardPrefab.name;
                 loadedBoardInstance.transform.localPosition = Vector3.zero;
-            }
+            }*/ 
+            //(제거요망)
 
             CreateTileVisuals(definition);
 
@@ -111,7 +112,7 @@ namespace YutArena.InGame
                 foreach (MapDefinition definition in mapDefinitions)
                 {
                     if (definition != null && definition.mapType != MapType.Random &&
-                        (definition.backgroundPrefab != null || definition.HasBoardVisual))
+                        (definition.backgroundPrefab != null /*|| definition.HasBoardVisual*/))
                         candidates.Add(definition);
                 }
 
