@@ -30,4 +30,4 @@ MonoBehaviour:
   passive_Status: 5
   active_Status: 9
   piecePrefab: {fileID: 6495641510054543857, guid: 66f0b738eb68c0248b0a85f06c5768ac, type: 3}
-  visualModelPrefab: {fileID: 6495641510054543857, guid: 66f0b738eb68c0248b0a85f06c5768ac, type: 3}
+  visualModelPrefab: {fileID: 919132149155446097, guid: ae588e0f12cdac7429328e07fe4f3e2f, type: 3}
