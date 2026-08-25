@@ -149,12 +149,17 @@ namespace YutArena.InGame
             if (turnManager != null) turnManager.OnPendingResultsChanged -= HandlePendingResultsChanged;
         }
 
+        // [수정] 즉시 이동하지 않고, 결과선택 UI한테 "이 말이 선택됐다"고 알려주기만 함
+        [SerializeField] private YutArena.UI.YutResultSelectorUI resultSelectorUI; // Inspector에서 연결 필요
+
         private void HandlePieceClicked(DebugPieceView view)
         {
             if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction ||
                 view.PlayerId != (int)turnManager.CurrentTurn.currentPlayer || pendingResults.Count == 0) return;
 
-            turnManager.RequestMovePiece(view.PieceId, pendingResults[0].result);
+            if (resultSelectorUI != null)
+                resultSelectorUI.SetSelectedPieceId(view.PieceId);
+            Debug.Log("[말선택] pieceId=" + view.PieceId + " 선택됨, 이제 결과 버튼을 눌러 이동하세요");
         }
 
         private void TrySelectPieceAtPointer()
