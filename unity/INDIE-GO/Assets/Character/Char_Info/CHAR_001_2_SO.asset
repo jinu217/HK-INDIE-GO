@@ -16,10 +16,11 @@ MonoBehaviour:
   char_Name: "\uC720\uAC00\uB78C"
   char_Desc: "\uAE30\uBCF8\uD615 \uCF00\uB9AD\uD130 \uC720\uAC00\uB78C\uC774\uB2E4."
   char_Icon: {fileID: 21300000, guid: 5a459c7a55a81b94f9fa027919829565, type: 3}
-  passive_Icon: {fileID: 21300000, guid: 6eb60d562f0d23544bc9bf29780b01fa, type: 3}
-  passive_Name: 
-  passive_Desc: 
-  active_Icon: {fileID: 21300000, guid: 4c47d7645599c514fb6a7562bffc1ad7, type: 3}
+  passive_Icon: {fileID: 21300000, guid: 5a459c7a55a81b94f9fa027919829565, type: 3}
+  passive_Name: "\uBD84\uC704\uAE30 \uD0C0\uAE30"
+  passive_Desc: "\uC7A1\uAE30 \uC131\uACF5 \uD639\uC740 \uC790\uC2E0\uC758 \uB9D0\uC5D0
+    \uC5C5\uD790\uC2DC SP 1\uAC1C \uD68D\uB4DD"
+  active_Icon: {fileID: 21300000, guid: 5a459c7a55a81b94f9fa027919829565, type: 3}
   active_Name: "\uD55C\uBC88 \uB354"
   active_Desc: "3\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5, \uC737\uC744 \uB358\uC9C4
     \uD6C4 \uD55C \uBC88 \uB354 \uB358\uC9C8 \uAE30\uD68C \uBD80\uC5EC (\uCD94\uAC00
@@ -27,7 +28,7 @@ MonoBehaviour:
   active_CooldownTurns: 3
   active_SkillPointCost: 0
   passive_CooldownTurns: 0
-  passive_Status: 0
+  passive_Status: 1
   active_Status: 0
   piecePrefab: {fileID: 7582462517120778866, guid: 423b66fab11796146a67ba855bd8fa10, type: 3}
   visualModelPrefab: {fileID: 919132149155446097, guid: 2f7d76c94a8f72542a5406c0c81979bb, type: 3}

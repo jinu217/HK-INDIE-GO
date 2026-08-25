@@ -158,7 +158,20 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 ok = skill.ModifyMoveCount(new CharacterMoveRequest(1, 0, 2, true)) == 3;
                 break;
             case "CHAR_001_2":
-                ok = skill.PassiveStatus == CharacterSkillStatus.None;
+                int garamPointsBefore = CharacterSkillRegistry.GetSkillPoints(1);
+                skill.OnCaptureCompleted(new CharacterCaptureRequest(
+                    1, 0, 2, 0, 1, true));
+                int garamStackId = p1.RuntimeData.CreateStackGroupId();
+                caster.SetStackGroup(garamStackId, ally.PieceId);
+                ally.SetStackGroup(garamStackId, ally.PieceId);
+                skill.OnMoveCompleted(new CharacterMoveRecord(
+                    1, 0, BoardTileId.Outer02, BoardTileId.Outer03,
+                    new[] { BoardTileId.Outer03 }));
+                skill.OnMoveCompleted(new CharacterMoveRecord(
+                    1, 0, BoardTileId.Outer02, BoardTileId.Outer03,
+                    new[] { BoardTileId.Outer03 }));
+                ok = skill.PassiveStatus == CharacterSkillStatus.Get_point &&
+                     CharacterSkillRegistry.GetSkillPoints(1) == garamPointsBefore + 2;
                 break;
             case "CHAR_002":
                 skill.OnPieceEnteredBoard();
