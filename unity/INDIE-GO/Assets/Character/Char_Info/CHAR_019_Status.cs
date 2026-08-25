@@ -8,6 +8,12 @@ public sealed class CHAR_019_Status : CharacterStatusBehaviour
         new Dictionary<int, int>();
     private static readonly HashSet<int> ActiveRulePlayers = new HashSet<int>();
 
+    public override bool CanSelectAsActiveCaster(
+        PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        return piece != null && piece.State != PieceState.Goal;
+    }
+
     [UnityEngine.RuntimeInitializeOnLoadMethod(
         UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()

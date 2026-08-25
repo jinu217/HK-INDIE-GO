@@ -5,6 +5,8 @@ using YutArena.InGame;
 
 public sealed class CHAR_008_Status : CharacterStatusBehaviour
 {
+    public override bool RequiresTargetPieceSelection => true;
+
     private static readonly Dictionary<int, IReadOnlyList<BoardTileId>> PendingLastPaths =
         new Dictionary<int, IReadOnlyList<BoardTileId>>();
     private static readonly Dictionary<int, IReadOnlyList<BoardTileId>> ActiveWindPaths =

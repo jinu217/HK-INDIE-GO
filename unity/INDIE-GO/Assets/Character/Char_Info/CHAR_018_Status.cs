@@ -4,6 +4,8 @@ using YutArena.InGame;
 
 public sealed class CHAR_018_Status : CharacterStatusBehaviour
 {
+    public override bool RequiresTargetPieceSelection => true;
+
     private int markedPlayerId = -1;
     private int markedPieceId = -1;
 

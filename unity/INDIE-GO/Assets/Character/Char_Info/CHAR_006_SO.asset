@@ -24,7 +24,7 @@ MonoBehaviour:
   active_Name: "\uC18C\uB4DC \uC624\uB7EC"
   active_Desc: "\uC0AC\uC6A9 \uC2DC \uC790\uC2E0 \uCE78\uACFC \uC55E \uD55C \uCE78\uC758
     \uC801 \uC7A1\uAE30 \uAC00\uB2A5"
-  active_CooldownTurns: 3
+  active_CooldownTurns: 5
   active_SkillPointCost: 0
   passive_CooldownTurns: 0
   passive_Status: 5

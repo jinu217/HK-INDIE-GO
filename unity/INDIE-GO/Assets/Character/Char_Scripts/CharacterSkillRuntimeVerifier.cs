@@ -15,7 +15,7 @@ using YutArena.Managers.GameProgress;
 /// <summary>
 /// Editor-only integration verifier for the character prefabs. It is completely
 /// inert unless the temp-file flag is present, so normal play and builds are not
-/// affected. The verifier intentionally lives under Scripts/Player because it
+/// affected. The verifier intentionally lives under Assets/Character because it
 /// validates only character-owned assets while exercising the public in-game API.
 /// </summary>
 [DefaultExecutionOrder(32000)]
@@ -23,7 +23,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
 {
     private const string FlagFileName = "indiego-character-runtime-verifier.flag";
     private const string ReportFileName = "indiego-character-runtime-verifier.log";
-    private const string PrefabRoot = "Assets/Scripts/Player/";
+    private const string PrefabRoot = "Assets/Character/Char_Prefabs/";
 
     private static readonly string[] CharacterIds =
     {
