@@ -16,11 +16,11 @@ MonoBehaviour:
   char_Name: "\uD64D\uAE38\uB3D9"
   char_Desc: "\uD64D\uAE38\uB3D9"
   char_Icon: {fileID: 21300000, guid: 6eb60d562f0d23544bc9bf29780b01fa, type: 3}
-  passive_Icon: {fileID: 21300000, guid: 6eb60d562f0d23544bc9bf29780b01fa, type: 3}
+  passive_Icon: {fileID: -6568617476166714493, guid: 970b7dd8690d41840964069e1d533eeb, type: 3}
   passive_Name: "\uC758\uC801\uC758 \uAE30\uAC1C"
   passive_Desc: "\uC7A1\uD790 \uC2DC, \uC801\uC758 \uB9D0\uC758 \uC22B\uC790\uB9CC\uD07C\uB9CC
     \uB9AC\uD0C0\uC774\uC5B4"
-  active_Icon: {fileID: 21300000, guid: 6eb60d562f0d23544bc9bf29780b01fa, type: 3}
+  active_Icon: {fileID: -4737323601079526532, guid: a86120c59dc969f4f9d6d5a12e2368e3, type: 3}
   active_Name: "\uBD84\uC2E0\uC220"
   active_Desc: "5\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5. \uC790\uC2E0\uC758
     \uB9D0\uC5D0 \uBD84\uC2E0\uC744 \uC5C5\uC74C. \uBD84\uC2E0\uC744 \uC7A1\uC740

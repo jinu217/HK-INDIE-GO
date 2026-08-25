@@ -15,12 +15,12 @@ MonoBehaviour:
   char_ID: 6
   char_Name: "\uD310\uD0C0\uC9C0 \uC6A9\uC0AC"
   char_Desc: 
-  char_Icon: {fileID: 0}
-  passive_Icon: {fileID: 0}
+  char_Icon: {fileID: 3091963200351999620, guid: 1ad66b0e8d22b3f4eb63795862eed639, type: 3}
+  passive_Icon: {fileID: 8003761533782688909, guid: 245e3f0e01c7638448794fef04863973, type: 3}
   passive_Name: "\uAD73\uAC74\uD55C \uC790"
   passive_Desc: "25%\uC758 \uD655\uB960\uB85C \uC801\uC758 \uC7A1\uAE30\uB098 \uB9AC\uD0C0\uC774\uC5B4\uB97C
     \uBC29\uC5B4\uD55C\uB2E4."
-  active_Icon: {fileID: 0}
+  active_Icon: {fileID: -5761267159009415856, guid: 3976893ea82f29a44830ac96941f0048, type: 3}
   active_Name: "\uC18C\uB4DC \uC624\uB7EC"
   active_Desc: "\uC0AC\uC6A9 \uC2DC \uC790\uC2E0 \uCE78\uACFC \uC55E \uD55C \uCE78\uC758
     \uC801 \uC7A1\uAE30 \uAC00\uB2A5"
