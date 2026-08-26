@@ -506,11 +506,18 @@ namespace YutArena.Managers
         // 다음 사람 차례로 넘김
         private void AdvanceToNextPlayer()
         {
-            // 순서 끝까지 가면 다시 처음 사람으로 돌아감 (4명이면 3 다음은 다시 0)
             TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
-            if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++; // 처음으로 돌아왔다 = 한 바퀴 다 돔 -> 라운드 +1
+            if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++;
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
-            BeginTurnFor(TurnOrder.Current);  // 다음 사람 턴 시작
+
+            if (settings != null && settings.maxTurnCount > 0 && CurrentTurn.turnNumber >= settings.maxTurnCount)
+            {
+                Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
+                winConditionManager.HandleTimeLimitReached();
+                if (CurrentTurn.isGameEnded) return; // 턴제한 함수
+            }
+
+            BeginTurnFor(TurnOrder.Current);
         }
         // WinConditionManager가 승리 조건을 확인했을 때 호출해서 부탁하는 함수
         // (CurrentTurn은 이 클래스만 바꿀 수 있어서, 다른 클래스는 직접 못 바꾸고 이 함수로 부탁함)

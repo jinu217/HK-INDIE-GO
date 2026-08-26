@@ -4430,6 +4430,8 @@ GameObject:
   - component: {fileID: 1332604205}
   - component: {fileID: 1332604204}
   - component: {fileID: 1332604211}
+  - component: {fileID: 1332604213}
+  - component: {fileID: 1332604212}
   m_Layer: 0
   m_Name: TurnManager
   m_TagString: Untagged
@@ -4494,7 +4496,9 @@ MonoBehaviour:
   yutRuleManager: {fileID: 1332604206}
   playerManager: {fileID: 41707850}
   pieceMovementManager: {fileID: 1332604211}
-  modeRuleSources: []
+  modeRuleSources:
+  - {fileID: 1332604213}
+  - {fileID: 1332604212}
 --- !u!114 &1332604208
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4557,6 +4561,30 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PieceMovementManager
   playerManager: {fileID: 41707850}
+--- !u!114 &1332604212
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1332604203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b55395614fef72c498d22712fd3618c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.Managers.EscapeModeRule
+--- !u!114 &1332604213
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1332604203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b450465c45bed1b46a25748d49c14817, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.Managers.ClassicModeRule
 --- !u!1 &1342853729
 GameObject:
   m_ObjectHideFlags: 0

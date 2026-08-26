@@ -20,7 +20,7 @@ public class TestRunner : MonoBehaviour
             {
                 gameMode = GameMode.Escape,
                 mapType = MapType.Basic,
-                matchComposition = MatchComposition.TwoVsTwo,
+                matchComposition = MatchComposition.OneVsOneVsOneVsOne,
                 isTeamMode = true,
                 playerTeams = new[] { 1, 1, 2, 2 },
                 playerCount = 4,

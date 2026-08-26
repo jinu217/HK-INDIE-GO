@@ -140,6 +140,8 @@ namespace YutArena.Managers
                 winningPlayer = FindSoloWinningPlayer(winningTeam), // winningTeam 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
                 finalRanking = finalRanking
             };
+            Debug.Log("[승리확정] winningTeam=" + winningTeam + " / winningPlayer=" + result.winningPlayer +
+                " / settings.matchComposition=" + settings.matchComposition + " / settings.playerCount=" + settings.playerCount); // 확인용 로그
             gameManager.EndGame(result);
         }
         // ===================================================================
