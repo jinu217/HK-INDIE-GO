@@ -12,8 +12,8 @@ namespace YutArena.UI
     /// </summary>
     public sealed class InGameUIManager : MonoBehaviour
     {
-        private const string GameTimePrefix = "GAME TIME LEFT ";
-        private const string TurnTimePrefix = "TURN TIME LEFT ";
+        private const string GameTimePrefix = "GAME TIME \n";
+        private const string TurnTimePrefix = "TURN TIME \n";
         private const string TurnCountPrefix = "TURN ";
         private const string UnlimitedText = "UNLIMITED";
 
