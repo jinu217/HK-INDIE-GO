@@ -139,7 +139,10 @@ namespace YutArena.InGame
                 turnManager.CurrentTurn.currentPhase == TurnPhase.WaitThrow)
                 turnManager.RequestThrow();
 
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            // 이동 선택(WaitAction) 중에는 MoveDestinationSelector 가 클릭을 소유한다.
+            // 그 외 단계에서는 종전과 동일하게 이 컨트롤러가 말 클릭을 처리한다.
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+                turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction)
                 TrySelectPieceAtPointer();
             RefreshPiecePositions();
         }
@@ -149,17 +152,14 @@ namespace YutArena.InGame
             if (turnManager != null) turnManager.OnPendingResultsChanged -= HandlePendingResultsChanged;
         }
 
-        // [수정] 즉시 이동하지 않고, 결과선택 UI한테 "이 말이 선택됐다"고 알려주기만 함
-        [SerializeField] private YutArena.UI.YutResultSelectorUI resultSelectorUI; // Inspector에서 연결 필요
-
+        // [수정] WaitAction 단계의 말 클릭 → 목적지 선택은 MoveDestinationSelector 가 담당한다.
+        // 이 핸들러는 WaitAction 이 아닌 단계에서만 도달하며(Update 의 단계 가드), 현재는 no-op 이다.
         private void HandlePieceClicked(DebugPieceView view)
         {
             if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction ||
                 view.PlayerId != (int)turnManager.CurrentTurn.currentPlayer || pendingResults.Count == 0) return;
 
-            if (resultSelectorUI != null)
-                resultSelectorUI.SetSelectedPieceId(view.PieceId);
-            Debug.Log("[말선택] pieceId=" + view.PieceId + " 선택됨, 이제 결과 버튼을 눌러 이동하세요");
+            // 이동 선택 흐름은 MoveDestinationSelector 로 이관됨.
         }
 
         private void TrySelectPieceAtPointer()
@@ -232,6 +232,63 @@ namespace YutArena.InGame
                                  view.PlayerId == (int)turnManager.CurrentTurn.currentPlayer;
                 view.SetSelected(canSelect);
             }
+        }
+
+        /// <summary>
+        /// 하이라이트 마커 배치용: BoardTileId 의 월드 좌표를 반환합니다.
+        /// MapManager(실제 맵) → 디버그 원형 보드 앵커 → 좌표 캐시 순으로 조회하며,
+        /// 보드 위 말과 같은 높이/깊이 보정(BoardPiecePositionAdjustment)을 적용합니다.
+        /// </summary>
+        public bool TryGetTileWorldPosition(BoardTileId tile, out Vector3 position)
+        {
+            if (tile != BoardTileId.None && tile != BoardTileId.Goal)
+            {
+                if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
+                {
+                    position = mapTilePosition + BoardPiecePositionAdjustment;
+                    return true;
+                }
+
+                if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugTileAnchor))
+                {
+                    position = debugTileAnchor.position + BoardPiecePositionAdjustment;
+                    return true;
+                }
+
+                if (boardPositions.TryGetValue(tile, out Vector3 cachedPosition))
+                {
+                    position = cachedPosition + BoardPiecePositionAdjustment;
+                    return true;
+                }
+            }
+
+            position = Vector3.zero;
+            return false;
+        }
+
+        /// <summary>
+        /// 칸 윤곽선용: BoardTileId 에 해당하는 타일 "칸" Transform 을 반환합니다.
+        /// 윤곽선을 이 자식으로 붙이면 칸의 위치/기울기(보드 평면)를 그대로 물려받는다.
+        /// 실제 맵: 논리 Anchor(칸 원점, 보드 기울기) / 디버그 보드: 원형 마커.
+        /// </summary>
+        public bool TryGetTileTransform(BoardTileId tile, out Transform tileTransform)
+        {
+            tileTransform = null;
+            if (tile == BoardTileId.None || tile == BoardTileId.Goal) return false;
+
+            if (mapManager != null && mapManager.TryGetTileAnchor(tile, out Transform anchor) && anchor != null)
+            {
+                tileTransform = anchor;   // 칸 원점 + 보드 평면 기울기. 스케일 ≈ 1.
+                return true;
+            }
+
+            if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugAnchor) && debugAnchor != null)
+            {
+                tileTransform = debugAnchor;
+                return true;
+            }
+
+            return false;
         }
 
         private Vector3 GetDisplayPosition(PlayerRuntimeData.PieceRuntimeData piece, int playerId, int pieceId)

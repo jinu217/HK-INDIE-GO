@@ -1,7 +1,7 @@
 using System.Collections.Generic;
+using System.Text;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using YutArena.Common;
 using YutArena.Managers;
 using YutArena.Managers.GameProgress;
@@ -9,138 +9,103 @@ using YutArena.Managers.GameProgress;
 namespace YutArena.UI
 {
     // ===================================================================
-    // 윷 결과 선택 UI (동적 생성 방식)
+    // 윷 결과 표시 UI (표시 전용)
     //
-    // 던진 결과 개수만큼 버튼을 그때그때 새로 만들었다가, 결과가 바뀌면 전부 지우고
-    // 다시 만드는 방식. 말/윷 결과 중 어느 것을 먼저 선택해도, 둘 다 선택되면 자동으로 이동됨.
+    // [변경] 예전에는 결과를 클릭 가능한 버튼으로 생성했지만, 기획 의도에 맞춰
+    // "아직 사용하지 않은 윷 결과를 보여주기만 하는 칸"으로 바꿨다.
+    // 실제 이동 선택(말 클릭 → 목적지 타일 클릭)은 MoveDestinationSelector 가 담당한다.
     //
     // 사용법:
-    // 1. 빈 오브젝트(예: YutResultPanel)에 이 스크립트를 붙임
-    // 2. Horizontal Layout Group + Content Size Fitter는 되도록 쓰지 말고,
-    //    Panel 크기를 고정값으로 직접 지정해서 사용할 것 (레이아웃 자동계산이 계속 꼬였던 이력 있음)
-    // 3. Inspector에서:
-    //    - turnManager: 씬의 TestTurnManager 연결
-    //    - buttonPrefab: 결과 하나당 버튼 하나, 이 프리팹을 복제해서 씀
+    // 1. 패널 오브젝트에 이 스크립트를 붙이고 Inspector 에서 turnManager 연결
+    // 2. 라벨(TextMeshProUGUI)은 없으면 Awake 에서 자동 생성됨 (프리팹 불필요)
     // ===================================================================
     public class YutResultSelectorUI : MonoBehaviour
     {
         [Header("Dependencies")]
         [SerializeField] private TestTurnManager turnManager;
-        [SerializeField] private Button buttonPrefab; // 결과 하나당 버튼 하나, 이 프리팹을 복제해서 씀
 
-        [Header("현재 선택 상태")]
-        [SerializeField] private int selectedPieceId = -1; // -1: 아직 말을 선택 안 한 상태
-        private YutResult? selectedResult = null; // 아직 윷 결과를 선택 안 하면 null
-
-        // 지금 화면에 떠있는 버튼들을 기억해뒀다가, 다음에 결과가 바뀌면 싹 지우고 새로 만들기 위함
-        private readonly List<Button> spawnedButtons = new List<Button>();
+        [Header("표시")]
+        [Tooltip("비우면 Awake 에서 자식으로 자동 생성합니다.")]
+        [SerializeField] private TextMeshProUGUI resultLabel;
+        [SerializeField] private string emptyText = "";
 
         private void Awake()
         {
-            ResetSelection(); // 시작할 때 선택 상태 확실히 초기화 (인스펙터에 저장된 이전 값 무시)
+            EnsureLabel();
+            SetText(string.Empty);
         }
 
         private void OnEnable()
         {
-            ResetSelection();
+            EnsureLabel();
+            SetText(string.Empty);
+
             if (turnManager == null)
             {
                 Debug.LogError("YutResultSelectorUI: turnManager가 연결 안 됨");
                 return;
             }
-            // 결과 묶음이 바뀔 때마다(던졌을 때, 이동해서 하나 소비했을 때 등) 버튼 다시 그리기
-            turnManager.OnPendingResultsChanged += RefreshButtons;
+
+            turnManager.OnPendingResultsChanged += RefreshDisplay;
+            turnManager.OnTurnStarted += HandleTurnStarted;
         }
 
         private void OnDisable()
         {
-            if (turnManager != null)
-                turnManager.OnPendingResultsChanged -= RefreshButtons;
+            if (turnManager == null) return;
+            turnManager.OnPendingResultsChanged -= RefreshDisplay;
+            turnManager.OnTurnStarted -= HandleTurnStarted;
         }
 
-        // pendingResults가 바뀔 때마다 호출됨: 기존 버튼 다 지우고, 지금 결과 개수만큼 새로 만듦
-        private void RefreshButtons(List<YutThrowData> pendingResults)
-        {
-            ClearButtons();
+        // 턴이 시작되면 pendingResults 는 비워지지만 이벤트가 오지 않으므로 여기서 라벨을 비운다.
+        private void HandleTurnStarted(PlayerSlot _) => SetText(string.Empty);
 
-            foreach (var throwData in pendingResults)
+        // pendingResults 가 바뀔 때마다(던짐/소비) 아직 안 쓴 결과 목록을 갱신 표시.
+        private void RefreshDisplay(List<YutThrowData> pendingResults)
+        {
+            if (pendingResults == null || pendingResults.Count == 0)
             {
-                Button newButton = Instantiate(buttonPrefab, transform);
-                newButton.gameObject.SetActive(true);
-
-                // 복제되면서 혹시 이상한 값이 섞여 들어오지 않게 위치/크기 초기화
-                RectTransform rt = newButton.GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    rt.localScale = Vector3.one;
-                    rt.localPosition = Vector3.zero;
-                }
-
-                // 버튼에 결과 이름 표시 (Text 또는 TextMeshProUGUI 둘 다 지원)
-                var tmpText = newButton.GetComponentInChildren<TextMeshProUGUI>();
-                if (tmpText != null) tmpText.text = GetDisplayName(throwData.result);
-
-                var legacyText = newButton.GetComponentInChildren<Text>();
-                if (legacyText != null) legacyText.text = GetDisplayName(throwData.result);
-
-                // 클로저 문제 방지: foreach 변수를 지역변수에 복사해서 캡처
-                YutResult capturedResult = throwData.result;
-                newButton.onClick.RemoveAllListeners();
-                newButton.onClick.AddListener(() => OnResultButtonClicked(capturedResult));
-
-                spawnedButtons.Add(newButton);
+                SetText(string.Empty);
+                return;
             }
-        }
 
-        // 윷 결과 버튼 클릭 시
-        private void OnResultButtonClicked(YutResult chosenResult)
-        {
-            selectedResult = chosenResult;
-            Debug.Log("[윷 결과 선택됨] " + chosenResult);
-            TryExecuteMove();
-        }
-
-        // 보드에서 말 클릭 시 호출되는 함수 (InGamePieceDebugController에서 호출)
-        public void SetSelectedPieceId(int pieceId)
-        {
-            selectedPieceId = pieceId;
-            Debug.Log("[말 선택됨] Piece ID: " + selectedPieceId);
-            TryExecuteMove();
-        }
-
-        // 말과 윷 결과가 둘 다 선택되었는지 확인하고 이동 실행 (순서 상관없이 둘 다 채워지면 실행됨)
-        private void TryExecuteMove()
-        {
-            if (selectedPieceId >= 0 && selectedResult.HasValue)
+            var builder = new StringBuilder();
+            for (int i = 0; i < pendingResults.Count; i++)
             {
-                Debug.Log("[이동 실행] 말: " + selectedPieceId + ", 윷결과: " + selectedResult.Value);
-                turnManager.RequestMovePiece(selectedPieceId, selectedResult.Value);
-                ResetSelection(); // 이동 실행 후 선택 상태 초기화 (버튼 자체는 RefreshButtons에서 다시 갱신됨)
+                if (i > 0) builder.Append("   ·   ");
+                builder.Append(GetDisplayName(pendingResults[i].result));
             }
-            else if (!selectedResult.HasValue)
-            {
-                Debug.Log("이동에 사용할 [윷 결과]를 선택해주세요.");
-            }
-            else if (selectedPieceId < 0)
-            {
-                Debug.Log("이동시킬 [말]을 보드에서 클릭해주세요.");
-            }
+            SetText(builder.ToString());
         }
 
-        private void ResetSelection()
+        private void SetText(string value)
         {
-            selectedPieceId = -1;
-            selectedResult = null;
+            if (resultLabel != null)
+                resultLabel.text = string.IsNullOrEmpty(value) ? emptyText : value;
         }
 
-        // 지금 떠있는 버튼들을 전부 지움 (다음 번 그릴 때 겹치지 않게)
-        private void ClearButtons()
+        private void EnsureLabel()
         {
-            foreach (var button in spawnedButtons)
-            {
-                if (button != null) Destroy(button.gameObject);
-            }
-            spawnedButtons.Clear();
+            if (resultLabel != null) return;
+
+            resultLabel = GetComponentInChildren<TextMeshProUGUI>(true);
+            if (resultLabel != null) return;
+
+            var labelObject = new GameObject("ResultLabel", typeof(RectTransform));
+            labelObject.transform.SetParent(transform, false);
+            resultLabel = labelObject.AddComponent<TextMeshProUGUI>();
+            resultLabel.alignment = TextAlignmentOptions.Center;
+            resultLabel.enableAutoSizing = true;
+            resultLabel.fontSizeMin = 18f;
+            resultLabel.fontSizeMax = 48f;
+            resultLabel.color = Color.white;
+            resultLabel.raycastTarget = false;
+
+            var rt = resultLabel.rectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
 
         private string GetDisplayName(YutResult result)

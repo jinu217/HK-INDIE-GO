@@ -28,6 +28,9 @@ namespace YutArena.Managers
         // 이번 턴에 던져서 "아직 이동에 쓰지 않은" 윷 결과들을 쌓아두는 리스트
         // 예: 윷-모-도 순서로 던졌다면 이 리스트에 [윷, 모, 도] 3개가 들어있다가 플레이어가 원하는 순서로 하나씩 골라서 꺼내 쓰게 됨
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
+        // 하이라이트 UI(MoveDestinationSelector) 초기 시딩용 읽기 전용 뷰.
+        // 실제 갱신 통보는 OnPendingResultsChanged 이벤트로 이뤄진다.
+        public IReadOnlyList<YutThrowData> PendingResults => pendingResults;
         // 잡기로 얻은 보너스 던지기 횟수 저장( 던진 윷 결과를 다 소모하고 보너스 던지기를 하니까)
         private int pendingCaptureThrows = 0;
         // 스킬로 얻은 보너스 던지기 횟수 저장 (예: 기본형 "한번더")
@@ -310,6 +313,7 @@ namespace YutArena.Managers
             }
             SetPhase(TurnPhase.WaitAction);
             //  이동 단계로 넘어가도 타이머는 이미 계속 흐르고 있어서 따로 시작 안 함
+            EndTurnIfNoUsableResult();
         }
         // UI에서 플레이어가 [결과 묶음] 중 하나를 골라(chosenResult), 어떤 말을 옮길지(pieceId) 정하면 호출됨
         // pieceId, chosenResult는 이 함수의 매개변수 - UI가 호출할 때 직접 넣어주는 값
@@ -396,6 +400,7 @@ namespace YutArena.Managers
             if (pendingResults.Count > 0)
             {
                 SetPhase(TurnPhase.WaitAction);
+                EndTurnIfNoUsableResult();
                 return;
             }
             // 쓸 결과는 다 썼는데, 쌓아둔 보너스 던지기(잡기 또는 스킬)가 있으면 -> 그거 쓰러 던지기 단계로 돌아감
@@ -431,6 +436,55 @@ namespace YutArena.Managers
                 }
             }
         }
+        // ===================================================================
+        // 남은 pendingResults 중 하나라도 실제로 말을 움직일 수 있으면 false 를 돌려주고,
+        // 아무 결과도 쓸 수 없으면(예: 판에 말이 하나도 없는데 뒷도만 남음) 즉시 턴을 종료한다.
+        // 이 처리가 없으면 마커가 하나도 안 떠서 플레이어가 시간 초과까지 기다려야 한다.
+        // 스턴/업힌 말 같은 세부 제약까지는 보지 않는다(데드락 방지가 목적).
+        // ===================================================================
+        private void EndTurnIfNoUsableResult()
+        {
+            if (CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
+            if (HasAnyUsablePendingResult()) return;
+
+            Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
+            EndTurn();
+        }
+
+        private bool HasAnyUsablePendingResult()
+        {
+            if (pendingResults.Count == 0) return false;
+
+            int playerId = (int)CurrentTurn.currentPlayer;
+            bool hasBoardPiece = HasAnyPieceInBoard(playerId);
+            bool hasWaitingPiece = HasAnyWaitingPiece(playerId);
+
+            foreach (var throwData in pendingResults)
+            {
+                if (throwData.result == YutResult.BackDo)
+                {
+                    if (hasBoardPiece) return true; // 뒷도는 보드 위 말이 있어야 씀
+                }
+                else if (hasBoardPiece || hasWaitingPiece)
+                {
+                    return true; // 전진 결과는 대기 말이든 보드 위 말이든 있으면 사용 가능
+                }
+            }
+            return false;
+        }
+
+        // 이 플레이어가 대기 중인(아직 판에 안 올린) 말이 하나라도 있는지
+        private bool HasAnyWaitingPiece(int playerId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                if (piece.State == PieceState.Waiting)
+                    return true;
+            }
+            return false;
+        }
+
         // ===================================================================
         // 이 플레이어 말 중 하나라도 보드 위에(State == InBoard) 있는지 확인하는 함수
         // 뒷도(BackDo)를 쓸 수 있는지 판단하는 용도로 씀 - 전부 대기중(Waiting)이면
@@ -521,10 +575,14 @@ namespace YutArena.Managers
         }
         // WinConditionManager가 승리 조건을 확인했을 때 호출해서 부탁하는 함수
         // (CurrentTurn은 이 클래스만 바꿀 수 있어서, 다른 클래스는 직접 못 바꾸고 이 함수로 부탁함)
-        // 여기서 바로 게임을 멈추지 않고, "끝났다"는 표시만 해둠 -> 지금 턴이 끝날 때(EndTurn) 실제로 멈춤
+        // 결과 팝업이 떠 있는 동안 뒤에서 게임이 계속 굴러가면 안 되므로, 플래그만 세우지 않고
+        // 즉시 턴 타이머를 멈추고 단계를 GameEnd로 바꿔 던지기/이동 요청을 전부 차단한다.
         public void NotifyGameEnded()
         {
             CurrentTurn.isGameEnded = true;
+            if (CurrentTurn.currentPhase == TurnPhase.GameEnd) return; // 중복 호출 방어
+            StopTurnTimer();
+            SetPhase(TurnPhase.GameEnd);
         }
         // ===================================================================
         //  (캐릭터/스킬) : 스킬 효과로 재던지기를 부여했을 때 호출할 함수

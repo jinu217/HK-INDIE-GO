@@ -4038,8 +4038,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.YutResultSlotUI
   turnManager: {fileID: 1332604209}
-  buttonPrefab: {fileID: 6327763877799669082, guid: f853832112e1c3a4c938291c4a705eed, type: 3}
-  selectedPieceId: -1
+  resultLabel: {fileID: 0}
+  emptyText: 
 --- !u!114 &1063866275
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5295,7 +5295,6 @@ MonoBehaviour:
     position: {x: 1.3, y: -1.3, z: 0}
   - tileId: 30
     position: {x: 2.65, y: -2.65, z: 0}
-  resultSelectorUI: {fileID: 1063866274}
 --- !u!4 &1376455555
 Transform:
   m_ObjectHideFlags: 0
@@ -9465,6 +9464,59 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1922777480}
   m_CullTransparentMesh: 1
+--- !u!1 &1954210362
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1954210364}
+  - component: {fileID: 1954210363}
+  m_Layer: 0
+  m_Name: MoveDestinationSelector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1954210363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1954210362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6206670ad76f38647be939dd4aaee6aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MoveDestinationSelector
+  turnManager: {fileID: 0}
+  pieceMovementManager: {fileID: 0}
+  playerManager: {fileID: 0}
+  mapManager: {fileID: 0}
+  pieceDebugController: {fileID: 0}
+  finishMarkerAnchor: {fileID: 0}
+  markerColor: {r: 1, g: 0.92, b: 0.3, a: 0.75}
+  markerScale: 0.55
+  verboseLog: 1
+--- !u!4 &1954210364
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1954210362}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1655.6307, y: 285.16696, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1971457168
 GameObject:
   m_ObjectHideFlags: 0
@@ -10422,3 +10474,4 @@ SceneRoots:
   - {fileID: 1022437743}
   - {fileID: 1854382044}
   - {fileID: 805855931}
+  - {fileID: 1954210364}
