@@ -32,6 +32,12 @@ namespace YutArena.Managers
         private List<TeamSlot> finishedRanking = new List<TeamSlot>();
         // 팀별 완주 수가 바뀔 때마다 UI(점수판 등)에 알려주기 위한 이벤트
         public System.Action<TeamSlot, int> OnEscapeCountChanged;
+
+        // UI(점수판)가 "지금 이 팀 몇 개 탈출시켰는지" 직접 물어볼 때 씀.
+        // Escape 모드는 완주한 말을 바로 대기 상태로 되돌리기 때문에, 말 상태를 다시 세는 방식으로는
+        // 항상 0이 나온다 - 반드시 이 누적값을 읽어야 한다. 개인전은 팀=본인 한 명이라 그대로 개인 점수가 됨.
+        public int GetEscapeCount(TeamSlot team)
+            => escapeCountByTeam.TryGetValue(team, out var count) ? count : 0;
         // GameManager.StartGame()에서 호출됨. 새 게임 시작하니까 이전 판 점수 기록은 초기화
         public void Initialize(GameStartSettings gameSettings)
         {

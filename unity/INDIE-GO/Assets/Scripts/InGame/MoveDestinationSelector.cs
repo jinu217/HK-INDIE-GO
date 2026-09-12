@@ -167,8 +167,7 @@ namespace YutArena.InGame
                 int playerId = (int)turnManager.CurrentTurn.currentPlayer;
                 int pickedId = -1;
 
-                if (DebugPieceView.TryFindAtScreenPosition(cam, screenPosition, out DebugPieceView pieceView) &&
-                    pieceView.PlayerId == playerId && IsSelectablePiece(pieceView.PieceId))
+                if (TryFindSelectablePieceAtScreenPosition(cam, screenPosition, playerId, out DebugPieceView pieceView))
                 {
                     pickedId = pieceView.PieceId;
                 }
@@ -242,6 +241,35 @@ namespace YutArena.InGame
             foreach (MoveMarker m in pieceArrows)
                 if (m != null && m.PieceId == pieceId) return true;
             return false;
+        }
+
+        // 업힌 말끼리 겹쳐 있을 때 말 클릭 판정. DebugPieceView.TryFindAtScreenPosition은
+        // "카메라에 가장 가까운 말"을 그냥 골라서, 그게 선택 불가능한(업힌) 말이면 조용히
+        // 실패한다 (그럼 사용자 입장에선 ▼만 눌러야 선택되는 것처럼 보임). 그래서 여기선
+        // "이 플레이어의 선택 가능한(=▼ 뜬) 말"만 후보로 두고 직접 레이캐스트한다.
+        private bool TryFindSelectablePieceAtScreenPosition(
+            Camera cam, Vector2 screenPosition, int playerId, out DebugPieceView found)
+        {
+            found = null;
+            if (cam == null) return false;
+
+            Ray ray = cam.ScreenPointToRay(screenPosition);
+            float nearest = float.PositiveInfinity;
+            foreach (DebugPieceView view in FindObjectsByType<DebugPieceView>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (view.PlayerId != playerId || !IsSelectablePiece(view.PieceId)) continue;
+
+                foreach (Collider col in view.GetComponentsInChildren<Collider>(false))
+                {
+                    if (!col.enabled ||
+                        !col.Raycast(ray, out RaycastHit hit, cam.farClipPlane) ||
+                        hit.distance >= nearest) continue;
+                    nearest = hit.distance;
+                    found = view;
+                }
+            }
+            return found != null;
         }
 
         // 1단계: 움직일 수 있는 현재 플레이어 말마다 화살표 (사용자가 이동할 말을 고름).
@@ -477,6 +505,7 @@ namespace YutArena.InGame
 
         private bool CanMovePiece(PlayerRuntimeData.PieceRuntimeData piece)
         {
+            if (piece.State == PieceState.Goal) return false;   // 완주한 말은 더 이상 이동 대상 아님
             if (piece.CurrentCc == CcDefine.Stun) return false;
             if (piece.IsStacked && piece.PieceId != piece.StackLeaderPieceId) return false; // 업힌 말
             return true;

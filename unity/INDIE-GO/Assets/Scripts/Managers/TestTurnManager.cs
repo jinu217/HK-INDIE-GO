@@ -95,6 +95,7 @@ namespace YutArena.Managers
             Debug.Log("[실제 게임] 확정된 순서: " + string.Join(" -> ", determinedOrder)); // 테스트용, 진짜 게임이 쓰는 순서를 딱 한 번 찍음
             CurrentTurn.roundNumber = 1;
             CurrentTurn.turnNumber = 1;
+            maxTurnLimitHandled = false;
             BeginTurnFor(TurnOrder.Current);
         }
         // 참가자 목록을 받아서, 던진 결과가 높은 순서대로 정렬된 새 목록을 돌려줌
@@ -557,6 +558,11 @@ namespace YutArena.Managers
             }
             AdvanceToNextPlayer();
         }
+        // 최대 턴수 도달 처리를 이미 했는지(한 게임당 한 번만). Classic/KillTheKing처럼
+        // HandleTimeLimitReached가 게임을 끝내지 않는 모드에서, 매 턴마다 같은 경고 로그가
+        // 무한 반복되는 걸 막는다. 새 게임 시작 시(StartFirstTurn) false로 초기화됨.
+        private bool maxTurnLimitHandled;
+
         // 다음 사람 차례로 넘김
         private void AdvanceToNextPlayer()
         {
@@ -564,8 +570,10 @@ namespace YutArena.Managers
             if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++;
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
 
-            if (settings != null && settings.maxTurnCount > 0 && CurrentTurn.turnNumber >= settings.maxTurnCount)
+            if (!maxTurnLimitHandled && settings != null && settings.maxTurnCount > 0 &&
+                CurrentTurn.turnNumber >= settings.maxTurnCount)
             {
+                maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
                 Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
                 winConditionManager.HandleTimeLimitReached();
                 if (CurrentTurn.isGameEnded) return; // 턴제한 함수
