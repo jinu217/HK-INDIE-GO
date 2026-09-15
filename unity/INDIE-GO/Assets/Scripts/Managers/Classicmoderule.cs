@@ -25,7 +25,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var playerSlot = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, playerSlot) != team)
+                if (MatchCompositionRule.GetTeamSlot(settings, playerSlot) != team)
                     continue; // 이 팀 소속이 아니면 건너뜀
 
                 if (!playerManager.TryGetPlayer(i, out var player))

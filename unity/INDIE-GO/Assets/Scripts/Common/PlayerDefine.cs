@@ -161,6 +161,28 @@ namespace YutArena.Common
             };
         }
 
+        // ===================================================================
+        // 버그 수정: 로비에서 고른 커스텀 팀 배정(settings.playerTeams)을 반영하는 오버로드.
+        // 예전엔 항상 위의 GetTeamSlot(composition, player)만 써서 P1+P2, P3+P4처럼
+        // 고정 배정만 나왔음 - 로비에서 P1+P3을 같은 팀으로 골라도 무시되던 버그.
+        //
+        // playerTeams[i]는 로비의 팀 색깔 인덱스(0=Red,1=Blue...)를 0부터 담고 있고,
+        // 팀전이 아니면(솔로) 항상 0으로 채워져 있어서 "팀 없음"과 구분이 안 됨.
+        // 그래서 isTeamMode가 true일 때만 이 값을 쓰고, 아니면 기존 고정 배정으로 대체함.
+        // ===================================================================
+        public static TeamSlot GetTeamSlot(GameStartSettings settings, PlayerSlot player)
+        {
+            int index = (int)player - 1;
+            if (settings != null && settings.isTeamMode &&
+                settings.playerTeams != null && index >= 0 && index < settings.playerTeams.Length)
+            {
+                return (TeamSlot)(settings.playerTeams[index] + 1); // 0=Red -> TeamA(1) 로 맞춤
+            }
+            return settings != null
+                ? GetTeamSlot(settings.matchComposition, player)
+                : TeamSlot.None;
+        }
+
         // 해당 대전 구성에서 유효한 플레이어인지 확인
         public static bool IsValidPlayer(MatchComposition composition, PlayerSlot player)
         {
