@@ -27,8 +27,11 @@ public sealed class PlayerRuntimeData
         public int StackLeaderPieceId { get; private set; }
         public bool IsStacked => StackGroupId >= 0;
 
-        public CcDefine CurrentCc { get; private set; }
-        public int RemainingCcTurns { get; private set; }
+        //수정: 모든 효과는 이 말의 CC 목록에 저장하며 Character의 효과 처리기만 변경합니다.
+        [UnityEngine.SerializeField] private PieceCcCollection cc = new PieceCcCollection();
+        public PieceCcCollection Cc => cc;
+        public CcDefine CurrentCc => cc.Primary;
+        public int RemainingCcTurns => cc.Get(CurrentCc)?.RemainingOwnerTurns ?? 0;
 
         internal PieceRuntimeData(int pieceId)
         {
@@ -55,6 +58,7 @@ public sealed class PlayerRuntimeData
             CurrentTileId = BoardTileId.None;
             PreviousTileId = BoardTileId.None;
             ClearStack();
+            ClearCc();
         }
 
         /// <summary>
@@ -66,11 +70,15 @@ public sealed class PlayerRuntimeData
             if (captureCc != CcDefine.Kill && captureCc != CcDefine.Retire)
                 throw new ArgumentException("Capture CC must be Kill or Retire.", nameof(captureCc));
 
+            CcEffectService.Apply(this, captureCc);
+        }
+
+        internal void ApplyCapturedPosition()
+        {
             State = PieceState.Waiting;
             CurrentTileId = BoardTileId.None;
             PreviousTileId = BoardTileId.None;
             ClearStack();
-            SetCc(captureCc);
         }
 
         public void SetStackGroup(int stackGroupId, int stackLeaderPieceId)
@@ -92,17 +100,12 @@ public sealed class PlayerRuntimeData
 
         public void SetCc(CcDefine ccType, int remainingTurns = 0)
         {
-            if (remainingTurns < 0)
-                throw new ArgumentOutOfRangeException(nameof(remainingTurns));
-
-            CurrentCc = ccType;
-            RemainingCcTurns = ccType == CcDefine.None ? 0 : remainingTurns;
+            CcEffectService.Apply(this, ccType, remainingTurns);
         }
 
         public void ClearCc()
         {
-            CurrentCc = CcDefine.None;
-            RemainingCcTurns = 0;
+            CcEffectService.Clear(this);
         }
 
         public void Reset()

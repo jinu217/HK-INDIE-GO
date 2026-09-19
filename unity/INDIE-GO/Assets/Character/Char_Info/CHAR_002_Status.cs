@@ -3,17 +3,16 @@ using YutArena.InGame;
 public sealed class CHAR_002_Status : CharacterStatusBehaviour
 {
     private bool talismanAvailable = true;
-    private bool doubleNextMove;
 
     public override bool CanSelectAsActiveCaster(
         PlayerRuntimeData.PieceRuntimeData piece)
     {
-        return piece != null && piece.State != PieceState.Goal;
+        return CcEffectService.CanUseSkill(piece);
     }
 
     public override void OnPieceEnteredBoard()
     {
-        if (!talismanAvailable || !TryStartPassiveCooldown() ||
+        if (!talismanAvailable ||
             !TryGetPiece(out PlayerRuntimeData.PieceRuntimeData source))
             return;
 
@@ -22,45 +21,29 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             PlayerId,
             PieceId,
             source.CurrentTileId);
-        if (!nearest.HasValue ||
-            !CharacterSkillRegistry.TryGet(
-                nearest.Value.Player.PlayerId,
-                nearest.Value.Piece.PieceId,
-                out CharacterStatusBehaviour ally))
+        if (!nearest.HasValue || !TryStartPassiveCooldown())
             return;
 
-        ally.GrantProtection(1, 1);
+        CcEffectService.Apply(nearest.Value.Piece, CcDefine.Protection, 1,
+            sourcePlayerId: PlayerId, sourcePieceId: PieceId);
         talismanAvailable = false;
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Passive] {nameof(CHAR_002_Status)} granted protection to " +
-            $"Player={ally.PlayerId}, Piece={ally.PieceId}. Owner={PlayerId}, Piece={PieceId}",
+            $"Player={nearest.Value.Player.PlayerId}, Piece={nearest.Value.Piece.PieceId}. Owner={PlayerId}, Piece={PieceId}",
             this);
     }
 
     public override void OnPieceRetired()
     {
         talismanAvailable = true;
-        doubleNextMove = false;
         ResetPassiveCooldown();
-    }
-
-    public override int ModifyMoveCount(CharacterMoveRequest request)
-    {
-        if (!doubleNextMove || request.IsActiveSkillMove) return request.MoveCount;
-        doubleNextMove = false;
-        int modifiedMoveCount = request.MoveCount * 2;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][ActiveEffect] {nameof(CHAR_002_Status)} doubled movement: " +
-            $"{request.MoveCount} -> {modifiedMoveCount}. Player={PlayerId}, Piece={PieceId}",
-            this);
-        return modifiedMoveCount;
     }
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
-        doubleNextMove = true;
+        ApplyEffect(CcDefine.DoubleMove);
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_002_Status)} activated. " +
             $"Player={PlayerId}, Piece={PieceId}",
@@ -68,8 +51,4 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
         return CharacterActiveResult.Success("The caster's next move count will be doubled.");
     }
 
-    public override void OnOwnerTurnEnded()
-    {
-        doubleNextMove = false;
-    }
 }

@@ -39,7 +39,8 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
                 firstEnemy.Value.Piece.PieceId))
             // CC is decremented at the start of its owner's turn. Two stored
             // ticks therefore produce one complete turn in which movement is blocked.
-            firstEnemy.Value.Piece.SetCc(CcDefine.Stun, 2);
+            CcEffectService.Apply(firstEnemy.Value.Piece, CcDefine.Stun, 2,
+                sourcePlayerId: PlayerId, sourcePieceId: PieceId);
 
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +

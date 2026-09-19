@@ -89,6 +89,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         {
             RefreshForCurrentTurn();
         }
+        UpdateButtonCooldownState();
 
         if ((!isSelectingCaster && !isSelectingTarget) ||
             (isSelectingCaster && Time.frameCount == casterSelectionStartedFrame) ||
@@ -284,6 +285,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         CharacterStatusBehaviour firstOnBoard = null;
         CharacterStatusBehaviour firstWaiting = null;
+        CharacterStatusBehaviour firstUnavailable = null;
         CharacterStatusBehaviour[] characters =
             player.GetComponentsInChildren<CharacterStatusBehaviour>(true);
 
@@ -295,13 +297,19 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             if (character.PieceId == preferredCasterPieceId)
                 return character;
 
+            if (!CcEffectService.CanUseSkill(piece) || !character.CanSelectAsActiveCaster(piece))
+            {
+                if (firstUnavailable == null) firstUnavailable = character;
+                continue;
+            }
+
             if (piece.State == PieceState.InBoard && firstOnBoard == null)
                 firstOnBoard = character;
             else if (piece.State == PieceState.Waiting && firstWaiting == null)
                 firstWaiting = character;
         }
 
-        return firstOnBoard != null ? firstOnBoard : firstWaiting;
+        return firstOnBoard != null ? firstOnBoard : firstWaiting != null ? firstWaiting : firstUnavailable;
     }
 
     private static bool TryGetEligiblePiece(
@@ -338,7 +346,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
                 continue;
             }
 
-            if (character.CanSelectAsActiveCaster(piece))
+            if (CcEffectService.CanUseSkill(piece) && character.CanSelectAsActiveCaster(piece))
                 return true;
         }
 
@@ -347,54 +355,21 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void HandleActiveSkillButtonClicked()
     {
-        //수정: 플레이어 전체에 적용되는 액티브는 말 선택 모드 없이 한 번의 클릭으로 사용합니다.
-        if (currentCharacter == null)
-            return;
-
-        if (currentCharacter.RequiresCasterPieceSelection && !HasSelectableActiveCaster())
+        if (currentCharacter == null) return;
+        switch (currentCharacter.GetNextInputStep(isSelectingCaster || isSelectingTarget,
+            preferredCasterPieceId >= 0, targetPieceId >= 0))
         {
-            if (isSelectingCaster || isSelectingTarget)
-                EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
+            case CharacterSkillInputStep.Caster:
+                if (HasSelectableActiveCaster() && !isSelectingCaster) BeginCasterSelection();
+                break;
+            case CharacterSkillInputStep.Target:
+                if (!isSelectingTarget) BeginTargetSelection();
+                break;
+            case CharacterSkillInputStep.Confirm:
+                if (UseCurrentActiveSkill())
+                    EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
+                break;
         }
-
-        if (!currentCharacter.RequiresCasterPieceSelection)
-        {
-            if (currentCharacter.RequiresTargetPieceSelection && targetPieceId < 0)
-            {
-                BeginTargetSelection();
-                return;
-            }
-
-            if (UseCurrentActiveSkill())
-                EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
-        }
-
-        if (!isSelectingCaster && !isSelectingTarget)
-        {
-            BeginCasterSelection();
-            return;
-        }
-
-        if (isSelectingCaster)
-        {
-            if (preferredCasterPieceId < 0)
-                return;
-
-            if (currentCharacter.RequiresTargetPieceSelection)
-                BeginTargetSelection();
-            else if (UseCurrentActiveSkill())
-                EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
-        }
-
-        if (preferredCasterPieceId < 0 ||
-            (currentCharacter.RequiresTargetPieceSelection && targetPieceId < 0))
-            return;
-
-        if (UseCurrentActiveSkill())
-            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
     }
 
     private bool UseCurrentActiveSkill()
@@ -424,7 +399,6 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
         if (result.Succeeded)
         {
-            turnManager.ResolveSkillResult(result.SuppressExtraThrow);
             onSkillSucceeded?.Invoke(result.Message);
         }
         else
@@ -457,7 +431,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             currentCharacter.PlayerId);
         bool canUse = remainingCooldown <= 0 &&
                       currentSkillPoints >= requiredSkillPoints &&
-                      currentCharacter.IsActiveUsableInCurrentPhase();
+                      currentCharacter.IsActiveUsableInCurrentPhase() &&
+                      (!currentCharacter.RequiresCasterPieceSelection || HasSelectableActiveCaster());
         canvasGroup.interactable = canUse;
         // 사용할 수 없는 상태에서도 Hover 상세 설명은 볼 수 있어야 합니다.
         canvasGroup.blocksRaycasts = true;
@@ -489,9 +464,12 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             return;
 
         preferredCasterPieceId = -1;
-        ClearTarget();
+        if (!isSelectingTarget)
+        {
+            ClearTarget();
+            ClearSelectedTargetHighlight();
+        }
         ClearSelectedCasterHighlight();
-        ClearSelectedTargetHighlight();
         isSelectingTarget = false;
         targetSelectionStartedFrame = -1;
         isSelectingCaster = true;
@@ -518,7 +496,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
                 view.PieceId,
                 out CharacterStatusBehaviour character) ||
             !character.HasActiveSkill ||
-            !character.CanSelectAsActiveCaster(piece))
+            (!CcEffectService.CanUseSkill(piece) || !character.CanSelectAsActiveCaster(piece)))
         {
             return;
         }
@@ -528,15 +506,14 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         selectedCasterView.SetSelected(true);
         SetCasterPiece(view.PieceId);
 
-        if (currentCharacter != null && currentCharacter.RequiresTargetPieceSelection)
+        if (currentCharacter != null && currentCharacter.GetNextInputStep(true, true,
+                targetPieceId >= 0) == CharacterSkillInputStep.Target)
             BeginTargetSelection();
     }
 
     private void BeginTargetSelection()
     {
         if (currentCharacter == null || currentPlayerId <= 0 || turnManager == null)
-            return;
-        if (currentCharacter.RequiresCasterPieceSelection && preferredCasterPieceId < 0)
             return;
 
         TurnContext turn = turnManager.CurrentTurn;
@@ -565,7 +542,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             !playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
             !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
             piece.State != PieceState.InBoard ||
-            !CharacterSkillRegistry.IsTargetable(view.PlayerId, view.PieceId))
+            currentCharacter == null || !currentCharacter.CanSelectActiveTarget(view.PlayerId, view.PieceId))
         {
             return;
         }

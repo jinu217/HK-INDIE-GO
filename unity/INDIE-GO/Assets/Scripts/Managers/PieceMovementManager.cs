@@ -170,6 +170,9 @@ public sealed class PieceMovementManager : MonoBehaviour
             return false;
         }
 
+        //수정: UI 이외의 호출도 공통 CC 이동 제한을 적용합니다.
+        if (!CcEffectService.CanMove(selectedPiece)) return false;
+
         //수정: 실제 이동 전에 Player 스킬 시스템에서 최종 이동량을 결정합니다.
         bool isFirstBoardMove = selectedPiece.State == PieceState.Waiting;
         moveCount = CharacterSkillRegistry.ModifyMoveCount(
@@ -348,11 +351,10 @@ public sealed class PieceMovementManager : MonoBehaviour
                     captureCc = GetCaptureCc(targetPiece, moveCount);
                 }
 
+                //수정: 표식 보상 및 CC 적용은 Character 효과 처리기에 위임합니다.
+                CcEffectService.RewardMarks(targetPiece, request);
                 targetPiece.SetCaptured(captureCc);
                 //수정: 실제 잡기 이후 방어자 퇴장과 공격자 잡기 완료를 알립니다.
-                CharacterSkillRegistry.NotifyPieceRetired(
-                    otherPlayer.PlayerId,
-                    targetPiece.PieceId);
                 CharacterSkillRegistry.NotifyCaptureCompleted(request);
             }
         }
@@ -390,7 +392,8 @@ public sealed class PieceMovementManager : MonoBehaviour
 
         foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
         {
-            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile)
+            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
+                piece.Cc.Has(CcDefine.Parts))
                 continue;
 
             piecesOnTile.Add(piece);

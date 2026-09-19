@@ -129,6 +129,11 @@ public static class CharacterBoardUtility
 
         for (int step = 0; step < stepCount; step++)
         {
+            if (current == BoardTileId.None && (piece.State == PieceState.InBoard || step > 0))
+            {
+                result.Add(BoardTileId.None); // 공유 출발 칸을 지나 완주. 그 이후 경로는 생성하지 않습니다.
+                break;
+            }
             BoardTileId next = GetNextForwardTile(current, previous, step == 0);
             result.Add(next);
             previous = current;
@@ -234,131 +239,21 @@ public static class CharacterBoardUtility
         }
     }
 
-    public static void Retire(
-        CharacterPieceReference target,
-        bool grantsExtraThrow)
-    {
-        target.Piece.SetCaptured(grantsExtraThrow ? CcDefine.Kill : CcDefine.Retire);
-        CharacterSkillRegistry.NotifyPieceRetired(
-            target.Player.PlayerId,
-            target.Piece.PieceId);
-    }
+    // 호환용 위임. 보드 효과 구현은 CcBoardEffects에만 존재합니다.
+    public static void Retire(CharacterPieceReference target, bool grantsExtraThrow) =>
+        CcBoardEffects.Retire(target, grantsExtraThrow);
 
-    public static bool TryCapture(
-        int attackerPlayerId,
-        int attackerPieceId,
-        CharacterPieceReference target,
-        int attackingPieceCount,
-        bool grantsExtraThrow,
-        out CharacterCaptureDecision decision)
-    {
-        var request = new CharacterCaptureRequest(
-            attackerPlayerId,
-            attackerPieceId,
-            target.Player.PlayerId,
-            target.Piece.PieceId,
-            attackingPieceCount,
-            grantsExtraThrow);
-        decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+    public static bool TryCapture(int attackerPlayerId, int attackerPieceId,
+        CharacterPieceReference target, int attackingPieceCount, bool grantsExtraThrow,
+        out CharacterCaptureDecision decision) =>
+        CcBoardEffects.TryCapture(attackerPlayerId, attackerPieceId, target,
+            attackingPieceCount, grantsExtraThrow, out decision);
 
-        if (decision == CharacterCaptureDecision.Prevent ||
-            decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
-            decision == CharacterCaptureDecision.ConvertToParts)
-        {
-            return false;
-        }
-
-        bool finalExtraThrow =
-            grantsExtraThrow &&
-            decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
-        Retire(target, finalExtraThrow);
-        CharacterSkillRegistry.NotifyCaptureCompleted(request);
-        return true;
-    }
-
-    public static void MoveStackAlongPath(
-        PlayerController owner,
-        PlayerRuntimeData.PieceRuntimeData caster,
-        IReadOnlyList<BoardTileId> path,
-        bool ignoresInstalledItems = false)
-    {
-        if (owner == null) throw new ArgumentNullException(nameof(owner));
-        if (caster == null) throw new ArgumentNullException(nameof(caster));
-        if (path == null) throw new ArgumentNullException(nameof(path));
-
-        BoardTileId startingTile = caster.CurrentTileId;
-        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
-        {
-            if (piece.PieceId == caster.PieceId ||
-                (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-            {
-                movingPieces.Add(piece);
-            }
-        }
-
-        foreach (BoardTileId tile in path)
-        {
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
-                piece.MoveTo(tile);
-        }
-
-        if (path.Count > 0)
-            ResolveFriendlyStack(owner, movingPieces, path[path.Count - 1]);
-
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
-        {
-            CharacterSkillRegistry.NotifyMoveCompleted(
-                new CharacterMoveRecord(
-                    owner.PlayerId,
-                    piece.PieceId,
-                    startingTile,
-                    piece.CurrentTileId,
-                    path,
-                    ignoresInstalledItems));
-        }
-    }
-
-    private static void ResolveFriendlyStack(
-        PlayerController owner,
-        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
-        BoardTileId landingTile)
-    {
-        PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
-        var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
-        {
-            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile)
-                continue;
-
-            piecesOnTile.Add(piece);
-            if (stationaryPiece == null && !ContainsPiece(movingPieces, piece))
-                stationaryPiece = piece;
-        }
-
-        if (stationaryPiece == null) return;
-
-        int groupId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackGroupId
-            : owner.RuntimeData.CreateStackGroupId();
-        int leaderId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackLeaderPieceId
-            : stationaryPiece.PieceId;
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
-            piece.SetStackGroup(groupId, leaderId);
-    }
-
-    private static bool ContainsPiece(
-        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> pieces,
-        PlayerRuntimeData.PieceRuntimeData target)
-    {
-        for (int i = 0; i < pieces.Count; i++)
-        {
-            if (pieces[i] == target) return true;
-        }
-
-        return false;
-    }
+    public static void MoveStackAlongPath(PlayerController owner,
+        PlayerRuntimeData.PieceRuntimeData caster, IReadOnlyList<BoardTileId> path,
+        bool ignoresInstalledItems = false) =>
+        CcEffectService.Apply(caster, CcDefine.MovePath, value: ignoresInstalledItems ? 2 : 1,
+            sourcePlayerId: owner.PlayerId, sourcePieceId: caster.PieceId, path: path);
 
     private static Dictionary<BoardTileId, List<BoardTileId>> BuildGraph()
     {
@@ -413,5 +308,244 @@ public static class CharacterBoardUtility
         }
 
         if (!neighbours.Contains(to)) neighbours.Add(to);
+    }
+}
+
+// CC가 결정한 보드 변경과 분신 표현만 실행합니다. 캐릭터별 발동 조건은 포함하지 않습니다.
+public static class CcBoardEffects
+{
+    public static void Retire(
+        CharacterPieceReference target,
+        bool grantsExtraThrow)
+    {
+        CcEffectService.Apply(target.Piece, grantsExtraThrow ? CcDefine.Kill : CcDefine.Retire);
+    }
+
+    public static bool TryCapture(
+        int attackerPlayerId,
+        int attackerPieceId,
+        CharacterPieceReference target,
+        int attackingPieceCount,
+        bool grantsExtraThrow,
+        out CharacterCaptureDecision decision)
+    {
+        var request = new CharacterCaptureRequest(
+            attackerPlayerId,
+            attackerPieceId,
+            target.Player.PlayerId,
+            target.Piece.PieceId,
+            attackingPieceCount,
+            grantsExtraThrow);
+        decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+
+        if (decision == CharacterCaptureDecision.Prevent ||
+            decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+            decision == CharacterCaptureDecision.ConvertToParts)
+        {
+            return false;
+        }
+
+        bool finalExtraThrow =
+            grantsExtraThrow &&
+            decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
+        CcEffectService.RewardMarks(target.Piece, request);
+        Retire(target, finalExtraThrow);
+        CharacterSkillRegistry.NotifyCaptureCompleted(request);
+        return true;
+    }
+
+    public static void MoveStackAlongPath(
+        PlayerController owner,
+        PlayerRuntimeData.PieceRuntimeData caster,
+        IReadOnlyList<BoardTileId> path,
+        bool ignoresInstalledItems = false)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        if (caster == null) throw new ArgumentNullException(nameof(caster));
+        if (path == null) throw new ArgumentNullException(nameof(path));
+
+        BoardTileId startingTile = caster.CurrentTileId;
+        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        {
+            if (piece.PieceId == caster.PieceId ||
+                (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
+            {
+                movingPieces.Add(piece);
+            }
+        }
+
+        if (!CcEffectService.CanMove(caster)) return;
+        foreach (BoardTileId tile in path)
+        {
+            if (caster.State == PieceState.InBoard && caster.CurrentTileId == BoardTileId.None &&
+                tile == BoardTileId.None)
+            {
+                foreach (var moving in movingPieces) moving.SetGoal();
+                break;
+            }
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+                piece.MoveTo(tile);
+        }
+
+        if (path.Count > 0 && caster.State != PieceState.Goal)
+            ResolveFriendlyStack(owner, movingPieces, path[path.Count - 1]);
+
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in movingPieces)
+        {
+            CharacterSkillRegistry.NotifyMoveCompleted(
+                new CharacterMoveRecord(
+                    owner.PlayerId,
+                    piece.PieceId,
+                    startingTile,
+                    piece.CurrentTileId,
+                    path,
+                    ignoresInstalledItems));
+        }
+    }
+
+    private static void ResolveFriendlyStack(
+        PlayerController owner,
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
+        BoardTileId landingTile)
+    {
+        PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
+        var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        {
+            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
+                piece.Cc.Has(CcDefine.Parts))
+                continue;
+
+            piecesOnTile.Add(piece);
+            if (stationaryPiece == null && !ContainsPiece(movingPieces, piece))
+                stationaryPiece = piece;
+        }
+
+        if (stationaryPiece == null) return;
+
+        int groupId = stationaryPiece.IsStacked
+            ? stationaryPiece.StackGroupId
+            : owner.RuntimeData.CreateStackGroupId();
+        int leaderId = stationaryPiece.IsStacked
+            ? stationaryPiece.StackLeaderPieceId
+            : stationaryPiece.PieceId;
+        foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
+            piece.SetStackGroup(groupId, leaderId);
+    }
+
+    private static bool ContainsPiece(
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> pieces,
+        PlayerRuntimeData.PieceRuntimeData target)
+    {
+        for (int i = 0; i < pieces.Count; i++)
+        {
+            if (pieces[i] == target) return true;
+        }
+
+        return false;
+    }
+
+
+    public static void RefreshClones(PlayerController owner, PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        if (owner == null) return;
+        int count = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+        if (count > 0 && !piece.IsStacked)
+            piece.SetStackGroup(owner.RuntimeData.CreateStackGroupId(), piece.PieceId);
+        else if (count == 0 && piece.IsStacked)
+        {
+            bool hasAlly = false;
+            foreach (var other in owner.RuntimeData.Pieces)
+                if (other != piece && other.StackGroupId == piece.StackGroupId) hasAlly = true;
+            if (!hasAlly) piece.ClearStack();
+        }
+        if (!CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var source)) return;
+        var view = source.GetComponent<CcCloneView>();
+        if (view == null && count > 0) view = source.gameObject.AddComponent<CcCloneView>();
+        if (view != null) view.Refresh(piece, source);
+    }
+
+    internal static void NormalizeStack(PlayerController owner, int groupId)
+    {
+        if (owner == null || groupId < 0) return;
+        var remaining = new List<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (var candidate in owner.RuntimeData.Pieces)
+            if (candidate.State == PieceState.InBoard && candidate.StackGroupId == groupId)
+                remaining.Add(candidate);
+        if (remaining.Count == 0) return;
+        int leader = remaining[0].PieceId;
+        foreach (var candidate in remaining)
+            if (candidate.PieceId == candidate.StackLeaderPieceId) leader = candidate.PieceId;
+        foreach (var candidate in remaining)
+        {
+            if (remaining.Count == 1 && !candidate.Cc.Has(CcDefine.Clone)) candidate.ClearStack();
+            else candidate.SetStackGroup(groupId, leader);
+        }
+    }
+}
+
+// 표현 전용. 분신 수/업기/잡기 규칙은 CcEffectService가 관리합니다.
+public sealed class CcCloneView : MonoBehaviour
+{
+    private readonly List<GameObject> visuals = new List<GameObject>();
+
+    public void Refresh(PlayerRuntimeData.PieceRuntimeData piece, CharacterStatusBehaviour source)
+    {
+        Clear();
+        int count = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+        for (int index = 0; index < count; index++)
+        {
+            var root = new GameObject($"SkillClone_{index + 1}");
+            root.transform.SetParent(transform, false);
+            root.transform.localPosition = new Vector3(0.24f + index * 0.16f, 0.2f, 0);
+            root.transform.localScale = Vector3.one * 0.65f;
+            // 모델을 통째로 복제하지 않고 렌더러만 복제하여 스킬/콜라이더 중복 생성을 방지합니다.
+            foreach (var mesh in source.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mesh.GetComponent<MeshRenderer>() is not MeshRenderer renderer ||
+                    mesh.GetComponentInParent<CcCloneView>() != this) continue;
+                bool cloneChild = false;
+                foreach (var visual in visuals)
+                    if (mesh.transform.IsChildOf(visual.transform)) cloneChild = true;
+                if (cloneChild) continue;
+                var model = new GameObject("CloneMesh");
+                model.transform.SetParent(root.transform, false);
+                model.transform.localPosition = source.transform.InverseTransformPoint(mesh.transform.position);
+                model.transform.localRotation = Quaternion.Inverse(source.transform.rotation) * mesh.transform.rotation;
+                Vector3 scale = source.transform.lossyScale;
+                model.transform.localScale = new Vector3(mesh.transform.lossyScale.x / scale.x,
+                    mesh.transform.lossyScale.y / scale.y, mesh.transform.lossyScale.z / scale.z);
+                model.AddComponent<MeshFilter>().sharedMesh = mesh.sharedMesh;
+                model.AddComponent<MeshRenderer>().sharedMaterials = renderer.sharedMaterials;
+            }
+            if (root.transform.childCount == 0)
+            {
+                var sprite = source.GetComponentInChildren<SpriteRenderer>();
+                if (sprite != null)
+                {
+                    var renderer = root.AddComponent<SpriteRenderer>();
+                    renderer.sprite = sprite.sprite;
+                    renderer.color = new Color(sprite.color.r, sprite.color.g, sprite.color.b, 0.6f);
+                    renderer.sortingLayerID = sprite.sortingLayerID;
+                    renderer.sortingOrder = sprite.sortingOrder + index + 1;
+                }
+            }
+            visuals.Add(root);
+        }
+    }
+
+    private void OnDisable() { Clear(); }
+
+    private void Clear()
+    {
+        foreach (var visual in visuals)
+            if (visual != null)
+            {
+                visual.SetActive(false);
+                visual.transform.SetParent(null);
+                Destroy(visual);
+            }
+        visuals.Clear();
     }
 }

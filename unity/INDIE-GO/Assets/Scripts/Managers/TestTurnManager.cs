@@ -213,22 +213,10 @@ namespace YutArena.Managers
             if (playerManager == null) return;
             int playerId = (int)player;
             if (!playerManager.TryGetPlayer(playerId, out var playerController)) return;
-            foreach (var piece in playerController.RuntimeData.Pieces)
-            {
-                if (piece.CurrentCc == CcDefine.None) continue;
-                if (piece.CurrentCc == CcDefine.Kill || piece.CurrentCc == CcDefine.Retire) continue; // 일회성이라 제외
-                if (piece.RemainingCcTurns <= 0)
-                {
-                    piece.ClearCc(); // 혹시 턴수가 이미 0인데 안 풀려있었으면 여기서 정리
-                    continue;
-                }
-                int newRemaining = piece.RemainingCcTurns - 1;
-                if (newRemaining <= 0)
-                    piece.ClearCc(); // 턴수 다 지났으니 CC 해제
-                else
-                    piece.SetCc(piece.CurrentCc, newRemaining); // 아직 남았으면 턴수만 줄여서 다시 세팅
-            }
+            //수정: 복합 CC의 지속시간/만료 효과는 Character 효과 처리기 한 곳에서 관리합니다.
+            CcEffectService.TickOwnerTurn(playerController);
         }
+
         // ===================================================================
         // 아래 3개는 UI 없이 인스펙터 우클릭으로 테스트하기 위한 임시 함수들.
         // 실제 게임 로직에는 영향 없음 (UI 완성되면 이 3개는 지워도 됨)
@@ -508,7 +496,7 @@ namespace YutArena.Managers
         {
             if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
             if (!player.TryGetPieceData(pieceId, out var pieceData)) return false;
-            if (pieceData.CurrentCc == CcDefine.Stun) return false;
+            if (!CcEffectService.CanMove(pieceData)) return false;
 
             //  업기 상태이고, 이 말이 리더(StackLeaderPieceId)가 아니면 이동 불가
             if (pieceData.IsStacked && pieceData.PieceId != pieceData.StackLeaderPieceId)
@@ -533,15 +521,8 @@ namespace YutArena.Managers
 
                 foreach (var piece in otherPlayer.RuntimeData.Pieces)
                 {
-                    if (piece.CurrentCc == CcDefine.Kill)
-                    {
-                        gotKill = true;
-                        piece.ClearCc();
-                    }
-                    else if (piece.CurrentCc == CcDefine.Retire)
-                    {
-                        piece.ClearCc();
-                    }
+                    //수정: 잡기 마커만 소비하여 함께 존재하는 다른 효과를 지우지 않습니다.
+                    gotKill |= CcEffectService.ConsumeCapture(piece);
                 }
             }
             return gotKill;

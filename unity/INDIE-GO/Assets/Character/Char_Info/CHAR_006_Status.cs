@@ -8,16 +8,19 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
 
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
+        var existing = base.EvaluateIncomingCapture(request);
+        if (existing != CharacterCaptureDecision.Proceed) return existing;
         if (IsPassiveReady && Random.value < 0.25f && TryStartPassiveCooldown())
         {
             Debug.Log(
                 $"[CharacterSkill][Passive] {nameof(CHAR_006_Status)} prevented capture. " +
                 $"Player={PlayerId}, Piece={PieceId}",
                 this);
-            return CharacterCaptureDecision.Prevent;
+            ApplyEffect(CcDefine.Protection);
+            return base.EvaluateIncomingCapture(request);
         }
 
-        return base.EvaluateIncomingCapture(request);
+        return CharacterCaptureDecision.Proceed;
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -67,6 +70,16 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
             captured
                 ? "The selected enemy was captured by Sword Aura."
                 : $"Sword Aura was resolved with {decision}.");
+    }
+
+    public override bool CanSelectActiveTarget(int targetPlayerId, int targetPieceId)
+    {
+        if (!base.CanSelectActiveTarget(targetPlayerId, targetPieceId) ||
+            !TryGetPiece(out var caster) || !TryGetPiece(targetPlayerId, targetPieceId, out var target))
+            return false;
+        return target.Piece.CurrentTileId == caster.CurrentTileId ||
+            target.Piece.CurrentTileId == CharacterBoardUtility.GetNextForwardTile(
+                caster.CurrentTileId, caster.PreviousTileId, true);
     }
 
     private bool TryFindAutomaticTarget(

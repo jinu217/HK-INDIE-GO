@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using YutArena.Common;
@@ -212,7 +213,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 skill.OnOwnerTurnEnded();
                 ally.Reset();
                 ally.MoveTo(BoardTileId.Outer02);
-                skill.OnAnyPieceMoveCompleted(new CharacterMoveRecord(
+                CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(
                     1, 1, BoardTileId.Outer01, BoardTileId.Outer02,
                     new[] { BoardTileId.Outer02 }));
                 ok = ally.CurrentTileId == BoardTileId.Outer03;
@@ -232,12 +233,11 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 break;
             case "CHAR_018":
                 skill.OnPieceEnteredBoard();
-                int markedPlayer = GetPrivateInt(skill, "markedPlayerId");
-                int markedPiece = GetPrivateInt(skill, "markedPieceId");
                 int pointsBefore = CharacterSkillRegistry.GetSkillPoints(1);
-                skill.OnCaptureCompleted(new CharacterCaptureRequest(
-                    1, 0, markedPlayer, markedPiece, 1, true));
-                ok = markedPlayer == 2 && markedPiece >= 0 &&
+                CcState mark = enemy.Cc.Get(CcDefine.Mark);
+                CcBoardEffects.TryCapture(1, 0, new CharacterPieceReference(p2, enemy),
+                    1, true, out _);
+                ok = mark != null && mark.SourcePlayerId == 1 && mark.SourcePieceId == 0 &&
                      CharacterSkillRegistry.GetSkillPoints(1) == pointsBefore + 1;
                 break;
             case "CHAR_019":
@@ -402,6 +402,350 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         File.WriteAllLines(ReportPath, report);
         Debug.Log($"[CharacterVerification][DONE] Passed={passed}, Failed={failed}, " +
                   $"Report={ReportPath}", this);
+    }
+}
+
+// 저장된 씬/SO를 변경하지 않는 명시적 Edit Mode 회귀 검증입니다.
+[InitializeOnLoad]
+internal static class CcArchitectureVerifier
+{
+    private const string Flag = "Temp/verify-cc.flag";
+    private const string Report = "Temp/cc-verification.log";
+    private static readonly List<string> results = new List<string>();
+    static CcArchitectureVerifier()
+    {
+        EditorApplication.delayCall += () =>
+        {
+            if (!File.Exists(Flag)) return;
+            File.Delete(Flag);
+            Run();
+        };
+    }
+
+    [MenuItem("Tools/Character/Verify CC Pipeline")]
+    public static void Run()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode ||
+            UnityEngine.Object.FindFirstObjectByType<PlayerManager>() != null)
+        {
+            Debug.LogWarning("CC 검증은 PlayerManager가 없는 씬에서 Edit Mode로 실행하세요.");
+            return;
+        }
+        results.Clear();
+        Scene previous = SceneManager.GetActiveScene();
+        Scene fixture = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+        var copies = new List<CharacterData>();
+        try
+        {
+            ResetRegistry();
+            var manager = new GameObject("CC Test Players").AddComponent<PlayerManager>();
+            var movement = new GameObject("CC Test Movement").AddComponent<PieceMovementManager>();
+            Set(movement, "playerManager", manager);
+            var turns = new GameObject("CC Test Turns").AddComponent<TestTurnManager>();
+            Set(turns, "playerManager", manager);
+            Set(turns, "pieceMovementManager", movement);
+            var p1 = new GameObject("CC Test P1").AddComponent<PlayerController>();
+            var p2 = new GameObject("CC Test P2").AddComponent<PlayerController>();
+            p1.Initialize(1, "Test 1", 4);
+            p2.Initialize(2, "Test 2", 4);
+            var players = (List<PlayerController>)Get(manager, "activePlayers");
+            players.Add(p1); players.Add(p2);
+            var piece = p1.RuntimeData.Pieces[0];
+            piece.MoveTo(BoardTileId.Outer01);
+            Check("Legacy enum values preserved", (int)CcDefine.Stun == 1 && (int)CcDefine.Kill == 4);
+            manager.TryApplyPieceCc(1, 0, CcDefine.Stun, 2);
+            manager.TryApplyPieceCc(1, 0, CcDefine.Silence, 3);
+            manager.TryApplyPieceCc(1, 0, CcDefine.Protection, 4);
+            Check("Manager stores all simultaneous effects", piece.Cc.Effects.Count == 3);
+            Check("Stun blocks direct movement", !movement.TryMovePiece(1, 0, 1));
+            CcEffectService.TickOwnerTurn(p1);
+            Check("CC decrements independently", piece.Cc.Get(CcDefine.Stun).RemainingOwnerTurns == 1 &&
+                piece.Cc.Get(CcDefine.Silence).RemainingOwnerTurns == 2);
+            CcEffectService.TickOwnerTurn(p1);
+            Check("Stun expires without removing Silence or Protection", !piece.Cc.Has(CcDefine.Stun) &&
+                piece.Cc.Has(CcDefine.Silence) && piece.Cc.Has(CcDefine.Protection));
+            Check("Silence allows movement but blocks active", CcEffectService.CanMove(piece) &&
+                !CcEffectService.CanUseSkill(piece));
+            CcEffectService.Apply(piece, CcDefine.Kill);
+            Check("Capture resets position and replaces effects", piece.State == PieceState.Waiting &&
+                piece.CurrentTileId == BoardTileId.None && piece.Cc.Effects.Count == 1);
+            Check("Kill is consumed exactly once", CcEffectService.ConsumeCapture(piece) &&
+                !CcEffectService.ConsumeCapture(piece));
+            CcEffectService.Apply(piece, CcDefine.Retire);
+            Check("Retire grants no bonus", !CcEffectService.ConsumeCapture(piece));
+            piece.MoveTo(BoardTileId.Outer01);
+            var carried = p1.RuntimeData.Pieces[1]; carried.MoveTo(BoardTileId.Outer01);
+            piece.SetStackGroup(50, 0); carried.SetStackGroup(50, 0);
+            CcEffectService.Apply(piece, CcDefine.Parts, 3);
+            Check("Parts leader detaches without stranding ally", !piece.IsStacked && !carried.IsStacked);
+            piece.ClearCc(); piece.SetStackGroup(51, 0); carried.SetStackGroup(51, 0);
+            CcEffectService.Apply(piece, CcDefine.Retire);
+            Check("Retired leader does not strand surviving ally", !carried.IsStacked && CcEffectService.CanUseSkill(carried));
+
+            string[] ids = { "001_1", "001_2", "002", "003", "004", "005", "006",
+                "007", "008", "009", "010", "018", "019" };
+            foreach (string id in ids)
+            {
+                p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                ResetRegistry();
+                turns.OnTurnStarted = null; turns.OnTurnEnded = null;
+                Set(turns, "pendingSkillThrows", 0); Set(turns, "pendingCaptureThrows", 0);
+                turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
+                turns.CurrentTurn.currentPhase = id == "001_1" || id == "019"
+                    ? TurnPhase.WaitThrow : TurnPhase.WaitAction;
+                var host = new GameObject("CC Test Character " + id);
+                host.transform.SetParent(p1.transform);
+                var skill = (CharacterStatusBehaviour)host.AddComponent(Type.GetType("CHAR_" + id + "_Status, Assembly-CSharp"));
+                var asset = AssetDatabase.LoadAssetAtPath<CharacterData>("Assets/Character/Char_Info/CHAR_" + id + "_SO.asset");
+                Check(id + " original SO loads", asset != null);
+                var data = UnityEngine.Object.Instantiate(asset);
+                data.visualModelPrefab = null;
+                data.active_CooldownTurns = 2; data.active_SkillPointCost = 1;
+                copies.Add(data); skill.Initialize(data);
+                typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(skill, null);
+                skill.OnOwnerTurnStarted();
+                piece.MoveTo(BoardTileId.Outer01);
+                var enemy = p2.RuntimeData.Pieces[0];
+                enemy.MoveTo(id == "007" || id == "005" ? BoardTileId.Outer02 : BoardTileId.Outer01);
+                CharacterSkillRegistry.RequestSkillPoint(1, 1);
+                CcEffectService.Apply(piece, CcDefine.Silence, 2);
+                Check(id + " active rejects Silence", !CharacterSkillRegistry.TryUseActive(
+                    new CharacterActiveRequest(1, 0, 2, 0)).Succeeded);
+                Check(id + " rejected active spends no SP/cooldown", CharacterSkillRegistry.GetSkillPoints(1) == 1 &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, data) == 0);
+                CcEffectService.Remove(piece, CcDefine.Silence);
+                var result = CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0, 2, 0));
+                Check(id + " active executes through registry", result.Succeeded, result.Message);
+                Check(id + " success spends SP and shares cooldown", CharacterSkillRegistry.GetSkillPoints(1) == 0 &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, data) == 2);
+                switch (id)
+                {
+                    case "001_1":
+                        Check("DoOrMo stored on piece", piece.Cc.Has(CcDefine.DoOrMo));
+                        var table = skill.ModifyYutProbability(new[] { (YutResult.Gae, 100f) });
+                        Check("DoOrMo consumed on next throw", table.Length == 2 && !piece.Cc.Has(CcDefine.DoOrMo));
+                        skill.ShouldGrantExtraThrow(YutResult.Do, false);
+                        Check("DoOrMo prohibited after first throw", !skill.IsActiveUsableInCurrentPhase());
+                        break;
+                    case "001_2":
+                        Check("ExtraThrow schedules exactly once", (int)Get(turns, "pendingSkillThrows") == 1);
+                        break;
+                    case "002":
+                        Check("DoubleMove is stored then consumed once", piece.Cc.Has(CcDefine.DoubleMove) &&
+                            skill.ModifyMoveCount(new CharacterMoveRequest(1, 0, 2, false)) == 4 &&
+                            skill.ModifyMoveCount(new CharacterMoveRequest(1, 0, 2, false)) == 2);
+                        break;
+                    case "003":
+                        Check("Clone stored and stacked", piece.Cc.Get(CcDefine.Clone)?.Value == 1 && piece.IsStacked);
+                        Check("Clone absorbs capture without bonus", skill.EvaluateIncomingCapture(
+                            new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.ConsumeCloneWithoutBonus &&
+                            !piece.Cc.Has(CcDefine.Clone) && !piece.IsStacked);
+                        break;
+                    case "004":
+                        Check("Hidden blocks targeting and capture", !skill.IsTargetable &&
+                            skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Prevent);
+                        CcEffectService.TickOwnerTurn(p1); CcEffectService.TickOwnerTurn(p1); CcEffectService.TickOwnerTurn(p1);
+                        Check("Hidden expires on third owner start", skill.IsTargetable);
+                        break;
+                    case "005":
+                        Check("Issen moves and retires without bonus", piece.CurrentTileId == BoardTileId.Outer04 &&
+                            enemy.State == PieceState.Waiting && (int)Get(turns, "pendingCaptureThrows") == 0);
+                        break;
+                    case "006": case "018":
+                        Check(id + " capture processed without UI", enemy.State == PieceState.Waiting &&
+                            enemy.CurrentCc == CcDefine.None && (int)Get(turns, "pendingCaptureThrows") == 1);
+                        break;
+                    case "007": case "008":
+                        Check(id + " Stun stored on target", enemy.Cc.Has(CcDefine.Stun));
+                        CcEffectService.TickOwnerTurn(p2);
+                        Check(id + " target cannot move for one complete turn", !movement.TryMovePiece(2, 0, 1));
+                        CcEffectService.TickOwnerTurn(p2);
+                        Check(id + " Stun expires", CcEffectService.CanMove(enemy));
+                        break;
+                    case "009":
+                        Check("Self destruct retires caster and enemy", piece.State == PieceState.Waiting && enemy.State == PieceState.Waiting);
+                        piece.MoveTo(BoardTileId.Outer01);
+                        Check("Parts conversion stored in CC", skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) ==
+                            CharacterCaptureDecision.ConvertToParts && piece.Cc.Has(CcDefine.Parts));
+                        Check("Parts cannot move/use skills", !movement.TryMovePiece(1, 0, 1) && !CcEffectService.CanUseSkill(piece));
+                        var ally = p1.RuntimeData.Pieces[1]; ally.MoveTo(BoardTileId.Outer02);
+                        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer03,
+                            BoardTileId.Outer02, new[] { BoardTileId.Outer02 }));
+                        Check("Ally revives Parts via CC", !piece.Cc.Has(CcDefine.Parts) && piece.CurrentTileId == BoardTileId.Outer01);
+                        break;
+                    case "010": Check("Retreat moves one tile back", piece.CurrentTileId == BoardTileId.None); break;
+                    case "019":
+                        Check("Reverse throw rule stored and consumed", piece.Cc.Has(CcDefine.ReverseExtraThrow) &&
+                            skill.ShouldGrantExtraThrow(YutResult.Do, false) && !piece.Cc.Has(CcDefine.ReverseExtraThrow));
+                        break;
+                }
+                if (id != "004")
+                {
+                    CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
+                    Check(id + " cooldown ticks once per owner", CharacterSkillRegistry.GetRemainingActiveCooldown(1, data) == 1);
+                }
+                p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                skill.OnPieceRetired();
+                piece.MoveTo(BoardTileId.Outer01);
+                enemy.MoveTo(BoardTileId.Outer02);
+                var passiveAlly = p1.RuntimeData.Pieces[1];
+                passiveAlly.MoveTo(BoardTileId.Outer03);
+                switch (id)
+                {
+                    case "001_1":
+                        p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                        skill.OnPieceRetired();
+                        enemy.MoveTo(BoardTileId.Outer03);
+                        var secondEnemy = p2.RuntimeData.Pieces[1];
+                        secondEnemy.MoveTo(BoardTileId.Outer04);
+                        Check("First move keeps original Geol distance then forces Do",
+                            movement.TryMovePiece(1, 0, 3) &&
+                            piece.CurrentTileId == BoardTileId.Outer04);
+                        Check("First landing and forced Do landing both capture",
+                            enemy.State == PieceState.Waiting &&
+                            secondEnemy.State == PieceState.Waiting);
+                        Check("Forced Do does not repeat on the next move",
+                            movement.TryMovePiece(1, 0, 1) &&
+                            piece.CurrentTileId == BoardTileId.Corner01);
+
+                        p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                        skill.OnPieceRetired();
+                        Check("Retire restores passive and corner landing starts shortcut Do",
+                            movement.TryMovePiece(1, 0, 5) &&
+                            piece.CurrentTileId == BoardTileId.Inner01);
+                        break;
+                    case "001_2": case "007":
+                        int beforeCapturePoint = CharacterSkillRegistry.GetSkillPoints(1);
+                        skill.OnCaptureCompleted(new CharacterCaptureRequest(1, 0, 2, 0, 1, true));
+                        Check(id + " passive SkillPoint effect", CharacterSkillRegistry.GetSkillPoints(1) == beforeCapturePoint + 1);
+                        break;
+                    case "002":
+                        skill.OnPieceEnteredBoard();
+                        Check("Protection stored on nearest ally with correct source", passiveAlly.Cc.Has(CcDefine.Protection) &&
+                            passiveAlly.Cc.Get(CcDefine.Protection).SourcePieceId == 0);
+                        Check("Protection works without character component", CharacterSkillRegistry.EvaluateIncomingCapture(
+                            new CharacterCaptureRequest(2, 0, 1, 1, 1, true)) == CharacterCaptureDecision.Prevent &&
+                            !passiveAlly.Cc.Has(CcDefine.Protection));
+                        break;
+                    case "003":
+                        Check("Capture limit resolves through CC", skill.EvaluateIncomingCapture(
+                            new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.LimitRetireToAttackingCount);
+                        break;
+                    case "004":
+                        Check("Charm passive uses Protection CC", skill.EvaluateIncomingCapture(
+                            new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Prevent &&
+                            skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Proceed);
+                        break;
+                    case "005":
+                        var probability = skill.ModifyYutProbability(new[] { (YutResult.Yut, 10f), (YutResult.Mo, 10f), (YutResult.BackDo, 4f) });
+                        Check("BackDo probability redistributed without loss", probability.Length == 2 &&
+                            probability[0].Item2 == 12 && probability[1].Item2 == 12);
+                        piece.MoveTo(BoardTileId.Outer16);
+                        var goalPath = CharacterBoardUtility.GetForwardPath(piece, 3);
+                        Check("Skill path stops at goal", goalPath.Count == 2 && goalPath[0] == BoardTileId.None && goalPath[1] == BoardTileId.None);
+                        CharacterBoardUtility.MoveStackAlongPath(p1, piece, goalPath);
+                        Check("Skill path goals instead of wrapping board", piece.State == PieceState.Goal);
+                        break;
+                    case "006":
+                        var randomState = UnityEngine.Random.state;
+                        UnityEngine.Random.InitState(6006);
+                        bool dodged = false;
+                        for (int i = 0; i < 128 && !dodged; i++)
+                            dodged = skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Prevent;
+                        UnityEngine.Random.state = randomState;
+                        Check("Dodge passive resolves through Protection", dodged);
+                        Check("Sword target range validated before confirmation", !skill.CanSelectActiveTarget(2, 1));
+                        break;
+                    case "008":
+                        skill.OnMoveCompleted(new CharacterMoveRecord(1, 0, BoardTileId.Outer01, BoardTileId.Outer02, new[] { BoardTileId.Outer02 }));
+                        skill.OnOwnerTurnEnded();
+                        Check("Wind path stored in CC", piece.Cc.Has(CcDefine.WindPath));
+                        passiveAlly.MoveTo(BoardTileId.Outer02);
+                        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer01, BoardTileId.Outer02, new[] { BoardTileId.Outer02 }));
+                        Check("Wind moves ally once through Move CC", passiveAlly.CurrentTileId == BoardTileId.Outer03);
+                        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer01, BoardTileId.Outer02, new[] { BoardTileId.Outer02 }));
+                        Check("Wind duplicate notification does not move twice", passiveAlly.CurrentTileId == BoardTileId.Outer03);
+                        break;
+                    case "009":
+                        skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true));
+                        CcEffectService.TickOwnerTurn(p1); CcEffectService.TickOwnerTurn(p1); CcEffectService.TickOwnerTurn(p1);
+                        Check("Unrevived Parts retires on third turn", piece.State == PieceState.Waiting && piece.Cc.Has(CcDefine.Retire));
+                        break;
+                    case "010":
+                        int stack = p1.RuntimeData.CreateStackGroupId();
+                        piece.SetStackGroup(stack, 0); passiveAlly.SetStackGroup(stack, 0);
+                        Check("Stack bonus resolves through CC", skill.ModifyMoveCount(new CharacterMoveRequest(1, 0, 2, false)) == 3);
+                        Check("Carried piece cannot use active", !CcEffectService.CanUseSkill(passiveAlly));
+                        break;
+                    case "018":
+                        skill.OnPieceEnteredBoard();
+                        Check("Mark stored on enemy with source", enemy.Cc.Get(CcDefine.Mark)?.SourcePieceId == 0);
+                        int markPoints = CharacterSkillRegistry.GetSkillPoints(1);
+                        CcBoardEffects.TryCapture(1, 0, new CharacterPieceReference(p2, enemy), 1, true, out _);
+                        Check("Actual marked capture grants SP once", CharacterSkillRegistry.GetSkillPoints(1) == markPoints + 1 && !enemy.Cc.Has(CcDefine.Mark));
+                        break;
+                    case "019":
+                        skill.OnOwnerTurnStarted();
+                        Check("Extra YutMo passive allowance once per turn", skill.ShouldGrantExtraThrow(YutResult.Yut, false) &&
+                            !skill.ShouldGrantExtraThrow(YutResult.Yut, false));
+                        break;
+                }
+                CharacterSkillRegistry.Unregister(skill);
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+        catch (Exception exception) { results.Add("FAIL EXCEPTION " + exception); }
+        finally
+        {
+            ResetRegistry();
+            EditorSceneManager.CloseScene(fixture, true);
+            if (previous.IsValid()) SceneManager.SetActiveScene(previous);
+            foreach (var data in copies) UnityEngine.Object.DestroyImmediate(data);
+            File.WriteAllLines(Report, results);
+            Debug.Log($"[CC Verification] {results.FindAll(line => line.StartsWith("PASS")).Count} passed, " +
+                $"{results.FindAll(line => line.StartsWith("FAIL")).Count} failed. {Report}");
+        }
+    }
+    private static void Check(string name, bool passed, string detail = "") =>
+        results.Add((passed ? "PASS " : "FAIL ") + name + " " + detail);
+    private static object Get(object target, string field) => target.GetType()
+        .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(target);
+    private static void Set(object target, string field, object value) => target.GetType()
+        .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
+    private static void ResetRegistry() => typeof(CharacterSkillRegistry)
+        .GetMethod("ResetRuntimeState", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+}
+
+// 런타임 CC를 복사하지 않고 PlayerManager가 관리하는 실제 말 데이터를 표시합니다.
+[CustomEditor(typeof(PlayerManager))]
+internal sealed class PlayerCcInspector : Editor
+{
+    public override void OnInspectorGUI()
+    {
+        DrawDefaultInspector();
+        var manager = (PlayerManager)target;
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Runtime Piece CC (Read Only)", EditorStyles.boldLabel);
+        if (!Application.isPlaying)
+        {
+            EditorGUILayout.HelpBox("플레이 중 각 말의 CC 종류, 남은 턴, 수치, 발동자를 표시합니다.", MessageType.Info);
+            return;
+        }
+        foreach (var player in manager.ActivePlayers)
+        {
+            EditorGUILayout.LabelField($"Player {player.PlayerId}", EditorStyles.boldLabel);
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                EditorGUILayout.LabelField($"Piece {piece.PieceId} / {piece.State}", $"CC: {piece.CurrentCc}");
+                using (new EditorGUI.IndentLevelScope())
+                foreach (var effect in piece.Cc.Effects)
+                    EditorGUILayout.LabelField(effect.Type.ToString(),
+                        $"Turns: {effect.RemainingOwnerTurns}, Value: {effect.Value}, " +
+                        $"Source: {effect.SourcePlayerId}/{effect.SourcePieceId}");
+            }
+        }
+        Repaint();
     }
 }
 #endif

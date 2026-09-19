@@ -17,8 +17,6 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     private GameObject spawnedVisualModel;
     private bool isRegistered;
-    private int grantedProtectionCharges;
-    private int grantedProtectionRemainingOwnerTurns;
     private int remainingPassiveCooldownTurns;
 
     public CharacterData Data => characterData;
@@ -37,7 +35,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public bool IsPassiveReady => remainingPassiveCooldownTurns <= 0;
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
-    public virtual bool IsTargetable => true;
+    public virtual bool IsTargetable => TryGetPiece(out var piece) && CcEffectService.IsTargetable(piece);
     //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
     public virtual bool RequiresCasterPieceSelection => true;
     public virtual bool RequiresTargetPieceSelection => false;
@@ -45,7 +43,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public virtual bool CanSelectAsActiveCaster(
         PlayerRuntimeData.PieceRuntimeData piece)
     {
-        if (piece == null || piece.State == PieceState.Goal)
+        if (!CcEffectService.CanUseSkill(piece))
             return false;
 
         return !RequiresCasterPieceSelection || piece.State == PieceState.InBoard;
@@ -120,24 +118,24 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public virtual int ModifyMoveCount(CharacterMoveRequest request)
     {
-        return request.MoveCount;
+        return TryGetPiece(out var piece) ? CcEffectService.ResolveMove(piece, request) : request.MoveCount;
     }
 
     public virtual (YutResult, float)[] ModifyYutProbability(
         (YutResult, float)[] currentTable)
     {
-        return currentTable;
+        return CcEffectService.ResolveProbability(PlayerId, currentTable);
     }
 
     public virtual bool ShouldGrantExtraThrow(YutResult result, bool defaultValue)
     {
-        return defaultValue;
+        return CcEffectService.ResolveExtraThrow(PlayerId, result, defaultValue);
     }
 
     public virtual CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        return TryConsumeGrantedProtection()
-            ? CharacterCaptureDecision.Prevent
+        return TryGetPiece(out var piece)
+            ? CcEffectService.ResolveCapture(piece, request)
             : CharacterCaptureDecision.Proceed;
     }
 
@@ -152,11 +150,6 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (remainingPassiveCooldownTurns > 0)
             remainingPassiveCooldownTurns--;
 
-        if (grantedProtectionRemainingOwnerTurns <= 0) return;
-
-        grantedProtectionRemainingOwnerTurns--;
-        if (grantedProtectionRemainingOwnerTurns == 0)
-            grantedProtectionCharges = 0;
     }
 
     public virtual void OnOwnerTurnEnded() { }
@@ -179,6 +172,11 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (caster.State == PieceState.Goal)
             return CharacterActiveResult.Failure("A goal piece cannot use an active skill.");
 
+        if (!CcEffectService.CanUseSkill(caster))
+            return CharacterActiveResult.Failure("Stun, Silence, Parts or a carried piece prevents skill use.");
+        if (!CanSelectAsActiveCaster(caster))
+            return CharacterActiveResult.Failure("This piece cannot be selected as the active caster.");
+
         return ExecuteActive(request, caster);
     }
 
@@ -188,7 +186,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
                Turns != null &&
                Turns.CurrentTurn != null &&
                (int)Turns.CurrentTurn.currentPlayer == PlayerId &&
-               CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase);
+               CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase) &&
+               TryGetPiece(out var piece) && CcEffectService.CanUseSkill(piece);
     }
 
     /// <summary>
@@ -200,10 +199,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (charges <= 0) throw new ArgumentOutOfRangeException(nameof(charges));
         if (remainingOwnerTurns <= 0) throw new ArgumentOutOfRangeException(nameof(remainingOwnerTurns));
 
-        grantedProtectionCharges = Math.Max(grantedProtectionCharges, charges);
-        grantedProtectionRemainingOwnerTurns = Math.Max(
-            grantedProtectionRemainingOwnerTurns,
-            remainingOwnerTurns);
+        ApplyEffect(CcDefine.Protection, remainingOwnerTurns, charges);
     }
 
     protected virtual CharacterActiveResult ExecuteActive(
@@ -283,15 +279,35 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     protected void RequestSkillPoint(int amount = 1)
     {
-        CharacterSkillRegistry.RequestSkillPoint(PlayerId, amount);
+        ApplyEffect(CcDefine.SkillPoint, value: amount);
     }
 
-    private bool TryConsumeGrantedProtection()
+    protected bool ApplyEffect(CcDefine type, int turns = 0, int value = 1)
     {
-        if (grantedProtectionCharges <= 0) return false;
-        grantedProtectionCharges--;
-        return true;
+        return TryGetPiece(out var piece) &&
+            CcEffectService.Apply(piece, type, turns, value, PlayerId, PieceId);
     }
+
+    // 발동 조건과 선택 순서는 스킬이 정의하고 UI는 입력/강조만 담당합니다.
+    public virtual CharacterSkillInputStep GetNextInputStep(bool selectionStarted,
+        bool hasCaster, bool hasTarget)
+    {
+        if (RequiresCasterPieceSelection && (!selectionStarted || !hasCaster))
+            return CharacterSkillInputStep.Caster;
+        if (RequiresTargetPieceSelection && !hasTarget)
+            return CharacterSkillInputStep.Target;
+        return CharacterSkillInputStep.Confirm;
+    }
+
+    public virtual bool CanSelectActiveTarget(int targetPlayerId, int targetPieceId)
+    {
+        return targetPlayerId != PlayerId &&
+            TryGetPiece(targetPlayerId, targetPieceId, out var target) &&
+            target.Piece.State == PieceState.InBoard &&
+            CcEffectService.IsTargetable(target.Piece);
+    }
+
+    internal bool TryTriggerPassiveCooldown() => TryStartPassiveCooldown();
 
     private void TryRegisterRuntime()
     {

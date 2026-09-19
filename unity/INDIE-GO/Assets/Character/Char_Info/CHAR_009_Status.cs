@@ -4,69 +4,17 @@ using YutArena.InGame;
 
 public sealed class CHAR_009_Status : CharacterStatusBehaviour
 {
-    private bool isParts;
-    private int partsRemainingOwnerTurns;
-    private BoardTileId partsTile;
-
-    public override bool IsTargetable => !isParts;
-
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        // Parts remain on their tile for revival checks but are not a board
-        // piece that can be captured again. In particular, do not refresh the
-        // three-turn parts timer when another piece lands on this tile.
-        if (isParts)
-            return CharacterCaptureDecision.Prevent;
-
-        if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece) ||
-            piece.State != PieceState.InBoard || !TryStartPassiveCooldown())
-            return CharacterCaptureDecision.Proceed;
-
-        isParts = true;
-        partsRemainingOwnerTurns = 3;
-        partsTile = piece.CurrentTileId;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_009_Status)} converted to parts at " +
-            $"{partsTile}. Player={PlayerId}, Piece={PieceId}",
-            this);
+        var existing = base.EvaluateIncomingCapture(request);
+        if (existing != CharacterCaptureDecision.Proceed) return existing;
+        if (!TryGetPiece(out var piece) || piece.State != PieceState.InBoard ||
+            !TryStartPassiveCooldown()) return CharacterCaptureDecision.Proceed;
+        ApplyEffect(CcDefine.Parts, 3);
         return CharacterCaptureDecision.ConvertToParts;
     }
 
-    public override void OnOwnerTurnStarted()
-    {
-        base.OnOwnerTurnStarted();
-        if (!isParts) return;
-
-        partsRemainingOwnerTurns--;
-        if (partsRemainingOwnerTurns > 0) return;
-
-        if (TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece))
-            CharacterBoardUtility.Retire(
-                new CharacterPieceReference(Owner, piece),
-                false);
-        ClearParts();
-    }
-
-    public override void OnAnyPieceMoveCompleted(CharacterMoveRecord record)
-    {
-        if (!isParts || record.PlayerId != PlayerId || record.PieceId == PieceId)
-            return;
-        if (!CharacterBoardUtility.IsWithinDistance(record.To, partsTile, 1))
-            return;
-
-        if (TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece))
-        {
-            piece.MoveTo(partsTile);
-            piece.ClearCc();
-        }
-        ClearParts();
-    }
-
-    public override void OnPieceRetired()
-    {
-        ClearParts();
-        ResetPassiveCooldown();
-    }
+    public override void OnPieceRetired() { ResetPassiveCooldown(); }
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
@@ -100,10 +48,4 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             suppressExtraThrow: true);
     }
 
-    private void ClearParts()
-    {
-        isParts = false;
-        partsRemainingOwnerTurns = 0;
-        partsTile = BoardTileId.None;
-    }
 }

@@ -6,8 +6,6 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
 {
     public override bool RequiresTargetPieceSelection => true;
 
-    private int markedPlayerId = -1;
-    private int markedPieceId = -1;
 
     public override void OnPieceEnteredBoard()
     {
@@ -25,11 +23,12 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
         if (!TryStartPassiveCooldown()) return;
 
         CharacterPieceReference selected = enemies[Random.Range(0, enemies.Count)];
-        markedPlayerId = selected.Player.PlayerId;
-        markedPieceId = selected.Piece.PieceId;
+        ClearMark();
+        CcEffectService.Apply(selected.Piece, CcDefine.Mark,
+            sourcePlayerId: PlayerId, sourcePieceId: PieceId);
         Debug.Log(
             $"[CharacterSkill][Passive] {nameof(CHAR_018_Status)} marked " +
-            $"Player={markedPlayerId}, Piece={markedPieceId}. " +
+            $"Player={selected.Player.PlayerId}, Piece={selected.Piece.PieceId}. " +
             $"Owner={PlayerId}, Piece={PieceId}",
             this);
     }
@@ -38,19 +37,6 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
     {
         ClearMark();
         ResetPassiveCooldown();
-    }
-
-    public override void OnCaptureCompleted(CharacterCaptureRequest request)
-    {
-        if (request.TargetPlayerId != markedPlayerId || request.TargetPieceId != markedPieceId)
-            return;
-
-        RequestSkillPoint();
-        Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_018_Status)} requested 1 skill point " +
-            $"for capturing the mark. Player={PlayerId}, Piece={PieceId}",
-            this);
-        ClearMark();
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -101,12 +87,12 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
 
     private bool TryFindAutomaticTarget(out CharacterPieceReference target)
     {
-        if (markedPlayerId > 0 && markedPieceId >= 0 &&
-            TryGetPiece(markedPlayerId, markedPieceId, out target) &&
-            target.Piece.State == PieceState.InBoard &&
-            CharacterSkillRegistry.IsTargetable(markedPlayerId, markedPieceId))
+        foreach (var enemy in CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
         {
-            return true;
+            if (!CharacterSkillRegistry.IsTargetable(enemy.Player.PlayerId, enemy.Piece.PieceId)) continue;
+            foreach (var effect in enemy.Piece.Cc.Effects)
+                if (effect.Type == CcDefine.Mark && effect.SourcePlayerId == PlayerId &&
+                    effect.SourcePieceId == PieceId) { target = enemy; return true; }
         }
 
         foreach (CharacterPieceReference enemy in
@@ -127,7 +113,6 @@ public sealed class CHAR_018_Status : CharacterStatusBehaviour
 
     private void ClearMark()
     {
-        markedPlayerId = -1;
-        markedPieceId = -1;
+        CcEffectService.ClearMarksFrom(PlayerId, PieceId);
     }
 }

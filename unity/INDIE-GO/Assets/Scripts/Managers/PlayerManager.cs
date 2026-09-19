@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
+using YutArena.InGame;
 
 /// <summary>
 /// 미리 배치된 PlayerSlot들을 활성화하고, 현재 게임에 참가 중인 플레이어를 관리한다.
@@ -101,6 +102,24 @@ public sealed class PlayerManager : MonoBehaviour
 
         player = null;
         return false;
+    }
+
+    //수정: 스킬/아이템 등의 공통 CC 적용 API. 상태는 기존 말 데이터에 직접 저장됩니다.
+    public bool TryApplyPieceCc(int playerId, int pieceId, CcDefine type,
+        int remainingOwnerTurns = 0, int value = 1, int sourcePlayerId = -1, int sourcePieceId = -1)
+    {
+        return TryGetPlayer(playerId, out var player) &&
+            player.TryGetPieceData(pieceId, out var piece) &&
+            CcEffectService.Apply(piece, type, remainingOwnerTurns, value, sourcePlayerId, sourcePieceId);
+    }
+
+    public bool TryGetPieceCc(int playerId, int pieceId, out PieceCcCollection cc)
+    {
+        cc = null;
+        if (!TryGetPlayer(playerId, out var player) || !player.TryGetPieceData(pieceId, out var piece))
+            return false;
+        cc = piece.Cc;
+        return true;
     }
 
     private void ValidateSetupRequest(int playerCount, int pieceCountPerPlayer, IReadOnlyList<string> playerNames)
