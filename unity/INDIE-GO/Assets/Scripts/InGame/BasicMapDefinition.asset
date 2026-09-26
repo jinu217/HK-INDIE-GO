@@ -15,6 +15,14 @@ MonoBehaviour:
   mapType: 0
   backgroundPrefab: {fileID: 7257135953520947148, guid: 8dbe797096687784e843a59994bfda32, type: 3}
   boardPrefab: {fileID: 4842533177795376041, guid: cadec29d01c0aba40a0ffce27fb0558f, type: 3}
+  startTilePrefab: {fileID: 0}
+  outerTilePrefab: {fileID: 0}
+  innerTilePrefab: {fileID: 0}
+  corner01TilePrefab: {fileID: 0}
+  corner02TilePrefab: {fileID: 0}
+  corner03TilePrefab: {fileID: 0}
+  corner04TilePrefab: {fileID: 0}
+  centerTilePrefab: {fileID: 0}
   specialTiles:
   - tileId: 6
     effect: 0

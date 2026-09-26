@@ -5,6 +5,12 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
     private bool talismanAvailable = true;
     private bool doubleNextMove;
 
+    public override bool CanSelectAsActiveCaster(
+        PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        return piece != null && piece.State != PieceState.Goal;
+    }
+
     public override void OnPieceEnteredBoard()
     {
         if (!talismanAvailable || !TryStartPassiveCooldown() ||

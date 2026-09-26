@@ -24,7 +24,7 @@ MonoBehaviour:
   active_Name: "\uC790\uD3ED"
   active_Desc: "\uC8FC\uBCC0 1\uCE78\uC758 \uBAA8\uB4E0 \uB9D0 \uB9AC\uD0C0\uC774\uC5B4(\uC544\uAD70
     \uD3EC\uD568)"
-  active_CooldownTurns: 5
+  active_CooldownTurns: 3
   passive_CooldownTurns: 0
   passive_Status: 0
   active_Status: 0

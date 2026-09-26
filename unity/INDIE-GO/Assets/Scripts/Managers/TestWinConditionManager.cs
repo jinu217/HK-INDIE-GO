@@ -32,6 +32,12 @@ namespace YutArena.Managers
         private List<TeamSlot> finishedRanking = new List<TeamSlot>();
         // 팀별 완주 수가 바뀔 때마다 UI(점수판 등)에 알려주기 위한 이벤트
         public System.Action<TeamSlot, int> OnEscapeCountChanged;
+
+        // UI(점수판)가 "지금 이 팀 몇 개 탈출시켰는지" 직접 물어볼 때 씀.
+        // Escape 모드는 완주한 말을 바로 대기 상태로 되돌리기 때문에, 말 상태를 다시 세는 방식으로는
+        // 항상 0이 나온다 - 반드시 이 누적값을 읽어야 한다. 개인전은 팀=본인 한 명이라 그대로 개인 점수가 됨.
+        public int GetEscapeCount(TeamSlot team)
+            => escapeCountByTeam.TryGetValue(team, out var count) ? count : 0;
         // GameManager.StartGame()에서 호출됨. 새 게임 시작하니까 이전 판 점수 기록은 초기화
         public void Initialize(GameStartSettings gameSettings)
         {
@@ -59,7 +65,7 @@ namespace YutArena.Managers
             activeTeams.Clear();
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
-                var team = MatchCompositionRule.GetTeamSlot(settings.matchComposition, (PlayerSlot)i);
+                var team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i);
                 if (team != TeamSlot.None)
                     activeTeams.Add(team);
             }
@@ -133,13 +139,23 @@ namespace YutArena.Managers
             // eliminatedTeams는 먼저 나간 팀이 리스트 앞쪽에 쌓여있으므로, 뒤집어서 붙이면 "가장 먼저 나간 팀이 제일 마지막(꼴찌)"가 됨
             for (int i = eliminatedTeams.Count - 1; i >= 0; i--)
                 finalRanking.Add(eliminatedTeams[i]);
+
+            // 버그 수정: 다인전(3팀 이상)에서 어떤 팀이 먼저 완주해서 finishedRanking에 먼저 들어가 있으면,
+            // 그 팀이 finalRanking의 진짜 1등인데 - "승자"로 표시되는 값(winningTeam)에는 그거랑 상관없이
+            // 그냥 이 Declare() 호출을 유발한(=마지막까지 남았던 대결의) 팀만 들어가고 있었음.
+            // 1:1이나 팀이 2개뿐인 대전은 finishedRanking이 항상 비어있어서 결과가 똑같고(동작 그대로),
+            // 3팀 이상 다인전일 때만 "화면에 표시될 승자"가 실제 1등과 맞게 바로잡힘.
+            TeamSlot displayedWinner = finalRanking.Count > 0 ? finalRanking[0] : winningTeam;
+
             var result = new GameResultData
             {
                 resultType = resultType,
-                winningTeam = winningTeam,
-                winningPlayer = FindSoloWinningPlayer(winningTeam), // winningTeam 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
+                winningTeam = displayedWinner,
+                winningPlayer = FindSoloWinningPlayer(displayedWinner), // displayedWinner 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
                 finalRanking = finalRanking
             };
+            Debug.Log("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
+                " / settings.matchComposition=" + settings.matchComposition + " / settings.playerCount=" + settings.playerCount); // 확인용 로그
             gameManager.EndGame(result);
         }
         // ===================================================================
@@ -154,7 +170,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var p = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != winningTeam) continue;
+                if (MatchCompositionRule.GetTeamSlot(settings, p) != winningTeam) continue;
                 memberCount++;
                 found = p;
             }
@@ -183,7 +199,7 @@ namespace YutArena.Managers
             if (settings == null) return;
             if (leftPlayers.Contains(leavingPlayer)) return; // 이미 처리한 사람이면 무시 (중복 방지)
             leftPlayers.Add(leavingPlayer);
-            TeamSlot team = MatchCompositionRule.GetTeamSlot(settings.matchComposition, leavingPlayer);
+            TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, leavingPlayer);
             if (HasActiveTeammate(team))
             {
                 // 아직 이 팀에 안 나간 사람이 남아있음 -> 팀전 상황, "이어할지" 확인 필요
@@ -205,7 +221,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var p = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) == team &&
+                if (MatchCompositionRule.GetTeamSlot(settings, p) == team &&
                     !leftPlayers.Contains(p))
                     return true;
             }
@@ -332,7 +348,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var p = (PlayerSlot)i;
-                if (tiedTeams.Contains(MatchCompositionRule.GetTeamSlot(settings.matchComposition, p)))
+                if (tiedTeams.Contains(MatchCompositionRule.GetTeamSlot(settings, p)))
                     tieBreakerPendingPlayers.Add(p);
             }
             Debug.Log("[타이브레이커] 시작됨! 대상 팀: " + string.Join(", ", tiedTeams) +
@@ -386,7 +402,7 @@ namespace YutArena.Managers
                 for (int i = 1; i <= settings.playerCount && i <= 8; i++)
                 {
                     var p = (PlayerSlot)i;
-                    if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
+                    if (MatchCompositionRule.GetTeamSlot(settings, p) != team) continue;
                     if (tieBreakerResults.TryGetValue(p, out var r))
                         sum += YutResultRule.GetMoveCount(r);
                 }
@@ -427,7 +443,7 @@ namespace YutArena.Managers
                 for (int i = 1; i <= settings.playerCount && i <= 8; i++)
                 {
                     var p = (PlayerSlot)i;
-                    if (MatchCompositionRule.GetTeamSlot(settings.matchComposition, p) != team) continue;
+                    if (MatchCompositionRule.GetTeamSlot(settings, p) != team) continue;
                     if (!playerManager.TryGetPlayer(i, out var player)) continue;
 
                     foreach (var piece in player.RuntimeData.Pieces)

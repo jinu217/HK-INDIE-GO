@@ -75,6 +75,74 @@ public sealed class PieceMovementManager : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// 하이라이트 UI 전용: 지정 말이 moveCount 만큼 이동하면 도착하게 될 타일을 계산합니다.
+    /// 실제 이동/잡기/업기/완주/스킬 처리는 전혀 하지 않으며(부작용 0), PieceRuntimeData 도
+    /// 건드리지 않습니다. 전이 규칙은 TryMovePiece 의 걷기 루프와 동일한 함수를 공유합니다.
+    ///
+    /// 주의: CharacterSkillRegistry.ModifyMoveCount(전우치 2배 등)는 부작용이 있어 여기서
+    /// 호출하지 않습니다. 이동량 보정 스킬이 걸린 경우 실제 도착지와 다를 수 있습니다.
+    /// </summary>
+    /// <param name="landingTile">도착 타일. reachesFinish 가 true 면 BoardTileId.None(판 밖).</param>
+    /// <param name="reachesFinish">이번 이동으로 참먹이를 지나 완주하게 되는지 여부.</param>
+    /// <returns>이동할 수 있는 목적지가 있으면 true. (예: 대기 중인 말 + 뒷도 → false)</returns>
+    public bool TryPreviewLanding(
+        int playerId,
+        int pieceId,
+        int moveCount,
+        out BoardTileId landingTile,
+        out bool reachesFinish)
+    {
+        landingTile = BoardTileId.None;
+        reachesFinish = false;
+
+        if (moveCount == 0)
+            return false;
+
+        if (playerManager == null ||
+            !playerManager.TryGetPlayer(playerId, out PlayerController player) ||
+            !player.TryGetPieceData(pieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+            piece.State == PieceState.Goal)
+        {
+            return false;
+        }
+
+        // 실제 말 대신 raw 타일 값만 들고 한 칸씩 시뮬레이션 (MoveTo 미러).
+        BoardTileId curr = piece.CurrentTileId;
+        BoardTileId prev = piece.PreviousTileId;
+        bool inBoard = piece.State == PieceState.InBoard;
+        bool isBackward = moveCount < 0;
+        int steps = Mathf.Abs(moveCount);
+
+        for (int step = 0; step < steps; step++)
+        {
+            // 참먹이를 지나쳐 완주하는 경우 (TryMovePiece 의 완주 판정과 동일).
+            if (!isBackward && inBoard && curr == BoardTileId.None)
+            {
+                landingTile = BoardTileId.None;
+                reachesFinish = true;
+                return true;
+            }
+
+            BoardTileId next = isBackward
+                ? GetNextBackwardTile(curr, prev, true)
+                : GetNextForwardTile(curr, prev, step == 0, true);
+
+            prev = curr;
+            curr = next;
+            if (next != BoardTileId.None)
+                inBoard = true;
+        }
+
+        // 대기 중인 말이 뒤로 갈 곳이 없는 경우 등: 목적지 없음.
+        if (curr == BoardTileId.None && !inBoard)
+            return false;
+
+        landingTile = curr;
+        reachesFinish = !isBackward && inBoard && curr == BoardTileId.None;
+        return true;
+    }
+
     //수정: 일반 이동과 캐릭터 스킬 이동을 구분할 수 있도록 선택 인자를 추가했습니다.
     public bool TryMovePiece(
         int playerId,
@@ -351,8 +419,19 @@ public sealed class PieceMovementManager : MonoBehaviour
         PlayerRuntimeData.PieceRuntimeData piece,
         bool isStartingThisMove)
     {
-        BoardTileId current = piece.CurrentTileId;
+        //수정: 실제 이동은 종전과 동일. raw 타일 값만 받는 오버로드로 위임합니다.
+        return GetNextForwardTile(piece.CurrentTileId, piece.PreviousTileId, isStartingThisMove, false);
+    }
 
+    //수정: TryPreviewLanding(하이라이트용)이 말 객체 없이 경로를 계산할 수 있도록
+    //현재/이전 타일 값만 받는 오버로드를 추가했습니다. 전이 규칙은 종전과 100% 동일하며,
+    //silent=true면 미정의 타일 로그를 생략합니다(미리보기가 매 프레임 재계산되므로).
+    private static BoardTileId GetNextForwardTile(
+        BoardTileId current,
+        BoardTileId previous,
+        bool isStartingThisMove,
+        bool silent)
+    {
         if (current == BoardTileId.None)
             return BoardTileId.Outer01;
 
@@ -393,25 +472,36 @@ public sealed class PieceMovementManager : MonoBehaviour
             case BoardTileId.Inner07: return BoardTileId.Inner08;
             case BoardTileId.Inner08: return BoardTileId.None;
             case BoardTileId.Center:
-                return piece.PreviousTileId == BoardTileId.Inner02
+                return previous == BoardTileId.Inner02
                     ? BoardTileId.Inner03
                     : BoardTileId.Inner07;
             default:
-                Debug.LogError($"Undefined forward tile: {current}");
+                if (!silent)
+                    Debug.LogError($"Undefined forward tile: {current}");
                 return BoardTileId.None;
         }
     }
 
     private static BoardTileId GetNextBackwardTile(PlayerRuntimeData.PieceRuntimeData piece)
     {
-        switch (piece.CurrentTileId)
+        //수정: 실제 이동은 종전과 동일. raw 타일 값만 받는 오버로드로 위임합니다.
+        return GetNextBackwardTile(piece.CurrentTileId, piece.PreviousTileId, false);
+    }
+
+    //수정: TryPreviewLanding(하이라이트용) 전용 오버로드. 후진 규칙은 종전과 100% 동일합니다.
+    private static BoardTileId GetNextBackwardTile(
+        BoardTileId current,
+        BoardTileId previous,
+        bool silent)
+    {
+        switch (current)
         {
             case BoardTileId.None:
-                if (piece.PreviousTileId == BoardTileId.Outer01)
+                if (previous == BoardTileId.Outer01)
                     return BoardTileId.Outer16;
-                if (piece.PreviousTileId == BoardTileId.Inner08)
+                if (previous == BoardTileId.Inner08)
                     return BoardTileId.Inner08;
-                if (piece.PreviousTileId == BoardTileId.Outer16)
+                if (previous == BoardTileId.Outer16)
                     return BoardTileId.Outer16;
                 return BoardTileId.None;
 
@@ -430,7 +520,7 @@ public sealed class PieceMovementManager : MonoBehaviour
             case BoardTileId.Outer11: return BoardTileId.Outer10;
             case BoardTileId.Outer12: return BoardTileId.Outer11;
             case BoardTileId.Corner03:
-                return piece.PreviousTileId == BoardTileId.Inner04
+                return previous == BoardTileId.Inner04
                     ? BoardTileId.Inner04
                     : BoardTileId.Outer12;
             case BoardTileId.Outer13: return BoardTileId.Corner03;
@@ -446,12 +536,13 @@ public sealed class PieceMovementManager : MonoBehaviour
             case BoardTileId.Inner07: return BoardTileId.Center;
             case BoardTileId.Inner08: return BoardTileId.Inner07;
             case BoardTileId.Center:
-                return piece.PreviousTileId == BoardTileId.Inner03 ||
-                       piece.PreviousTileId == BoardTileId.Inner02
+                return previous == BoardTileId.Inner03 ||
+                       previous == BoardTileId.Inner02
                     ? BoardTileId.Inner02
                     : BoardTileId.Inner06;
             default:
-                Debug.LogError($"Undefined back-do tile: {piece.CurrentTileId}");
+                if (!silent)
+                    Debug.LogError($"Undefined back-do tile: {current}");
                 return BoardTileId.None;
         }
     }

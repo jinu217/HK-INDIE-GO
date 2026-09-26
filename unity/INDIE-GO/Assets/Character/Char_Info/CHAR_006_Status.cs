@@ -4,6 +4,8 @@ using YutArena.InGame;
 
 public sealed class CHAR_006_Status : CharacterStatusBehaviour
 {
+    public override bool RequiresTargetPieceSelection => true;
+
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
         if (IsPassiveReady && Random.value < 0.25f && TryStartPassiveCooldown())

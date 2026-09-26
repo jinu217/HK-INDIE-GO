@@ -28,6 +28,9 @@ namespace YutArena.Managers
         // 이번 턴에 던져서 "아직 이동에 쓰지 않은" 윷 결과들을 쌓아두는 리스트
         // 예: 윷-모-도 순서로 던졌다면 이 리스트에 [윷, 모, 도] 3개가 들어있다가 플레이어가 원하는 순서로 하나씩 골라서 꺼내 쓰게 됨
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
+        // 하이라이트 UI(MoveDestinationSelector) 초기 시딩용 읽기 전용 뷰.
+        // 실제 갱신 통보는 OnPendingResultsChanged 이벤트로 이뤄진다.
+        public IReadOnlyList<YutThrowData> PendingResults => pendingResults;
         // 잡기로 얻은 보너스 던지기 횟수 저장( 던진 윷 결과를 다 소모하고 보너스 던지기를 하니까)
         private int pendingCaptureThrows = 0;
         // 스킬로 얻은 보너스 던지기 횟수 저장 (예: 기본형 "한번더")
@@ -92,6 +95,7 @@ namespace YutArena.Managers
             Debug.Log("[실제 게임] 확정된 순서: " + string.Join(" -> ", determinedOrder)); // 테스트용, 진짜 게임이 쓰는 순서를 딱 한 번 찍음
             CurrentTurn.roundNumber = 1;
             CurrentTurn.turnNumber = 1;
+            maxTurnLimitHandled = false;
             BeginTurnFor(TurnOrder.Current);
         }
         // 참가자 목록을 받아서, 던진 결과가 높은 순서대로 정렬된 새 목록을 돌려줌
@@ -136,14 +140,14 @@ namespace YutArena.Managers
         private List<PlayerSlot> DetermineTeamBasedOrder(List<PlayerSlot> players)
         {
             var playersByTeam = players
-                .GroupBy(p => MatchCompositionRule.GetTeamSlot(settings.matchComposition, p))
+                .GroupBy(p => MatchCompositionRule.GetTeamSlot(settings, p))
                 .ToDictionary(g => g.Key, g => g.OrderBy(p => (int)p).ToList());
 
             var representatives = playersByTeam.Select(kv => kv.Value[0]).ToList();
 
             // 팀 순위(어느 팀이 먼저인지)만 뽑아둠
             var teamOrder = DetermineOrder(representatives)
-                .Select(rep => MatchCompositionRule.GetTeamSlot(settings.matchComposition, rep))
+                .Select(rep => MatchCompositionRule.GetTeamSlot(settings, rep))
                 .ToList();
 
             // 라운드(1P끼리, 2P끼리...) 단위로 팀 순위를 반복해서 번갈아가며 이어붙임
@@ -179,7 +183,7 @@ namespace YutArena.Managers
             CurrentTurn.currentPlayer = player;
             // settings.matchComposition에 "1vs1vs1vs1(개인전)"인지 "2vs2(팀전)"인지가 담겨있으므로
             // Common의 MatchCompositionRule을 그대로 써서 team을 계산함
-            CurrentTurn.currentTeam = MatchCompositionRule.GetTeamSlot(settings.matchComposition, player);
+            CurrentTurn.currentTeam = MatchCompositionRule.GetTeamSlot(settings, player);
             pendingResults.Clear();
             pendingCaptureThrows = 0;
             pendingSkillThrows = 0; // 새 턴 시작이니 스킬 보너스 던지기도 초기화
@@ -310,6 +314,7 @@ namespace YutArena.Managers
             }
             SetPhase(TurnPhase.WaitAction);
             //  이동 단계로 넘어가도 타이머는 이미 계속 흐르고 있어서 따로 시작 안 함
+            EndTurnIfNoUsableResult();
         }
         // UI에서 플레이어가 [결과 묶음] 중 하나를 골라(chosenResult), 어떤 말을 옮길지(pieceId) 정하면 호출됨
         // pieceId, chosenResult는 이 함수의 매개변수 - UI가 호출할 때 직접 넣어주는 값
@@ -396,6 +401,7 @@ namespace YutArena.Managers
             if (pendingResults.Count > 0)
             {
                 SetPhase(TurnPhase.WaitAction);
+                EndTurnIfNoUsableResult();
                 return;
             }
             // 쓸 결과는 다 썼는데, 쌓아둔 보너스 던지기(잡기 또는 스킬)가 있으면 -> 그거 쓰러 던지기 단계로 돌아감
@@ -431,6 +437,55 @@ namespace YutArena.Managers
                 }
             }
         }
+        // ===================================================================
+        // 남은 pendingResults 중 하나라도 실제로 말을 움직일 수 있으면 false 를 돌려주고,
+        // 아무 결과도 쓸 수 없으면(예: 판에 말이 하나도 없는데 뒷도만 남음) 즉시 턴을 종료한다.
+        // 이 처리가 없으면 마커가 하나도 안 떠서 플레이어가 시간 초과까지 기다려야 한다.
+        // 스턴/업힌 말 같은 세부 제약까지는 보지 않는다(데드락 방지가 목적).
+        // ===================================================================
+        private void EndTurnIfNoUsableResult()
+        {
+            if (CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
+            if (HasAnyUsablePendingResult()) return;
+
+            Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
+            EndTurn();
+        }
+
+        private bool HasAnyUsablePendingResult()
+        {
+            if (pendingResults.Count == 0) return false;
+
+            int playerId = (int)CurrentTurn.currentPlayer;
+            bool hasBoardPiece = HasAnyPieceInBoard(playerId);
+            bool hasWaitingPiece = HasAnyWaitingPiece(playerId);
+
+            foreach (var throwData in pendingResults)
+            {
+                if (throwData.result == YutResult.BackDo)
+                {
+                    if (hasBoardPiece) return true; // 뒷도는 보드 위 말이 있어야 씀
+                }
+                else if (hasBoardPiece || hasWaitingPiece)
+                {
+                    return true; // 전진 결과는 대기 말이든 보드 위 말이든 있으면 사용 가능
+                }
+            }
+            return false;
+        }
+
+        // 이 플레이어가 대기 중인(아직 판에 안 올린) 말이 하나라도 있는지
+        private bool HasAnyWaitingPiece(int playerId)
+        {
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                if (piece.State == PieceState.Waiting)
+                    return true;
+            }
+            return false;
+        }
+
         // ===================================================================
         // 이 플레이어 말 중 하나라도 보드 위에(State == InBoard) 있는지 확인하는 함수
         // 뒷도(BackDo)를 쓸 수 있는지 판단하는 용도로 씀 - 전부 대기중(Waiting)이면
@@ -503,21 +558,43 @@ namespace YutArena.Managers
             }
             AdvanceToNextPlayer();
         }
+        // 최대 턴수 도달 처리를 이미 했는지(한 게임당 한 번만). Classic/KillTheKing처럼
+        // HandleTimeLimitReached가 게임을 끝내지 않는 모드에서, 매 턴마다 같은 경고 로그가
+        // 무한 반복되는 걸 막는다. 새 게임 시작 시(StartFirstTurn) false로 초기화됨.
+        private bool maxTurnLimitHandled;
+
         // 다음 사람 차례로 넘김
         private void AdvanceToNextPlayer()
         {
-            // 순서 끝까지 가면 다시 처음 사람으로 돌아감 (4명이면 3 다음은 다시 0)
             TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
-            if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++; // 처음으로 돌아왔다 = 한 바퀴 다 돔 -> 라운드 +1
+            if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++;
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
-            BeginTurnFor(TurnOrder.Current);  // 다음 사람 턴 시작
+
+            // 버그 수정: >= 였을 때는 turnNumber가 maxTurnCount와 같아지는 순간(=마지막 턴이
+            // 시작되기 직전)에 걸려서, 그 마지막 턴(예: 20턴 설정이면 20번째 턴)이 실제로는
+            // 시작도 못 해보고 게임이 끝났음. maxTurnCount번째 턴까지는 실제로 플레이되게
+            // "그걸 넘어섰을 때"(>)만 종료되도록 바꿈.
+            if (!maxTurnLimitHandled && settings != null && settings.maxTurnCount > 0 &&
+                CurrentTurn.turnNumber > settings.maxTurnCount)
+            {
+                maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
+                Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
+                winConditionManager.HandleTimeLimitReached();
+                if (CurrentTurn.isGameEnded) return; // 턴제한 함수
+            }
+
+            BeginTurnFor(TurnOrder.Current);
         }
         // WinConditionManager가 승리 조건을 확인했을 때 호출해서 부탁하는 함수
         // (CurrentTurn은 이 클래스만 바꿀 수 있어서, 다른 클래스는 직접 못 바꾸고 이 함수로 부탁함)
-        // 여기서 바로 게임을 멈추지 않고, "끝났다"는 표시만 해둠 -> 지금 턴이 끝날 때(EndTurn) 실제로 멈춤
+        // 결과 팝업이 떠 있는 동안 뒤에서 게임이 계속 굴러가면 안 되므로, 플래그만 세우지 않고
+        // 즉시 턴 타이머를 멈추고 단계를 GameEnd로 바꿔 던지기/이동 요청을 전부 차단한다.
         public void NotifyGameEnded()
         {
             CurrentTurn.isGameEnded = true;
+            if (CurrentTurn.currentPhase == TurnPhase.GameEnd) return; // 중복 호출 방어
+            StopTurnTimer();
+            SetPhase(TurnPhase.GameEnd);
         }
         // ===================================================================
         //  (캐릭터/스킬) : 스킬 효과로 재던지기를 부여했을 때 호출할 함수
@@ -564,13 +641,45 @@ namespace YutArena.Managers
         {
             var remainingPlayers = TurnOrder.order.Where(p => p != player).ToList();
             PlayerSlot currentBefore = TurnOrder.Current;
-            int newIndex = remainingPlayers.IndexOf(currentBefore);
-            if (newIndex < 0) newIndex = 0;
+            int newIndex = ResolveIndexAfterRemoval(remainingPlayers, currentBefore);
             TurnOrder = new TurnOrderData
             {
                 order = remainingPlayers,
-                currentIndex = remainingPlayers.Count > 0 ? newIndex : 0
+                currentIndex = newIndex
             };
+        }
+
+        // ===================================================================
+        // 버그 수정: 지금 순서 목록에서 몇 명이 빠졌을 때, "다음에 currentIndex가 될 값"을 정확히 계산.
+        // - 지금 차례인 사람이 그대로 남아있으면 -> 그 사람의 새 자리로 그대로 매핑 (기존과 동일)
+        // - 지금 차례인 사람 본인이 빠진 경우 -> 예전엔 그냥 0(목록 맨 앞)으로 가서, 원래 있던 순서상
+        //   "다음 사람"이 아니라 엉뚱한 사람이 다음 차례가 될 수 있었음. 게다가 이 함수 직후 보통
+        //   EndTurn() -> AdvanceToNextPlayer()가 자동으로 한 번 더 +1 하기 때문에, 여기서 "다음 사람"
+        //   자리를 그대로 넣으면 그 다음 사람까지 건너뛰는 이중 진행 버그가 생겼음.
+        //   그래서 원래 순서 기준으로 "다음에 와야 할, 아직 안 빠진 사람"을 찾은 뒤, 그 사람 자리보다
+        //   한 칸 전을 가리키게 해서 뒤이은 자동 +1 과 정확히 맞아떨어지게 만든다.
+        // ===================================================================
+        private int ResolveIndexAfterRemoval(List<PlayerSlot> remainingPlayers, PlayerSlot currentBefore)
+        {
+            if (remainingPlayers.Count == 0) return 0;
+
+            int foundIndex = remainingPlayers.IndexOf(currentBefore);
+            if (foundIndex >= 0) return foundIndex; // 지금 차례인 사람이 안 빠졌으면 그대로 매핑
+
+            List<PlayerSlot> oldOrder = TurnOrder.order;
+            int oldIndex = oldOrder.IndexOf(currentBefore);
+            if (oldIndex < 0) return 0; // 이론상 안 일어나는 방어 처리
+
+            for (int step = 1; step <= oldOrder.Count; step++)
+            {
+                PlayerSlot candidate = oldOrder[(oldIndex + step) % oldOrder.Count];
+                int candidateNewIndex = remainingPlayers.IndexOf(candidate);
+                if (candidateNewIndex < 0) continue; // 이 사람도 이번에 같이 빠졌으면 건너뜀
+
+                // "다음 사람" 자리보다 한 칸 전 -> 곧이어 실행될 AdvanceToNextPlayer()의 +1과 상쇄됨
+                return (candidateNewIndex - 1 + remainingPlayers.Count) % remainingPlayers.Count;
+            }
+            return 0;
         }
         // ===================================================================
         // 다인전 순위 시스템용: 목표를 먼저 채운 팀이 있으면, 게임을 끝내지 않고
@@ -582,16 +691,14 @@ namespace YutArena.Managers
         {
             // 지금 순서 목록에서, 방금 빠져야 할 팀 소속이 아닌 사람들만 남김
             var remainingPlayers = TurnOrder.order
-                .Where(p => MatchCompositionRule.GetTeamSlot(gameSettings.matchComposition, p) != team)
+                .Where(p => MatchCompositionRule.GetTeamSlot(gameSettings, p) != team)
                 .ToList();
-            // 지금 차례였던 사람이 방금 제외된 팀이면, 남은 목록에서 자연스럽게 다음 사람부터 이어가게 보정
             PlayerSlot currentBefore = TurnOrder.Current;
-            int newIndex = remainingPlayers.IndexOf(currentBefore);
-            if (newIndex < 0) newIndex = 0; // 지금 차례인 사람이 제외됐으면, 새 목록 맨 앞 사람부터
+            int newIndex = ResolveIndexAfterRemoval(remainingPlayers, currentBefore);
             TurnOrder = new TurnOrderData
             {
                 order = remainingPlayers,
-                currentIndex = remainingPlayers.Count > 0 ? newIndex : 0
+                currentIndex = newIndex
             };
         }
         // 턴 단계를 바꾸는 유일한 통로. 값 바꾸기 + 방송하기를 항상 같이 실행되게 묶어둠

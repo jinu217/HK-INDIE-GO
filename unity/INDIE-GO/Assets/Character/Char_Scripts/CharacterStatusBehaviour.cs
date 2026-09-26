@@ -40,6 +40,16 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public virtual bool IsTargetable => true;
     //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
     public virtual bool RequiresCasterPieceSelection => true;
+    public virtual bool RequiresTargetPieceSelection => false;
+
+    public virtual bool CanSelectAsActiveCaster(
+        PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        if (piece == null || piece.State == PieceState.Goal)
+            return false;
+
+        return !RequiresCasterPieceSelection || piece.State == PieceState.InBoard;
+    }
 
     protected PlayerController Owner { get; private set; }
     protected PlayerManager Players { get; private set; }
@@ -335,6 +345,10 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         }
 
         spawnedVisualModel = Instantiate(characterData.visualModelPrefab, transform);
-        spawnedVisualModel.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+        spawnedVisualModel.transform.SetLocalPositionAndRotation(
+            Vector3.zero,
+            Quaternion.Euler(40f, 180f, 0f));
+        spawnedVisualModel.transform.localScale = Vector3.one * 2f;
+        DebugPieceView.EnsureSelectionCollider(spawnedVisualModel);
     }
 }
