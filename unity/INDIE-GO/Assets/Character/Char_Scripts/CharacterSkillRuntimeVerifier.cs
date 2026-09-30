@@ -504,7 +504,13 @@ internal static class CcArchitectureVerifier
                 copies.Add(data); skill.Initialize(data);
                 typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(skill, null);
-                skill.OnOwnerTurnStarted();
+                int pointsBeforeTurn = CharacterSkillRegistry.GetSkillPoints(1);
+                CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
+                int expectedAfterTurn = id == "007"
+                    ? pointsBeforeTurn
+                    : Math.Min(pointsBeforeTurn + 1, CharacterSkillRegistry.GetMaxSkillPoints(1));
+                Check(id + " base turn SkillPoint gain",
+                    CharacterSkillRegistry.GetSkillPoints(1) == expectedAfterTurn);
                 piece.MoveTo(BoardTileId.Outer01);
                 var enemy = p2.RuntimeData.Pieces[0];
                 enemy.MoveTo(id == "007" || id == "005" ? BoardTileId.Outer02 : BoardTileId.Outer01);
@@ -618,7 +624,10 @@ internal static class CcArchitectureVerifier
                     case "001_2": case "007":
                         int beforeCapturePoint = CharacterSkillRegistry.GetSkillPoints(1);
                         skill.OnCaptureCompleted(new CharacterCaptureRequest(1, 0, 2, 0, 1, true));
-                        Check(id + " passive SkillPoint effect", CharacterSkillRegistry.GetSkillPoints(1) == beforeCapturePoint + 1);
+                        Check(id + " passive SkillPoint respects maximum",
+                            CharacterSkillRegistry.GetSkillPoints(1) == Math.Min(
+                                beforeCapturePoint + 1,
+                                CharacterSkillRegistry.GetMaxSkillPoints(1)));
                         break;
                     case "002":
                         skill.OnPieceEnteredBoard();
@@ -683,7 +692,11 @@ internal static class CcArchitectureVerifier
                         Check("Mark stored on enemy with source", enemy.Cc.Get(CcDefine.Mark)?.SourcePieceId == 0);
                         int markPoints = CharacterSkillRegistry.GetSkillPoints(1);
                         CcBoardEffects.TryCapture(1, 0, new CharacterPieceReference(p2, enemy), 1, true, out _);
-                        Check("Actual marked capture grants SP once", CharacterSkillRegistry.GetSkillPoints(1) == markPoints + 1 && !enemy.Cc.Has(CcDefine.Mark));
+                        Check("Actual marked capture respects SP maximum",
+                            CharacterSkillRegistry.GetSkillPoints(1) == Math.Min(
+                                markPoints + 1,
+                                CharacterSkillRegistry.GetMaxSkillPoints(1)) &&
+                            !enemy.Cc.Has(CcDefine.Mark));
                         break;
                     case "019":
                         skill.OnOwnerTurnStarted();

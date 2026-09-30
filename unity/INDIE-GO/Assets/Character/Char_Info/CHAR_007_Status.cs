@@ -4,6 +4,9 @@ using YutArena.InGame;
 
 public sealed class CHAR_007_Status : CharacterStatusBehaviour
 {
+    // 전투광은 기본 턴 SP 대신 적을 잡았을 때만 SP를 얻습니다.
+    public override bool GainsBaseTurnSkillPoint => false;
+
     public override void OnCaptureCompleted(CharacterCaptureRequest request)
     {
         if (!TryStartPassiveCooldown()) return;

@@ -4,6 +4,41 @@ using YutArena.Common;
 using YutArena.InGame;
 using YutArena.Managers;
 
+/// <summary>UI가 SP 변경 원인을 구분할 때 사용합니다.</summary>
+public enum SkillPointChangeSource
+{
+    BaseTurnGain,
+    SkillEffectGain,
+    ActiveSkillSpend
+}
+
+/// <summary>한 번의 SP 변경 결과를 UI에 전달하는 값입니다.</summary>
+public readonly struct SkillPointChange
+{
+    public SkillPointChange(
+        int playerId,
+        int previousPoints,
+        int currentPoints,
+        int maximumPoints,
+        int delta,
+        SkillPointChangeSource source)
+    {
+        PlayerId = playerId;
+        PreviousPoints = previousPoints;
+        CurrentPoints = currentPoints;
+        MaximumPoints = maximumPoints;
+        Delta = delta;
+        Source = source;
+    }
+
+    public int PlayerId { get; }
+    public int PreviousPoints { get; }
+    public int CurrentPoints { get; }
+    public int MaximumPoints { get; }
+    public int Delta { get; }
+    public SkillPointChangeSource Source { get; }
+}
+
 /// <summary>
 /// 인게임 코드가 Character의 스킬 발동 조건과 CC 효과를 호출하는 공통 진입점입니다.
 /// 캐릭터 프리팹 네 개가 등록되어도 플레이어/말 ID로 정확히 한 구현만 조회합니다.
@@ -35,6 +70,8 @@ public static class CharacterSkillRegistry
     /// SP가 변경됐을 때 UI나 별도 플레이어 시스템에 변경량을 전달합니다.
     /// </summary>
     public static event Action<int, int> SkillPointRequested;
+    /// <summary>SP 획득·소비 후 현재값과 최대값을 UI에 전달합니다.</summary>
+    public static event Action<SkillPointChange> SkillPointChanged;
     public static event Action<CharacterMoveRecord> MoveCompleted;
 
     [UnityEngine.RuntimeInitializeOnLoadMethod(
@@ -47,6 +84,7 @@ public static class CharacterSkillRegistry
         ActiveCooldowns.Clear();
         SkillPoints.Clear();
         SkillPointRequested = null;
+        SkillPointChanged = null;
         MoveCompleted = null;
     }
 
@@ -164,6 +202,7 @@ public static class CharacterSkillRegistry
     public static void NotifyOwnerTurnStarted(int playerId)
     {
         TickActiveCooldowns(playerId);
+        GrantBaseTurnSkillPoint(playerId);
 
         foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
             behaviour.OnOwnerTurnStarted();
@@ -203,11 +242,19 @@ public static class CharacterSkillRegistry
 
         if (skillPointCost > 0)
         {
-            SkillPoints[request.PlayerId] = GetSkillPoints(request.PlayerId) - skillPointCost;
+            int previousPoints = GetSkillPoints(request.PlayerId);
+            int remainingPoints = previousPoints - skillPointCost;
+            SkillPoints[request.PlayerId] = remainingPoints;
             UnityEngine.Debug.Log(
                 $"[CharacterSkill][SkillPoint] Spent {skillPointCost}. " +
-                $"Player={request.PlayerId}, Remaining={SkillPoints[request.PlayerId]}",
+                $"Player={request.PlayerId}, Remaining={remainingPoints}",
                 behaviour);
+            NotifySkillPointChanged(
+                request.PlayerId,
+                previousPoints,
+                remainingPoints,
+                -skillPointCost,
+                SkillPointChangeSource.ActiveSkillSpend);
         }
 
         if (behaviour.ActiveCooldownTurns > 0)
@@ -224,12 +271,28 @@ public static class CharacterSkillRegistry
         return result;
     }
 
+    /// <summary>플레이어의 현재 SP를 반환합니다.</summary>
     public static int GetSkillPoints(int playerId)
     {
         if (playerId <= 0) return 0;
-        return SkillPoints.TryGetValue(playerId, out int points)
-            ? Math.Max(0, points)
-            : 0;
+        if (!SkillPoints.TryGetValue(playerId, out int points)) return 0;
+
+        return Math.Min(Math.Max(0, points), GetMaxSkillPoints(playerId));
+    }
+
+    /// <summary>현재 캐릭터의 액티브 필요 SP를 최대 SP로 반환합니다.</summary>
+    public static int GetMaxSkillPoints(int playerId)
+    {
+        if (playerId <= 0) return 0;
+
+        int maximum = 0;
+        foreach (KeyValuePair<(int playerId, int pieceId), CharacterStatusBehaviour> entry in Behaviours)
+        {
+            if (entry.Key.playerId == playerId && entry.Value != null)
+                maximum = Math.Max(maximum, entry.Value.ActiveSkillPointCost);
+        }
+
+        return maximum;
     }
 
     public static int GetRemainingActiveCooldown(int playerId, CharacterData character)
@@ -248,16 +311,26 @@ public static class CharacterSkillRegistry
             : CcEffectService.IsTargetable(CcEffectService.GetPiece(playerId, pieceId));
     }
 
-    internal static void RequestSkillPoint(int playerId, int amount = 1)
+    internal static void RequestSkillPoint(
+        int playerId,
+        int amount = 1,
+        SkillPointChangeSource source = SkillPointChangeSource.SkillEffectGain)
     {
         if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
         if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
 
-        int total = GetSkillPoints(playerId) + amount;
+        int current = GetSkillPoints(playerId);
+        int maximum = GetMaxSkillPoints(playerId);
+        int gained = Math.Min(amount, maximum - current);
+        if (gained <= 0) return;
+
+        int total = current + gained;
         SkillPoints[playerId] = total;
         UnityEngine.Debug.Log(
-            $"[CharacterSkill][SkillPoint] Gained {amount}. Player={playerId}, Total={total}");
-        SkillPointRequested?.Invoke(playerId, amount);
+            $"[CharacterSkill][SkillPoint] Gained {gained}. " +
+            $"Player={playerId}, Total={total}/{maximum}, Source={source}");
+        SkillPointRequested?.Invoke(playerId, gained);
+        NotifySkillPointChanged(playerId, current, total, gained, source);
     }
 
     internal static void EnsureManagerBridges(
@@ -339,6 +412,30 @@ public static class CharacterSkillRegistry
         }
 
         return result;
+    }
+
+    private static void GrantBaseTurnSkillPoint(int playerId)
+    {
+        CharacterStatusBehaviour character = FindFirstForPlayer(playerId);
+        if (character == null || !character.GainsBaseTurnSkillPoint) return;
+
+        RequestSkillPoint(playerId, source: SkillPointChangeSource.BaseTurnGain);
+    }
+
+    private static void NotifySkillPointChanged(
+        int playerId,
+        int previousPoints,
+        int currentPoints,
+        int delta,
+        SkillPointChangeSource source)
+    {
+        SkillPointChanged?.Invoke(new SkillPointChange(
+            playerId,
+            previousPoints,
+            currentPoints,
+            GetMaxSkillPoints(playerId),
+            delta,
+            source));
     }
 
     private static void TickActiveCooldowns(int playerId)

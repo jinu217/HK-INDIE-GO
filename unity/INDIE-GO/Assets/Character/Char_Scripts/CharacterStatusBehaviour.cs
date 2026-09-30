@@ -29,6 +29,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         characterData != null ? Mathf.Max(0, characterData.active_CooldownTurns) : 0;
     public int ActiveSkillPointCost =>
         characterData != null ? Mathf.Max(0, characterData.active_SkillPointCost) : 0;
+    public virtual bool GainsBaseTurnSkillPoint => true;
     public int PassiveCooldownTurns =>
         characterData != null ? Mathf.Max(0, characterData.passive_CooldownTurns) : 0;
     public int RemainingPassiveCooldownTurns => remainingPassiveCooldownTurns;
