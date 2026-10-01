@@ -25,9 +25,16 @@ namespace YutArena.InGame
         private GameObject loadedBackgroundInstance;
         private GameObject loadedBoardInstance;
         private bool isCommonBoardLayoutCached;
+        private BoardTileRuntimeStateManager boardRuntimeState;
 
         public MapDefinition CurrentMap { get; private set; }
         public bool IsMapLoaded => loadedBoardInstance != null || loadedTileVisualInstances.Count > 0;
+        public BoardTileRuntimeStateManager BoardRuntimeState => EnsureBoardRuntimeState();
+
+        private void Awake()
+        {
+            EnsureBoardRuntimeState();
+        }
 
         public bool LoadMap(GameStartSettings settings)
         {
@@ -239,6 +246,9 @@ namespace YutArena.InGame
 
         private void ClearLoadedMap()
         {
+            if (boardRuntimeState != null)
+                boardRuntimeState.ClearAll();
+
             tilePositions.Clear();
             specialTileSettings.Clear();
             CurrentMap = null;
@@ -265,6 +275,16 @@ namespace YutArena.InGame
                    tileId == BoardTileId.Corner02 ||
                    tileId == BoardTileId.Corner03 ||
                    tileId == BoardTileId.Corner04;
+        }
+
+        private BoardTileRuntimeStateManager EnsureBoardRuntimeState()
+        {
+            if (boardRuntimeState == null)
+                boardRuntimeState = GetComponent<BoardTileRuntimeStateManager>();
+            if (boardRuntimeState == null && Application.isPlaying)
+                boardRuntimeState = gameObject.AddComponent<BoardTileRuntimeStateManager>();
+
+            return boardRuntimeState;
         }
     }
 }

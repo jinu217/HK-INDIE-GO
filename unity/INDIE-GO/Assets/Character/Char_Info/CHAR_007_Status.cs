@@ -4,6 +4,9 @@ using YutArena.InGame;
 
 public sealed class CHAR_007_Status : CharacterStatusBehaviour
 {
+    // 전투광은 기본 턴 SP 대신 적을 잡았을 때만 SP를 얻습니다.
+    public override bool GainsBaseTurnSkillPoint => false;
+
     public override void OnCaptureCompleted(CharacterCaptureRequest request)
     {
         if (!TryStartPassiveCooldown()) return;
@@ -39,7 +42,8 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
                 firstEnemy.Value.Piece.PieceId))
             // CC is decremented at the start of its owner's turn. Two stored
             // ticks therefore produce one complete turn in which movement is blocked.
-            firstEnemy.Value.Piece.SetCc(CcDefine.Stun, 2);
+            CcEffectService.Apply(firstEnemy.Value.Piece, CcDefine.Stun, 2,
+                sourcePlayerId: PlayerId, sourcePieceId: PieceId);
 
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +

@@ -43,6 +43,42 @@ namespace YutArena.InGame
         [Tooltip("생성되는 모든 말 프리팹의 기본 크기 배율입니다.")]
         [SerializeField, Min(0.01f)] private float pieceScaleMultiplier = 1f;
 
+        [Header("Carried Piece Storage")]
+        [Tooltip("업힌 말 GameObject를 화면 밖에 모아둘 위치입니다.")]
+        [SerializeField] private Transform carriedPieceStorageAnchor;
+        [Tooltip("같은 플레이어의 업힌 말들이 서로 겹치지 않도록 PieceId별로 적용할 간격입니다.")]
+        [SerializeField] private Vector3 carriedPieceSpacing = new Vector3(0.6f, 0f, 0f);
+        [Tooltip("플레이어별 업힌 말 보관 위치 간격입니다.")]
+        [SerializeField] private Vector3 carriedPlayerSpacing = new Vector3(0f, -1f, 0f);
+
+        [Header("Board Tile Piece Formation")]
+        [Tooltip("한 칸에 보이는 말이 1개일 때의 로컬 위치 오프셋입니다.")]
+        [SerializeField] private Vector3[] onePieceTileOffsets =
+        {
+            Vector3.zero
+        };
+        [Tooltip("한 칸에 보이는 말이 2개일 때 각 말의 로컬 위치 오프셋입니다.")]
+        [SerializeField] private Vector3[] twoPieceTileOffsets =
+        {
+            new Vector3(-0.25f, 0f, 0f),
+            new Vector3(0.25f, 0f, 0f)
+        };
+        [Tooltip("한 칸에 보이는 말이 3개일 때 각 말의 로컬 위치 오프셋입니다.")]
+        [SerializeField] private Vector3[] threePieceTileOffsets =
+        {
+            new Vector3(-0.28f, -0.2f, 0f),
+            new Vector3(0.28f, -0.2f, 0f),
+            new Vector3(0f, 0.25f, 0f)
+        };
+        [Tooltip("한 칸에 보이는 말이 4개일 때 각 말의 로컬 위치 오프셋입니다.")]
+        [SerializeField] private Vector3[] fourPieceTileOffsets =
+        {
+            new Vector3(-0.25f, 0.25f, 0f),
+            new Vector3(0.25f, 0.25f, 0f),
+            new Vector3(-0.25f, -0.25f, 0f),
+            new Vector3(0.25f, -0.25f, 0f)
+        };
+
         [Header("Player 1 Home Formation")]
         [Tooltip("Player 1의 Piece 0~3 초기 배치 오프셋입니다.")]
         [FormerlySerializedAs("homePieceOffsets")]
@@ -66,6 +102,8 @@ namespace YutArena.InGame
 
         private readonly Dictionary<BoardTileId, Vector3> boardPositions = new Dictionary<BoardTileId, Vector3>();
         private readonly Dictionary<BoardTileId, Transform> debugBoardTileAnchors = new Dictionary<BoardTileId, Transform>();
+        private readonly Dictionary<BoardTileId, List<DebugPieceView>> visiblePieceViewsByTile = new Dictionary<BoardTileId, List<DebugPieceView>>();
+        private readonly Dictionary<DebugPieceView, Vector3> tileFormationOffsets = new Dictionary<DebugPieceView, Vector3>();
         private readonly List<DebugPieceView> pieceViews = new List<DebugPieceView>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private PlayerManager playerManager;
@@ -221,17 +259,107 @@ namespace YutArena.InGame
 
         private void RefreshPiecePositions()
         {
+            BuildTileFormationOffsets();
+
             foreach (DebugPieceView view in pieceViews)
             {
                 if (!playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
                     !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece)) continue;
-                view.transform.position = GetDisplayPosition(piece, view.PlayerId, view.PieceId);
+                Vector3 formationOffset = tileFormationOffsets.TryGetValue(view, out Vector3 offset)
+                    ? offset
+                    : Vector3.zero;
+                view.transform.position = GetDisplayPosition(piece, view.PlayerId, view.PieceId) + formationOffset;
                 if (TryGetHomeAnchor(view.PlayerId, out Transform homeAnchor))
                     view.transform.rotation = homeAnchor.rotation;
                 bool canSelect = turnManager.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
                                  view.PlayerId == (int)turnManager.CurrentTurn.currentPlayer;
                 view.SetSelected(canSelect);
             }
+        }
+
+        private void BuildTileFormationOffsets()
+        {
+            tileFormationOffsets.Clear();
+            foreach (List<DebugPieceView> tileViews in visiblePieceViewsByTile.Values)
+                tileViews.Clear();
+
+            foreach (DebugPieceView view in pieceViews)
+            {
+                if (!playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
+                    !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+                    piece.State != PieceState.InBoard ||
+                    IsCarriedPiece(piece))
+                {
+                    continue;
+                }
+
+                BoardTileId tile = piece.CurrentTileId == BoardTileId.None
+                    ? BoardTileId.Start
+                    : piece.CurrentTileId;
+                if (!visiblePieceViewsByTile.TryGetValue(tile, out List<DebugPieceView> tileViews))
+                {
+                    tileViews = new List<DebugPieceView>();
+                    visiblePieceViewsByTile.Add(tile, tileViews);
+                }
+
+                tileViews.Add(view);
+            }
+
+            foreach (KeyValuePair<BoardTileId, List<DebugPieceView>> pair in visiblePieceViewsByTile)
+            {
+                List<DebugPieceView> tileViews = pair.Value;
+                if (tileViews.Count == 0)
+                    continue;
+
+                tileViews.Sort(ComparePieceViews);
+                for (int index = 0; index < tileViews.Count; index++)
+                {
+                    Vector3 localOffset = GetTileFormationOffset(tileViews.Count, index);
+                    tileFormationOffsets[tileViews[index]] = RotateTileFormationOffset(pair.Key, localOffset);
+                }
+            }
+        }
+
+        private static int ComparePieceViews(DebugPieceView left, DebugPieceView right)
+        {
+            int playerComparison = left.PlayerId.CompareTo(right.PlayerId);
+            return playerComparison != 0
+                ? playerComparison
+                : left.PieceId.CompareTo(right.PieceId);
+        }
+
+        private Vector3 GetTileFormationOffset(int pieceCount, int pieceIndex)
+        {
+            Vector3[] offsets;
+            if (pieceCount <= 1)
+                offsets = onePieceTileOffsets;
+            else if (pieceCount == 2)
+                offsets = twoPieceTileOffsets;
+            else if (pieceCount == 3)
+                offsets = threePieceTileOffsets;
+            else
+                offsets = fourPieceTileOffsets;
+
+            if (offsets == null || offsets.Length == 0)
+                return Vector3.zero;
+
+            return offsets[Mathf.Clamp(pieceIndex, 0, offsets.Length - 1)];
+        }
+
+        private Vector3 RotateTileFormationOffset(BoardTileId tile, Vector3 localOffset)
+        {
+            if (mapManager != null && mapManager.TryGetTileAnchor(tile, out Transform mapAnchor))
+                return mapAnchor.rotation * localOffset;
+
+            if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugAnchor))
+                return debugAnchor.rotation * localOffset;
+
+            return localOffset;
+        }
+
+        private static bool IsCarriedPiece(PlayerRuntimeData.PieceRuntimeData piece)
+        {
+            return piece.IsStacked && piece.PieceId != piece.StackLeaderPieceId;
         }
 
         /// <summary>
@@ -293,6 +421,14 @@ namespace YutArena.InGame
 
         private Vector3 GetDisplayPosition(PlayerRuntimeData.PieceRuntimeData piece, int playerId, int pieceId)
         {
+            // 업기 그룹의 대표 말만 보드 위에 표시한다.
+            // 업힌 말은 데이터와 GameObject를 유지하되 화면 밖 보관 위치로 옮긴다.
+            if (piece.State == PieceState.InBoard &&
+                IsCarriedPiece(piece))
+            {
+                return GetCarriedPieceStoragePosition(playerId, pieceId);
+            }
+
             if (piece.State == PieceState.Waiting) return GetHomePosition(playerId, pieceId);
             if (piece.State == PieceState.Goal) return new Vector3((playerId - 2.5f) * 1.2f, -4.7f) + GetOffset(pieceId);
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
@@ -304,6 +440,18 @@ namespace YutArena.InGame
                 return debugTileAnchor.position + BoardPiecePositionAdjustment;
 
             return boardPositions[tile] + BoardPiecePositionAdjustment;
+        }
+
+        private Vector3 GetCarriedPieceStoragePosition(int playerId, int pieceId)
+        {
+            // 씬 Anchor가 빠져도 업힌 말이 보드 위에 겹치지 않도록 확실한 화면 밖 좌표를 사용한다.
+            Vector3 basePosition = carriedPieceStorageAnchor != null
+                ? carriedPieceStorageAnchor.position
+                : new Vector3(1000f, 1000f, 1000f);
+
+            return basePosition +
+                   carriedPlayerSpacing * Mathf.Max(0, playerId - 1) +
+                   carriedPieceSpacing * Mathf.Max(0, pieceId);
         }
 
         private Vector3 GetHomePosition(int playerId, int pieceId)

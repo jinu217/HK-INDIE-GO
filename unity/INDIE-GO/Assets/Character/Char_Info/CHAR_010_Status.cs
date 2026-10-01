@@ -5,10 +5,10 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
     public override int ModifyMoveCount(CharacterMoveRequest request)
     {
         if (request.IsActiveSkillMove)
-            return request.MoveCount;
+            return base.ModifyMoveCount(request);
 
         if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData caster) || !caster.IsStacked)
-            return request.MoveCount;
+            return base.ModifyMoveCount(request);
 
         int groupSize = 0;
         foreach (PlayerRuntimeData.PieceRuntimeData piece in Owner.RuntimeData.Pieces)
@@ -17,17 +17,11 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
         }
 
         int carriedPieceCount = groupSize > 0 ? groupSize - 1 : 0;
-        if (carriedPieceCount == 0) return request.MoveCount;
-        if (!TryStartPassiveCooldown()) return request.MoveCount;
+        if (carriedPieceCount == 0) return base.ModifyMoveCount(request);
+        if (!TryStartPassiveCooldown()) return base.ModifyMoveCount(request);
 
-        int modifiedMoveCount = request.MoveCount < 0
-            ? request.MoveCount - carriedPieceCount
-            : request.MoveCount + carriedPieceCount;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_010_Status)} stack bonus: " +
-            $"{request.MoveCount} -> {modifiedMoveCount}. Player={PlayerId}, Piece={PieceId}",
-            this);
-        return modifiedMoveCount;
+        ApplyEffect(CcDefine.MoveBonus, value: carriedPieceCount);
+        return base.ModifyMoveCount(request);
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -38,7 +32,7 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("PieceMovementManager is not available.");
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Tactical Retreat requires a piece on the board.");
-        if (!Movement.TryMovePiece(PlayerId, PieceId, -1, true))
+        if (!ApplyEffect(CcDefine.Move, value: -1))
             return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
 
         UnityEngine.Debug.Log(

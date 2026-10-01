@@ -6,12 +6,11 @@ public sealed class CHAR_019_Status : CharacterStatusBehaviour
 {
     private static readonly Dictionary<int, int> AdditionalYutMoAllowance =
         new Dictionary<int, int>();
-    private static readonly HashSet<int> ActiveRulePlayers = new HashSet<int>();
 
     public override bool CanSelectAsActiveCaster(
         PlayerRuntimeData.PieceRuntimeData piece)
     {
-        return piece != null && piece.State != PieceState.Goal;
+        return CcEffectService.CanUseSkill(piece);
     }
 
     [UnityEngine.RuntimeInitializeOnLoadMethod(
@@ -19,25 +18,18 @@ public sealed class CHAR_019_Status : CharacterStatusBehaviour
     private static void ResetRuntimeState()
     {
         AdditionalYutMoAllowance.Clear();
-        ActiveRulePlayers.Clear();
     }
 
     public override void OnOwnerTurnStarted()
     {
         base.OnOwnerTurnStarted();
         AdditionalYutMoAllowance[PlayerId] = 1;
-        ActiveRulePlayers.Remove(PlayerId);
     }
 
     public override bool ShouldGrantExtraThrow(YutResult result, bool defaultValue)
     {
-        if (ActiveRulePlayers.Remove(PlayerId))
-        {
-            return result == YutResult.Do ||
-                   result == YutResult.Gae ||
-                   result == YutResult.Geol ||
-                   result == YutResult.BackDo;
-        }
+        if (CcEffectService.HasPlayerEffect(PlayerId, CcDefine.ReverseExtraThrow))
+            return base.ShouldGrantExtraThrow(result, defaultValue);
 
         if (defaultValue) return true;
         if (result != YutResult.Yut && result != YutResult.Mo) return false;
@@ -51,14 +43,15 @@ public sealed class CHAR_019_Status : CharacterStatusBehaviour
             $"[CharacterSkill][Passive] {nameof(CHAR_019_Status)} granted an additional " +
             $"throw for {result}. Player={PlayerId}, Piece={PieceId}",
             this);
-        return true;
+        ApplyEffect(CcDefine.YutMoExtraThrow);
+        return base.ShouldGrantExtraThrow(result, defaultValue);
     }
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
-        ActiveRulePlayers.Add(PlayerId);
+        ApplyEffect(CcDefine.ReverseExtraThrow);
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_019_Status)} activated. " +
             $"Player={PlayerId}, Piece={PieceId}",
@@ -69,7 +62,6 @@ public sealed class CHAR_019_Status : CharacterStatusBehaviour
 
     public override void OnOwnerTurnEnded()
     {
-        ActiveRulePlayers.Remove(PlayerId);
     }
 
     protected override bool CanUseActiveDuringPhase(TurnPhase phase)

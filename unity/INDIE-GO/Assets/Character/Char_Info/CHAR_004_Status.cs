@@ -3,56 +3,28 @@ using YutArena.InGame;
 public sealed class CHAR_004_Status : CharacterStatusBehaviour
 {
     private bool charmShieldAvailable = true;
-    private int hiddenOwnerTurns;
-
-    public override bool IsTargetable => hiddenOwnerTurns <= 0;
-
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        // PieceMovementManager asks the target behaviour directly for ordinary
-        // landing captures, so IsTargetable alone protects only targeted skills.
-        // Hidden pieces must also reject the ordinary capture path here.
-        if (hiddenOwnerTurns > 0)
-            return CharacterCaptureDecision.Prevent;
-
-        if (charmShieldAvailable && TryStartPassiveCooldown())
-        {
-            charmShieldAvailable = false;
-            UnityEngine.Debug.Log(
-                $"[CharacterSkill][Passive] {nameof(CHAR_004_Status)} prevented capture. " +
-                $"Player={PlayerId}, Piece={PieceId}",
-                this);
-            return CharacterCaptureDecision.Prevent;
-        }
-
+        var existing = base.EvaluateIncomingCapture(request);
+        if (existing != CharacterCaptureDecision.Proceed) return existing;
+        if (!charmShieldAvailable || !TryStartPassiveCooldown()) return existing;
+        charmShieldAvailable = false;
+        ApplyEffect(CcDefine.Protection);
         return base.EvaluateIncomingCapture(request);
     }
 
     public override void OnPieceRetired()
     {
         charmShieldAvailable = true;
-        hiddenOwnerTurns = 0;
         ResetPassiveCooldown();
     }
 
-    public override void OnOwnerTurnStarted()
-    {
-        base.OnOwnerTurnStarted();
-        if (hiddenOwnerTurns > 0) hiddenOwnerTurns--;
-    }
-
-    protected override CharacterActiveResult ExecuteActive(
-        CharacterActiveRequest request,
+    protected override CharacterActiveResult ExecuteActive(CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Illusion requires a piece on the board.");
-
-        hiddenOwnerTurns = 3;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_004_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
-        return CharacterActiveResult.Success("The caster cannot be targeted for three owner turns.");
+        ApplyEffect(CcDefine.Hidden, 3);
+        return CharacterActiveResult.Success("The caster cannot be targeted until its third owner turn starts.");
     }
 }

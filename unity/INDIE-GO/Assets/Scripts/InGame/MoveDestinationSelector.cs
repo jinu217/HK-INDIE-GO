@@ -506,7 +506,7 @@ namespace YutArena.InGame
         private bool CanMovePiece(PlayerRuntimeData.PieceRuntimeData piece)
         {
             if (piece.State == PieceState.Goal) return false;   // 완주한 말은 더 이상 이동 대상 아님
-            if (piece.CurrentCc == CcDefine.Stun) return false;
+            if (!CcEffectService.CanMove(piece)) return false;
             if (piece.IsStacked && piece.PieceId != piece.StackLeaderPieceId) return false; // 업힌 말
             return true;
         }

@@ -9,17 +9,10 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 
     private static readonly Dictionary<int, IReadOnlyList<BoardTileId>> PendingLastPaths =
         new Dictionary<int, IReadOnlyList<BoardTileId>>();
-    private static readonly Dictionary<int, IReadOnlyList<BoardTileId>> ActiveWindPaths =
-        new Dictionary<int, IReadOnlyList<BoardTileId>>();
-    private static readonly HashSet<(int playerId, int pieceId)> TriggeredPieces =
-        new HashSet<(int, int)>();
-
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()
     {
         PendingLastPaths.Clear();
-        ActiveWindPaths.Clear();
-        TriggeredPieces.Clear();
     }
 
     public override void OnMoveCompleted(CharacterMoveRecord record)
@@ -27,40 +20,15 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
         PendingLastPaths[PlayerId] = record.Path;
     }
 
-    public override void OnOwnerTurnStarted()
-    {
-        base.OnOwnerTurnStarted();
-        TriggeredPieces.RemoveWhere(key => key.playerId == PlayerId);
-    }
-
     public override void OnOwnerTurnEnded()
     {
         if (!PendingLastPaths.TryGetValue(PlayerId, out IReadOnlyList<BoardTileId> path))
             return;
 
-        ActiveWindPaths[PlayerId] = path;
+        if (TryGetPiece(out var piece))
+            CcEffectService.Apply(piece, CcDefine.WindPath, sourcePlayerId: PlayerId,
+                sourcePieceId: PieceId, path: path);
         PendingLastPaths.Remove(PlayerId);
-    }
-
-    public override void OnAnyPieceMoveCompleted(CharacterMoveRecord record)
-    {
-        if (record.PlayerId != PlayerId ||
-            !ActiveWindPaths.TryGetValue(PlayerId, out IReadOnlyList<BoardTileId> activeWindPath) ||
-            TriggeredPieces.Contains((PlayerId, record.PieceId)) ||
-            !Contains(activeWindPath, record.To) ||
-            !TryStartPassiveCooldown())
-            return;
-
-        if (Movement == null) return;
-        TriggeredPieces.Add((PlayerId, record.PieceId));
-        if (Movement.TryMovePiece(record.PlayerId, record.PieceId, 1, true))
-        {
-            UnityEngine.Debug.Log(
-                $"[CharacterSkill][Passive] {nameof(CHAR_008_Status)} moved " +
-                $"Player={record.PlayerId}, Piece={record.PieceId} by 1. " +
-                $"Owner={PlayerId}, Piece={PieceId}",
-                this);
-        }
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -99,7 +67,8 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 
         // CC is decremented at the start of its owner's turn. Two stored
         // ticks therefore produce one complete turn in which movement is blocked.
-        target.Piece.SetCc(CcDefine.Stun, 2);
+        CcEffectService.Apply(target.Piece, CcDefine.Stun, 2,
+            sourcePlayerId: PlayerId, sourcePieceId: PieceId);
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_008_Status)} activated against " +
             $"Player={target.Player.PlayerId}, Piece={target.Piece.PieceId}. " +
@@ -136,13 +105,10 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
         return nearestDistance != int.MaxValue;
     }
 
-    private static bool Contains(IReadOnlyList<BoardTileId> path, BoardTileId tile)
+    public override bool CanSelectActiveTarget(int targetPlayerId, int targetPieceId)
     {
-        for (int i = 0; i < path.Count; i++)
-        {
-            if (path[i] == tile) return true;
-        }
-
-        return false;
+        return base.CanSelectActiveTarget(targetPlayerId, targetPieceId) &&
+            TryGetPiece(out var caster) && TryGetPiece(targetPlayerId, targetPieceId, out var target) &&
+            CharacterBoardUtility.IsWithinDistance(caster.CurrentTileId, target.Piece.CurrentTileId, 5);
     }
 }

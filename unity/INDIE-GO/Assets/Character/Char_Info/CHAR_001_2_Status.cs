@@ -71,7 +71,8 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
         if (Turns.CurrentTurn.currentPhase != TurnPhase.WaitAction)
             return CharacterActiveResult.Failure("Use Once More after throwing yut and before moving a piece.");
 
-        Turns.GrantSkillExtraThrow();
+        if (!ApplyEffect(CcDefine.ExtraThrow))
+            return CharacterActiveResult.Failure("The extra throw effect could not be applied.");
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_001_2_Status)} activated. " +
             $"Player={PlayerId}, Piece={PieceId}",
