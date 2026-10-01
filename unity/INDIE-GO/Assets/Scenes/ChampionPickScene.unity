@@ -182,6 +182,11 @@ MonoBehaviour:
   - {fileID: 1972006435}
   - {fileID: 1024246102}
   - {fileID: 707839176}
+  playerMarkerViews2:
+  - {fileID: 241634826}
+  - {fileID: 1280641633}
+  - {fileID: 2113442771}
+  - {fileID: 910082391}
   playerPanelViews:
   - {fileID: 1233518392}
   - {fileID: 2120387693}

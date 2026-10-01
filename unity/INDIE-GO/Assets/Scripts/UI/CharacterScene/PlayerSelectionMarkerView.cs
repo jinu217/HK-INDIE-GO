@@ -39,6 +39,15 @@ namespace YutArena.UI.CharacterScene
             }
         }
 
+        public void SetColor(Color color)
+        {
+            playerColor = color;
+            if (frameImage != null)
+            {
+                frameImage.color = color;
+            }
+        }
+
         public void MoveTo(
             RectTransform target,
             bool showFrame,

@@ -56,6 +56,8 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private CharacterCardView[] cardViews;
         [Tooltip("플레이어 마커 목록")]
         [SerializeField] private PlayerSelectionMarkerView[] playerMarkerViews;
+        [Tooltip("추가 플레이어 마커 이미지 목록")]
+        [SerializeField] private Image[] playerMarkerViews2;
         [Tooltip("플레이어 상세 패널 목록")]
         [SerializeField] private PlayerCharacterPanelView[] playerPanelViews;
 
@@ -282,20 +284,60 @@ namespace YutArena.UI.CharacterScene
 
         private void InitializePlayerMarkers()
         {
-            if (playerMarkerViews == null)
+            GameStartSettings settings = GameStartSettingsHolder.Current;
+            InitializePlayerMarkers(playerMarkerViews, settings);
+            InitializePlayerMarkerImages(settings);
+        }
+
+        private void InitializePlayerMarkerImages(GameStartSettings settings)
+        {
+            if (playerMarkerViews2 == null || settings == null || !settings.isTeamMode ||
+                settings.playerTeams == null)
+                return;
+
+            int count = Mathf.Min(playerMarkerViews2.Length, settings.playerTeams.Length, playerCount);
+            for (int playerIndex = 0; playerIndex < count; playerIndex++)
+            {
+                Image image = playerMarkerViews2[playerIndex];
+                if (image != null && TryGetTeamColor(settings.playerTeams[playerIndex], out Color teamColor))
+                    image.color = teamColor;
+            }
+        }
+
+        private void InitializePlayerMarkers(PlayerSelectionMarkerView[] markers, GameStartSettings settings)
+        {
+            if (markers == null)
             {
                 return;
             }
 
-            int markerCount = Mathf.Min(playerMarkerViews.Length, MaxPlayerCount);
+            int markerCount = Mathf.Min(markers.Length, MaxPlayerCount);
 
             for (int playerIndex = 0; playerIndex < markerCount; playerIndex++)
             {
-                PlayerSelectionMarkerView marker = playerMarkerViews[playerIndex];
+                PlayerSelectionMarkerView marker = markers[playerIndex];
                 if (marker == null) continue;
 
+                if (settings != null && settings.isTeamMode &&
+                    settings.playerTeams != null && playerIndex < settings.playerTeams.Length &&
+                    TryGetTeamColor(settings.playerTeams[playerIndex], out Color teamColor))
+                {
+                    marker.SetColor(teamColor);
+                }
                 marker.Initialize(playerIndex);
                 marker.gameObject.SetActive(playerIndex < playerCount);
+            }
+        }
+
+        private static bool TryGetTeamColor(int teamIndex, out Color color)
+        {
+            switch (teamIndex)
+            {
+                case 1: color = Color.blue; return true;
+                case 2: color = Color.yellow; return true;
+                case 3: color = Color.red; return true;
+                case 4: color = Color.green; return true;
+                default: color = default; return false;
             }
         }
 
