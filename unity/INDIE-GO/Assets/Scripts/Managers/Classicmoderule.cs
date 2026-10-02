@@ -29,7 +29,7 @@ namespace YutArena.Managers
                     continue; // 이 팀 소속이 아니면 건너뜀
 
                 if (!playerManager.TryGetPlayer(i, out var player))
-                    continue; // 아직 세팅 안 된 플레이어면 건너뜀 (승리 아직 아님으로 취급됨)
+                    return false; // 아직 세팅 안 된 플레이어가 있으면 말을 확인할 수 없으니 승리 아님
 
                 // 그 플레이어가 가진 말들을 전부 확인
                 foreach (var piece in player.RuntimeData.Pieces)
