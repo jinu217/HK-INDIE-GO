@@ -315,6 +315,11 @@ namespace YutArena.Managers
                 Debug.LogWarning("지금은 말을 이동할 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
                 return;
             }
+            if (TryGetPendingForcedMove(out _))
+            {
+                Debug.LogWarning("윤누리 패시브 추가 1칸 이동을 먼저 해야 함 (RequestForcedMove)");
+                return;
+            }
             // 검사 2: chosenResult가 실제로 던져서 얻은 결과(pendingResults 안)가 맞는지 찾음
             var matched = pendingResults.Find(r => r.result == chosenResult);
             if (matched == null)
@@ -357,6 +362,13 @@ namespace YutArena.Managers
             {
                 Debug.LogWarning("영서 쪽 이동 처리 실패: player=" + playerId + " piece=" + pieceId);
             }
+            ResolveAfterMove(playerId, finishedCountBefore);
+        }
+
+        // 이동 한 번이 끝난 뒤 공통 처리: 완주/승리 확인 -> 잡기 보너스 -> 다음 단계 결정
+        // (일반 이동과 윤누리 패시브 추가 이동이 같이 씀)
+        private void ResolveAfterMove(int playerId, int finishedCountBefore)
+        {
             SetPhase(TurnPhase.ResolveTile); // 도착 칸 처리 단계로 표시 (특수효과는 아직 미구현)
             SetPhase(TurnPhase.ResolveBoardRule); // 잡기/업기/완주 결과 처리 단계로 표시
                                                   // 완주했는지 확인은 여기서 안 하고, WinConditionManager한테 결과를 넘겨서 대신 확인시킴
@@ -385,6 +397,13 @@ namespace YutArena.Managers
                 CurrentTurn.extraThrowByCaptureCount++;
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  잡기 보너스도 시간 더해줌
             }
+            // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저,
+            // 플레이어가 두 번째 화살표를 누를 때까지 기다림 (MoveDestinationSelector가 화살표 표시)
+            if (!CurrentTurn.isGameEnded && TryGetPendingForcedMove(out _))
+            {
+                SetPhase(TurnPhase.WaitAction);
+                return;
+            }
             // 아직 안 쓴 윷 결과가 남아있으면 -> 계속 말 이동시키는 단계로 돌아감
             if (pendingResults.Count > 0)
             {
@@ -400,6 +419,52 @@ namespace YutArena.Managers
                 return;
             }
             EndTurn(); // 쓸 결과도, 보너스 던지기도 없으면 이 턴은 여기서 끝
+        }
+
+        // 윤누리 첫 이동 +1: 플레이어가 두 번째 화살표(추가 1칸)를 눌렀을 때 UI가 호출
+        public void RequestForcedMove()
+        {
+            if (CurrentTurn.currentPhase != TurnPhase.WaitAction)
+            {
+                Debug.LogWarning("지금은 말을 이동할 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
+                return;
+            }
+            if (!TryGetPendingForcedMove(out _, out CHAR_001_1_Status forcedMoveOwner))
+            {
+                Debug.LogWarning("대기 중인 윤누리 추가 이동이 없음");
+                return;
+            }
+            int playerId = (int)CurrentTurn.currentPlayer;
+            int finishedCountBefore = CountFinishedPieces(playerId);
+            SetPhase(TurnPhase.MovePiece);
+            if (!forcedMoveOwner.ExecutePendingForcedMove())
+            {
+                Debug.LogWarning("윤누리 추가 1칸 이동 실패: player=" + playerId);
+            }
+            ResolveAfterMove(playerId, finishedCountBefore);
+        }
+
+        // 지금 차례인 플레이어 말 중에 윤누리 패시브 추가 1칸 이동이 대기 중인 말이 있는지
+        public bool TryGetPendingForcedMove(out int pieceId) => TryGetPendingForcedMove(out pieceId, out _);
+
+        private bool TryGetPendingForcedMove(out int pieceId, out CHAR_001_1_Status forcedMoveOwner)
+        {
+            pieceId = -1;
+            forcedMoveOwner = null;
+            int playerId = (int)CurrentTurn.currentPlayer;
+            if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
+
+            foreach (var piece in player.RuntimeData.Pieces)
+            {
+                if (CharacterSkillRegistry.TryGet(playerId, piece.PieceId, out CharacterStatusBehaviour behaviour) &&
+                    behaviour is CHAR_001_1_Status yunnuri && yunnuri.HasPendingForcedMove)
+                {
+                    pieceId = piece.PieceId;
+                    forcedMoveOwner = yunnuri;
+                    return true;
+                }
+            }
+            return false;
         }
         // 이 플레이어가 지금까지 완주시킨 말이 몇 개인지 셈 (State == Goal)
         private int CountFinishedPieces(int playerId)
@@ -530,6 +595,13 @@ namespace YutArena.Managers
         private void EndTurn()
         {
             StopTurnTimer(); // 턴이 진짜로 끝나는 지점이니, 흐르고 있던 통합 타이머 정리
+            // 윤누리 추가 1칸 이동을 안 누른 채 턴이 끝나면(시간 초과 등) 자동으로 이동시킴.
+            // 턴이 끝나는 중이라 여기서 잡아도 보너스 던지기는 없고, 잡기 표시만 정리함.
+            if (!CurrentTurn.isGameEnded && TryGetPendingForcedMove(out _, out CHAR_001_1_Status forcedMoveOwner))
+            {
+                forcedMoveOwner.ExecutePendingForcedMove();
+                ConsumeCaptureResults((int)CurrentTurn.currentPlayer);
+            }
             SetPhase(TurnPhase.TurnEnd);
             OnTurnEnded?.Invoke(CurrentTurn.currentPlayer);
             if (CurrentTurn.isGameEnded)

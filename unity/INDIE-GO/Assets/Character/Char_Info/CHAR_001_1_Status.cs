@@ -8,6 +8,10 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
     private static readonly HashSet<int> PlayersWhoHaveThrown = new HashSet<int>();
     private bool firstMovePassiveAvailable = true;
     private bool firstMovePassivePending;
+    // 첫 이동 후 추가 도(1칸) 이동을 바로 실행하지 않고, 플레이어가 화살표를 누를 때까지 대기
+    private bool forcedMovePending;
+
+    public bool HasPendingForcedMove => forcedMovePending;
 
     //수정: 모 아니면 도는 특정 말이 아닌 플레이어의 다음 윷 결과에 적용됩니다.
     public override bool RequiresCasterPieceSelection => false;
@@ -42,17 +46,32 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
 
         firstMovePassivePending = false;
         firstMovePassiveAvailable = false;
+        forcedMovePending = true;
+        UnityEngine.Debug.Log(
+            $"[CharacterSkill][Passive] {nameof(CHAR_001_1_Status)} queued a Do move " +
+            $"after the piece's first move. Player={PlayerId}, Piece={PieceId}",
+            this);
+    }
+
+    // 턴매니저가 호출: 플레이어가 추가 이동 화살표를 눌렀거나, 누르기 전에 턴이 끝날 때
+    public bool ExecutePendingForcedMove()
+    {
+        if (!forcedMovePending) return false;
+
+        forcedMovePending = false;
         bool moved = ApplyEffect(CcDefine.Move, value: 1);
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Passive] {nameof(CHAR_001_1_Status)} forced a Do move " +
             $"after the piece's first move. Player={PlayerId}, Piece={PieceId}, Moved={moved}",
             this);
+        return moved;
     }
 
     public override void OnPieceRetired()
     {
         firstMovePassiveAvailable = true;
         firstMovePassivePending = false;
+        forcedMovePending = false;
     }
 
     //수정: 첫 번째 윷 결과가 확정되는 시점부터 이번 턴에는 액티브를 사용할 수 없습니다.

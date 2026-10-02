@@ -69,6 +69,8 @@ namespace YutArena.InGame
         private readonly List<MoveMarker> destMarkers = new List<MoveMarker>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private int selectedPieceId = -1;
+        // 윤누리 첫 이동 +1 대기 중: 그 말의 추가 1칸 화살표만 띄우고, 빈 곳 클릭으로 취소 불가
+        private bool forcedMoveActive;
         private bool subscribed;
         private MoveMarker lastHoverLogged;
 
@@ -161,6 +163,16 @@ namespace YutArena.InGame
 
             if (!Mouse.current.leftButton.wasPressedThisFrame) return;
 
+            if (forcedMoveActive)
+            {
+                if (MoveMarker.TryFindAtScreenPosition(cam, screenPosition, MoveMarkerRole.Destination, out MoveMarker _))
+                {
+                    if (verboseLog) Debug.Log($"[MoveSelector] 윤누리 추가 1칸 칸 클릭 → RequestForcedMove(piece={selectedPieceId})", this);
+                    turnManager.RequestForcedMove();
+                }
+                return;
+            }
+
             if (selectedPieceId < 0)
             {
                 // 1단계: "말"을 직접 클릭해서 선택. 파란 ▼ 는 어떤 말이 선택 가능한지 보여주는 표시일 뿐.
@@ -219,6 +231,20 @@ namespace YutArena.InGame
             ClearAll();
 
             if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
+
+            if (turnManager.TryGetPendingForcedMove(out int forcedPieceId))
+            {
+                forcedMoveActive = true;
+                selectedPieceId = forcedPieceId;
+                BuildForcedMoveMarker();
+                return;
+            }
+            if (forcedMoveActive)
+            {
+                forcedMoveActive = false;
+                selectedPieceId = -1; // 추가 이동 끝남 → 남은 결과는 다시 말 선택부터
+            }
+
             if (pendingResults.Count == 0) return;
 
             if (selectedPieceId < 0)
@@ -326,56 +352,7 @@ namespace YutArena.InGame
                 int moveCount = YutResultRule.GetMoveCount(result);
                 if (moveCount == 0) continue;
 
-                if (!pieceMovementManager.TryPreviewLanding(
-                        playerId, selectedPieceId, moveCount,
-                        out BoardTileId landingTile, out bool reachesFinish))
-                {
-                    if (verboseLog) Debug.Log($"[MoveSelector]   {result}: 목적지 없음", this);
-                    continue;
-                }
-
-                if (!TryResolveWorldPosition(landingTile, reachesFinish, out Vector3 tilePos))
-                {
-                    if (verboseLog) Debug.LogWarning($"[MoveSelector]   {result}: {landingTile} 좌표 해석 실패", this);
-                    continue;
-                }
-
-                // 두 결과가 같은 칸에 도착하는 경우만 살짝 옆으로.
-                tilePos = OffsetIfOverlapping(tilePos, placed);
-                placed.Add(tilePos);
-
-                // ▼ 높이: 말 없는 칸 = 칸 중앙 살짝 위 / 말 있는 칸 = 말 1개 정수리 살짝 위.
-                bool pieceOnTile = !reachesFinish && AnyPieceOnTile(landingTile);
-                float arrowBaseY = pieceOnTile
-                    ? OnePieceTopOnTile(landingTile) + arrowHeightAbovePiece
-                    : arrowHeightEmptyTile;
-
-                // 화면 위/아래 UI 패널에 ▼ 가 걸리면 안 가리게 민다 (타일 하이라이트는 그대로, ▼ 만 이동).
-                Vector3 arrowWorld = ClampToScreenSafeArea(tilePos + Vector3.up * arrowBaseY);
-                float arrowLocalY = arrowWorld.y - tilePos.y;
-
-                // 보드 타일 앵커 (윤곽선을 자식으로 붙여 보드 기울기 물려받음).
-                // 완주(참먹이 도착)면 landingTile 이 None 이라 Start 칸 앵커를 쓴다.
-                Transform tileAnchor = null;
-                if (pieceDebugController != null)
-                    pieceDebugController.TryGetTileTransform(
-                        reachesFinish ? BoardTileId.Start : landingTile, out tileAnchor);
-                if (reachesFinish && finishMarkerAnchor != null)
-                    tileAnchor = finishMarkerAnchor;
-
-                bool diagonalTile = IsDiagonalShortcutTile(landingTile);
-                float tileAngle = diagonalTile ? outlineAngleDegDiagonal : outlineAngleDeg;
-
-                var obj = new GameObject("MoveDestMarker");
-                obj.transform.SetParent(transform, false);
-                var marker = obj.AddComponent<MoveMarker>();
-                marker.ConfigureAsDestination(
-                    result, selectedPieceId, tilePos, arrowLocalY, pieceOnTile,
-                    tileAnchor, diagonalTile,
-                    outlineTileSize, tileAngle, outlineThickness, outlineCornerRadius,
-                    destColor, outlineColor, outlineHoverColor, destScale);
-                destMarkers.Add(marker);
-                if (verboseLog) Debug.Log($"[MoveSelector]   {result} → {landingTile} finish={reachesFinish} piece={pieceOnTile} {tilePos}", this);
+                TryCreateDestinationMarker(playerId, result, moveCount, placed);
             }
 
             if (destMarkers.Count == 0)
@@ -384,6 +361,75 @@ namespace YutArena.InGame
                 selectedPieceId = -1;
                 RefreshForCurrentState();
             }
+        }
+
+        // 윤누리 첫 이동 +1: 말이 이미 첫 착지 칸에 서 있으므로 "여기서 새로 1칸"을 미리보기.
+        // 실제 추가 이동도 새 이동이라, 모서리에서는 똑같이 안쪽(지름길)으로 꺾인다.
+        private void BuildForcedMoveMarker()
+        {
+            int playerId = (int)turnManager.CurrentTurn.currentPlayer;
+            if (verboseLog) Debug.Log($"[MoveSelector] 윤누리 추가 1칸 대기: piece{selectedPieceId}", this);
+            if (!TryCreateDestinationMarker(playerId, YutResult.Do, 1, new List<Vector3>()))
+            {
+                // 갈 곳이 없으면(정상적으론 없음) 대기를 풀어야 턴이 멈추지 않음
+                Debug.LogWarning("[MoveSelector] 윤누리 추가 1칸 목적지를 못 찾아 바로 실행합니다.", this);
+                turnManager.RequestForcedMove();
+            }
+        }
+
+        private bool TryCreateDestinationMarker(int playerId, YutResult result, int moveCount, List<Vector3> placed)
+        {
+            if (!pieceMovementManager.TryPreviewLanding(
+                    playerId, selectedPieceId, moveCount,
+                    out BoardTileId landingTile, out bool reachesFinish))
+            {
+                if (verboseLog) Debug.Log($"[MoveSelector]   {result}: 목적지 없음", this);
+                return false;
+            }
+
+            if (!TryResolveWorldPosition(landingTile, reachesFinish, out Vector3 tilePos))
+            {
+                if (verboseLog) Debug.LogWarning($"[MoveSelector]   {result}: {landingTile} 좌표 해석 실패", this);
+                return false;
+            }
+
+            // 두 결과가 같은 칸에 도착하는 경우만 살짝 옆으로.
+            tilePos = OffsetIfOverlapping(tilePos, placed);
+            placed.Add(tilePos);
+
+            // ▼ 높이: 말 없는 칸 = 칸 중앙 살짝 위 / 말 있는 칸 = 말 1개 정수리 살짝 위.
+            bool pieceOnTile = !reachesFinish && AnyPieceOnTile(landingTile);
+            float arrowBaseY = pieceOnTile
+                ? OnePieceTopOnTile(landingTile) + arrowHeightAbovePiece
+                : arrowHeightEmptyTile;
+
+            // 화면 위/아래 UI 패널에 ▼ 가 걸리면 안 가리게 민다 (타일 하이라이트는 그대로, ▼ 만 이동).
+            Vector3 arrowWorld = ClampToScreenSafeArea(tilePos + Vector3.up * arrowBaseY);
+            float arrowLocalY = arrowWorld.y - tilePos.y;
+
+            // 보드 타일 앵커 (윤곽선을 자식으로 붙여 보드 기울기 물려받음).
+            // 완주(참먹이 도착)면 landingTile 이 None 이라 Start 칸 앵커를 쓴다.
+            Transform tileAnchor = null;
+            if (pieceDebugController != null)
+                pieceDebugController.TryGetTileTransform(
+                    reachesFinish ? BoardTileId.Start : landingTile, out tileAnchor);
+            if (reachesFinish && finishMarkerAnchor != null)
+                tileAnchor = finishMarkerAnchor;
+
+            bool diagonalTile = IsDiagonalShortcutTile(landingTile);
+            float tileAngle = diagonalTile ? outlineAngleDegDiagonal : outlineAngleDeg;
+
+            var obj = new GameObject("MoveDestMarker");
+            obj.transform.SetParent(transform, false);
+            var marker = obj.AddComponent<MoveMarker>();
+            marker.ConfigureAsDestination(
+                result, selectedPieceId, tilePos, arrowLocalY, pieceOnTile,
+                tileAnchor, diagonalTile,
+                outlineTileSize, tileAngle, outlineThickness, outlineCornerRadius,
+                destColor, outlineColor, outlineHoverColor, destScale);
+            destMarkers.Add(marker);
+            if (verboseLog) Debug.Log($"[MoveSelector]   {result} → {landingTile} finish={reachesFinish} piece={pieceOnTile} {tilePos}", this);
+            return true;
         }
 
         private bool OnlyBackDoRemaining()
