@@ -378,6 +378,11 @@ namespace YutArena.Managers
             winConditionManager.OnPieceMoveResolved(
                 CurrentTurn.currentPlayer, CurrentTurn.currentTeam, isFinished, newlyFinishedCount);
 
+            // 버그 수정: 이 이동으로 승리가 확정되면 NotifyGameEnded가 GameEnd로 바꿔놓는데, 예전엔 아래에서
+            // 남은 윷 결과/보너스 던지기를 보고 단계를 WaitAction/WaitThrow로 다시 덮어써서
+            // 게임이 끝난 뒤에도 말 이동/던지기가 가능했음. 게임이 끝났으면 여기서 멈춤.
+            if (CurrentTurn.isGameEnded) return;
+
             // ===================================================================
             // Escape 모드 전용: 완주한 말은 재사용해야 하므로, 상태를 다시
             // 대기(Waiting)로 되돌림. 영서 확인: "위치는 나중에 조정, 지금은 상태만 바꾸면 됨"
@@ -399,7 +404,7 @@ namespace YutArena.Managers
             }
             // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저,
             // 플레이어가 두 번째 화살표를 누를 때까지 기다림 (MoveDestinationSelector가 화살표 표시)
-            if (!CurrentTurn.isGameEnded && TryGetPendingForcedMove(out _))
+            if (TryGetPendingForcedMove(out _))
             {
                 SetPhase(TurnPhase.WaitAction);
                 return;
@@ -494,12 +499,23 @@ namespace YutArena.Managers
         // 남은 pendingResults 중 하나라도 실제로 말을 움직일 수 있으면 false 를 돌려주고,
         // 아무 결과도 쓸 수 없으면(예: 판에 말이 하나도 없는데 뒷도만 남음) 즉시 턴을 종료한다.
         // 이 처리가 없으면 마커가 하나도 안 떠서 플레이어가 시간 초과까지 기다려야 한다.
-        // 스턴/업힌 말 같은 세부 제약까지는 보지 않는다(데드락 방지가 목적).
+        // 버그 수정: 예전엔 "말이 있냐"만 봐서, 판 위 말이 전부 기절/부품이면 화살표는 안 뜨는데
+        // 턴도 안 넘어가서 45초를 기다렸음. 실제 이동 검사(CanPieceMove)와 같은 기준으로 판단함.
         // ===================================================================
         private void EndTurnIfNoUsableResult()
         {
             if (CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
             if (HasAnyUsablePendingResult()) return;
+
+            // 이번 턴에 잡기/스킬로 얻은 보너스 던지기가 남아 있으면, 못 쓰는 결과만 버리고 던지러 감
+            if (pendingCaptureThrows > 0 || pendingSkillThrows > 0)
+            {
+                Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
+                pendingResults.Clear();
+                OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+                SetPhase(TurnPhase.WaitThrow);
+                return;
+            }
 
             Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
             EndTurn();
@@ -510,8 +526,8 @@ namespace YutArena.Managers
             if (pendingResults.Count == 0) return false;
 
             int playerId = (int)CurrentTurn.currentPlayer;
-            bool hasBoardPiece = HasAnyPieceInBoard(playerId);
-            bool hasWaitingPiece = HasAnyWaitingPiece(playerId);
+            bool hasBoardPiece = HasAnyMovablePiece(playerId, PieceState.InBoard);
+            bool hasWaitingPiece = HasAnyMovablePiece(playerId, PieceState.Waiting);
 
             foreach (var throwData in pendingResults)
             {
@@ -527,13 +543,13 @@ namespace YutArena.Managers
             return false;
         }
 
-        // 이 플레이어가 대기 중인(아직 판에 안 올린) 말이 하나라도 있는지
-        private bool HasAnyWaitingPiece(int playerId)
+        // 그 상태(판 위/대기)의 말 중에 실제로 움직일 수 있는(기절·부품·업힌 말 아님) 말이 있는지
+        private bool HasAnyMovablePiece(int playerId, PieceState state)
         {
             if (!playerManager.TryGetPlayer(playerId, out var player)) return false;
             foreach (var piece in player.RuntimeData.Pieces)
             {
-                if (piece.State == PieceState.Waiting)
+                if (piece.State == state && CanPieceMove(playerId, piece.PieceId))
                     return true;
             }
             return false;

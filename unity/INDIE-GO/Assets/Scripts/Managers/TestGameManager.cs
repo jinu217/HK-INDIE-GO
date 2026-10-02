@@ -145,16 +145,56 @@ namespace YutArena.Managers
 
             winConditionManager.Initialize(settings);
             turnManager.Initialize(settings);
+
+            if (firstTurnCoroutine != null) StopCoroutine(firstTurnCoroutine);
+            firstTurnCoroutine = StartCoroutine(StartFirstTurnWhenPiecesReady(settings));
+        }
+
+        // 버그 수정: 캐릭터 말(스킬 포함)은 InGamePieceDebugController가 1프레임 뒤에 생성하는데,
+        // 여기서 바로 첫 턴을 시작하면 스킬 시스템이 "턴 시작" 신호를 구독하기 전에 신호가 지나가서
+        // 첫 차례 플레이어의 첫 턴 SP +1 / 턴 시작 스킬 처리가 빠졌음. 말이 다 생길 때까지 기다렸다 시작.
+        private const float PieceSpawnWaitTimeoutSeconds = 1f;
+        private Coroutine firstTurnCoroutine;
+
+        private IEnumerator StartFirstTurnWhenPiecesReady(GameStartSettings settings)
+        {
+            float giveUpAt = Time.time + PieceSpawnWaitTimeoutSeconds;
+            while (!AreAllPiecesReady() && Time.time < giveUpAt)
+                yield return null;
+
+            if (!AreAllPiecesReady())
+                Debug.LogWarning("TestGameManager: 말 생성을 기다리다 시간 초과 - 그대로 첫 턴을 시작합니다.");
+
+            firstTurnCoroutine = null;
             turnManager.StartFirstTurn();
 
             // ===================================================================
-            // Escape 승리조건 2번용 실시간 제한시간 타이머
+            // Escape 승리조건 2번용 실시간 제한시간 타이머 (첫 턴과 같이 시작)
             // ===================================================================
             if (settings.timeLimitMinutes != GameRuleDefine.UnlimitedTimeMinutes)
             {
                 if (timeLimitCoroutine != null) StopCoroutine(timeLimitCoroutine); // 이전 판 타이머 남아있으면 정리
                 timeLimitCoroutine = StartCoroutine(TimeLimitRoutine(settings.timeLimitMinutes * 60f));
             }
+        }
+
+        // 모든 말이 스킬 시스템에 등록됐거나, 캐릭터 없는 말까지 포함해 화면에 다 생성됐으면 준비 완료
+        private bool AreAllPiecesReady()
+        {
+            int totalPieces = 0;
+            int registeredPieces = 0;
+            foreach (PlayerController player in playerManager.ActivePlayers)
+            {
+                foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                {
+                    totalPieces++;
+                    if (CharacterSkillRegistry.TryGet(player.PlayerId, piece.PieceId, out _))
+                        registeredPieces++;
+                }
+            }
+            if (registeredPieces >= totalPieces) return true;
+
+            return FindObjectsByType<DebugPieceView>(FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length >= totalPieces;
         }
 
         //  위 타이머용 필드+코루틴
