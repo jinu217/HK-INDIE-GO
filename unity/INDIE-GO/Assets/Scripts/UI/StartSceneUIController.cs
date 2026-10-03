@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
+using System.Collections.Generic;
 using YutArena.Managers;
 
 namespace YutArena.UI
@@ -68,26 +69,38 @@ namespace YutArena.UI
         [SerializeField] private Sprite modeHelpSprite;
 
         [Header("Settings")]
-        [Tooltip("게임 전체 오디오 볼륨을 조절하는 슬라이더")]
+        [Tooltip("게임 전체 오디오 볼륨을 0~100으로 조절하는 슬라이더")]
         [FormerlySerializedAs("bgmVolumeSlider")]
         [FormerlySerializedAs("masterVolumeSlider")]
         [SerializeField] private Slider masterVolumeSlider;
-        [Tooltip("BGM 전체 볼륨을 조절하는 슬라이더")]
+        [Tooltip("BGM 전체 볼륨을 0~100으로 조절하는 슬라이더")]
         [SerializeField] private Slider bgmVolumeSlider;
-        [Tooltip("모든 버튼 클릭음의 전체 볼륨을 조절하는 슬라이더")]
+        [Tooltip("버튼음과 게임 효과음의 볼륨을 0~100으로 조절하는 슬라이더")]
         [SerializeField] private Slider clickVolumeSlider;
         [Tooltip("게임 전체 오디오의 음소거 여부를 설정하는 토글")]
         [SerializeField] private Toggle masterMuteToggle;
         [Tooltip("BGM의 음소거 여부를 설정하는 토글")]
         [SerializeField] private Toggle bgmMuteToggle;
-        [Tooltip("모든 버튼 클릭음의 음소거 여부를 설정하는 토글")]
+        [Tooltip("버튼음과 게임 효과음의 음소거 여부를 설정하는 토글")]
         [SerializeField] private Toggle clickMuteToggle;
+        [Tooltip("다른 창을 볼 때도 사운드를 재생할지 선택하는 토글")]
+        [SerializeField] private Toggle backgroundSoundToggle;
+
+        [Header("Graphics Settings")]
         [Tooltip("해상도 드롭다운")]
         [SerializeField] private TMP_Dropdown resolutionDropdown;
-        [Tooltip("화면 모드 드롭다운")]
+        [Tooltip("전체 화면, 테두리 없는 전체 화면, 창 모드를 선택하는 드롭다운")]
         [SerializeField] private TMP_Dropdown screenModeDropdown;
-        [Tooltip("전체화면 토글")]
+        [Tooltip("기존 전체 화면 토글입니다. 켜면 테두리 없는 전체 화면으로 설정됩니다.")]
         [SerializeField] private Toggle fullScreenToggle;
+        [Tooltip("수직 동기화를 켜거나 끄는 토글")]
+        [SerializeField] private Toggle vSyncToggle;
+        [Tooltip("30, 60, 120, 144, 제한 없음 중 최대 프레임을 선택하는 드롭다운")]
+        [SerializeField] private TMP_Dropdown frameRateDropdown;
+        [Tooltip("낮음, 중간, 높음 그래픽 품질을 선택하는 드롭다운")]
+        [SerializeField] private TMP_Dropdown qualityDropdown;
+        [Tooltip("화면 전체 밝기를 조절하는 슬라이더입니다. 0.5가 기본값입니다.")]
+        [SerializeField] private Slider brightnessSlider;
 
         [Header("Scene")]
         [Tooltip("로컬 대기실 씬 이름")]
@@ -97,18 +110,7 @@ namespace YutArena.UI
         [Tooltip("연결 누락 경고")]
         [SerializeField] private bool showMissingReferenceWarnings = true;
 
-        private readonly ResolutionOption[] resolutionOptions =
-        {
-            new ResolutionOption(1024, 768, "4 : 3"),
-            new ResolutionOption(1280, 960, "4 : 3"),
-            new ResolutionOption(1600, 1200, "4 : 3"),
-            new ResolutionOption(1280, 720, "16 : 9"),
-            new ResolutionOption(1600, 900, "16 : 9"),
-            new ResolutionOption(1920, 1080, "16 : 9"),
-            new ResolutionOption(1280, 800, "16 : 10"),
-            new ResolutionOption(1680, 1050, "16 : 10"),
-            new ResolutionOption(1920, 1200, "16 : 10")
-        };
+        private List<Vector2Int> resolutionOptions;
 
         private void Awake()
         {
@@ -164,12 +166,20 @@ namespace YutArena.UI
             WarnIfMissing(masterMuteToggle, nameof(masterMuteToggle));
             WarnIfMissing(bgmMuteToggle, nameof(bgmMuteToggle));
             WarnIfMissing(clickMuteToggle, nameof(clickMuteToggle));
+            WarnIfMissing(backgroundSoundToggle, nameof(backgroundSoundToggle));
+            WarnIfMissing(resolutionDropdown, nameof(resolutionDropdown));
+            WarnIfMissing(screenModeDropdown, nameof(screenModeDropdown));
+            WarnIfMissing(vSyncToggle, nameof(vSyncToggle));
+            WarnIfMissing(frameRateDropdown, nameof(frameRateDropdown));
+            WarnIfMissing(qualityDropdown, nameof(qualityDropdown));
+            WarnIfMissing(brightnessSlider, nameof(brightnessSlider));
         }
 
         private void SetupSettingsControls()
         {
             SetupResolutionDropdown();
             SetupScreenModeControls();
+            SetupGraphicsControls();
 
             SetupVolumeSlider(masterVolumeSlider, AudioManager.LoadMasterVolume(), SetMasterVolume);
             SetupVolumeSlider(bgmVolumeSlider, AudioManager.LoadBgmVolume(), SetBgmVolume);
@@ -177,6 +187,7 @@ namespace YutArena.UI
             SetupMuteToggle(masterMuteToggle, AudioManager.LoadMasterMuted(), SetMasterMuted);
             SetupMuteToggle(bgmMuteToggle, AudioManager.LoadBgmMuted(), SetBgmMuted);
             SetupMuteToggle(clickMuteToggle, AudioManager.LoadClickMuted(), SetClickMuted);
+            SetupMuteToggle(backgroundSoundToggle, AudioManager.LoadBackgroundSoundEnabled(), SetBackgroundSoundEnabled);
         }
 
         private void SetupResolutionDropdown()
@@ -186,14 +197,13 @@ namespace YutArena.UI
                 return;
             }
 
+            resolutionOptions = GraphicsSettingsManager.GetSupportedResolutions();
+            var labels = new List<string>();
+            foreach (Vector2Int option in resolutionOptions)
+                labels.Add(option.x + " x " + option.y);
             resolutionDropdown.ClearOptions();
-
-            foreach (ResolutionOption option in resolutionOptions)
-            {
-                resolutionDropdown.options.Add(new TMP_Dropdown.OptionData(option.Label));
-            }
-
-            resolutionDropdown.value = GetCurrentResolutionIndex();
+            resolutionDropdown.AddOptions(labels);
+            resolutionDropdown.SetValueWithoutNotify(GetCurrentResolutionIndex());
             resolutionDropdown.RefreshShownValue();
             resolutionDropdown.onValueChanged.AddListener(SetResolution);
         }
@@ -203,18 +213,42 @@ namespace YutArena.UI
             if (screenModeDropdown != null)
             {
                 screenModeDropdown.ClearOptions();
-                screenModeDropdown.options.Add(new TMP_Dropdown.OptionData("Windowed Mode"));
-                screenModeDropdown.options.Add(new TMP_Dropdown.OptionData("Full Screen"));
-                screenModeDropdown.value = Screen.fullScreen ? 1 : 0;
+                screenModeDropdown.AddOptions(new List<string> { "전체 화면", "테두리 없는 전체 화면", "창 모드" });
+                screenModeDropdown.SetValueWithoutNotify(GetScreenModeIndex());
                 screenModeDropdown.RefreshShownValue();
                 screenModeDropdown.onValueChanged.AddListener(SetScreenMode);
             }
 
             if (fullScreenToggle != null)
             {
-                fullScreenToggle.isOn = Screen.fullScreen;
+                fullScreenToggle.SetIsOnWithoutNotify(GraphicsSettingsManager.ScreenMode != FullScreenMode.Windowed);
                 fullScreenToggle.onValueChanged.AddListener(SetFullScreen);
             }
+        }
+
+        private void SetupGraphicsControls()
+        {
+            SetupMuteToggle(vSyncToggle, GraphicsSettingsManager.VSyncEnabled, SetVSync);
+            if (frameRateDropdown != null)
+            {
+                frameRateDropdown.ClearOptions();
+                frameRateDropdown.AddOptions(new List<string> { "30", "60", "120", "144", "제한 없음" });
+                frameRateDropdown.SetValueWithoutNotify(GraphicsSettingsManager.FrameRateIndex);
+                frameRateDropdown.RefreshShownValue();
+                frameRateDropdown.onValueChanged.AddListener(SetFrameRate);
+                frameRateDropdown.interactable = !GraphicsSettingsManager.VSyncEnabled;
+            }
+
+            if (qualityDropdown != null)
+            {
+                qualityDropdown.ClearOptions();
+                qualityDropdown.AddOptions(new List<string> { "낮음", "중간", "높음" });
+                qualityDropdown.SetValueWithoutNotify(GraphicsSettingsManager.QualityIndex);
+                qualityDropdown.RefreshShownValue();
+                qualityDropdown.onValueChanged.AddListener(SetQuality);
+            }
+
+            SetupBrightnessSlider(brightnessSlider, GraphicsSettingsManager.Brightness, SetBrightness);
         }
 
         private void SetupHelpImage()
@@ -290,6 +324,7 @@ namespace YutArena.UI
 
             HideAllPanels();
             SyncVolumeSliders();
+            SyncGraphicsControls();
             SetActive(settingsPanel, true);
         }
 
@@ -345,7 +380,7 @@ namespace YutArena.UI
         {
             if (AudioManager.Instance != null)
             {
-                AudioManager.Instance.SetMasterVolume(volume);
+                AudioManager.Instance.SetMasterVolume(volume / 100f);
             }
         }
 
@@ -353,7 +388,7 @@ namespace YutArena.UI
         {
             if (AudioManager.Instance != null)
             {
-                AudioManager.Instance.SetBgmVolume(volume);
+                AudioManager.Instance.SetBgmVolume(volume / 100f);
             }
         }
 
@@ -361,7 +396,7 @@ namespace YutArena.UI
         {
             if (AudioManager.Instance != null)
             {
-                AudioManager.Instance.SetClickVolume(volume);
+                AudioManager.Instance.SetClickVolume(volume / 100f);
             }
         }
 
@@ -389,21 +424,27 @@ namespace YutArena.UI
             }
         }
 
+        private void SetBackgroundSoundEnabled(bool enabled)
+        {
+            if (AudioManager.Instance != null)
+                AudioManager.Instance.SetBackgroundSoundEnabled(enabled);
+        }
+
         private void SyncVolumeSliders()
         {
             if (masterVolumeSlider != null)
             {
-                masterVolumeSlider.SetValueWithoutNotify(AudioManager.LoadMasterVolume());
+                masterVolumeSlider.SetValueWithoutNotify(AudioManager.LoadMasterVolume() * 100f);
             }
 
             if (bgmVolumeSlider != null)
             {
-                bgmVolumeSlider.SetValueWithoutNotify(AudioManager.LoadBgmVolume());
+                bgmVolumeSlider.SetValueWithoutNotify(AudioManager.LoadBgmVolume() * 100f);
             }
 
             if (clickVolumeSlider != null)
             {
-                clickVolumeSlider.SetValueWithoutNotify(AudioManager.LoadClickVolume());
+                clickVolumeSlider.SetValueWithoutNotify(AudioManager.LoadClickVolume() * 100f);
             }
 
             if (masterMuteToggle != null)
@@ -420,6 +461,44 @@ namespace YutArena.UI
             {
                 clickMuteToggle.SetIsOnWithoutNotify(AudioManager.LoadClickMuted());
             }
+
+            if (backgroundSoundToggle != null)
+                backgroundSoundToggle.SetIsOnWithoutNotify(AudioManager.LoadBackgroundSoundEnabled());
+        }
+
+        private void SyncGraphicsControls()
+        {
+            if (resolutionDropdown != null)
+            {
+                resolutionDropdown.SetValueWithoutNotify(GetCurrentResolutionIndex());
+                resolutionDropdown.RefreshShownValue();
+            }
+
+            if (screenModeDropdown != null)
+            {
+                screenModeDropdown.SetValueWithoutNotify(GetScreenModeIndex());
+                screenModeDropdown.RefreshShownValue();
+            }
+
+            if (fullScreenToggle != null)
+                fullScreenToggle.SetIsOnWithoutNotify(GraphicsSettingsManager.ScreenMode != FullScreenMode.Windowed);
+            if (vSyncToggle != null)
+                vSyncToggle.SetIsOnWithoutNotify(GraphicsSettingsManager.VSyncEnabled);
+            if (frameRateDropdown != null)
+            {
+                frameRateDropdown.SetValueWithoutNotify(GraphicsSettingsManager.FrameRateIndex);
+                frameRateDropdown.RefreshShownValue();
+                frameRateDropdown.interactable = !GraphicsSettingsManager.VSyncEnabled;
+            }
+
+            if (qualityDropdown != null)
+            {
+                qualityDropdown.SetValueWithoutNotify(GraphicsSettingsManager.QualityIndex);
+                qualityDropdown.RefreshShownValue();
+            }
+
+            if (brightnessSlider != null)
+                brightnessSlider.SetValueWithoutNotify(GraphicsSettingsManager.Brightness);
         }
 
         private static void SetupVolumeSlider(
@@ -432,6 +511,19 @@ namespace YutArena.UI
                 return;
             }
 
+            slider.minValue = 0f;
+            slider.maxValue = 100f;
+            slider.wholeNumbers = true;
+            slider.SetValueWithoutNotify(initialValue * 100f);
+            slider.onValueChanged.AddListener(onValueChanged);
+        }
+
+        private static void SetupBrightnessSlider(
+            Slider slider,
+            float initialValue,
+            UnityEngine.Events.UnityAction<float> onValueChanged)
+        {
+            if (slider == null) return;
             slider.minValue = 0f;
             slider.maxValue = 1f;
             slider.wholeNumbers = false;
@@ -455,56 +547,78 @@ namespace YutArena.UI
 
         private void SetResolution(int index)
         {
-            if (index < 0 || index >= resolutionOptions.Length)
-            {
-                return;
-            }
-
-            ResolutionOption option = resolutionOptions[index];
-            Screen.SetResolution(option.Width, option.Height, Screen.fullScreenMode);
+            if (resolutionOptions == null || index < 0 || index >= resolutionOptions.Count) return;
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetResolution(resolutionOptions[index]);
         }
 
         private void SetScreenMode(int index)
         {
-            bool isFullScreen = index == 1;
-            ApplyFullScreen(isFullScreen);
+            FullScreenMode mode = index == 0 ? FullScreenMode.ExclusiveFullScreen :
+                index == 1 ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetScreenMode(mode);
+            if (fullScreenToggle != null)
+                fullScreenToggle.SetIsOnWithoutNotify(mode != FullScreenMode.Windowed);
         }
 
         private void SetFullScreen(bool isFullScreen)
         {
-            ApplyFullScreen(isFullScreen);
-        }
-
-        private void ApplyFullScreen(bool isFullScreen)
-        {
-            Screen.fullScreenMode = isFullScreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-            Screen.fullScreen = isFullScreen;
-
-            if (screenModeDropdown != null && screenModeDropdown.value != (isFullScreen ? 1 : 0))
+            FullScreenMode mode = isFullScreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetScreenMode(mode);
+            if (screenModeDropdown != null)
             {
-                screenModeDropdown.value = isFullScreen ? 1 : 0;
+                screenModeDropdown.SetValueWithoutNotify(GetScreenModeIndex());
                 screenModeDropdown.RefreshShownValue();
             }
+        }
 
-            if (fullScreenToggle != null && fullScreenToggle.isOn != isFullScreen)
+        private void SetVSync(bool enabled)
+        {
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetVSync(enabled);
+            if (frameRateDropdown != null) frameRateDropdown.interactable = !enabled;
+        }
+
+        private void SetFrameRate(int index)
+        {
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetFrameRateIndex(index);
+        }
+
+        private void SetQuality(int index)
+        {
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetQualityIndex(index);
+        }
+
+        private void SetBrightness(float value)
+        {
+            if (GraphicsSettingsManager.Instance != null)
+                GraphicsSettingsManager.Instance.SetBrightness(value);
+        }
+
+        private static int GetScreenModeIndex()
+        {
+            switch (GraphicsSettingsManager.ScreenMode)
             {
-                fullScreenToggle.isOn = isFullScreen;
+                case FullScreenMode.ExclusiveFullScreen: return 0;
+                case FullScreenMode.FullScreenWindow: return 1;
+                default: return 2;
             }
-
-            SetResolution(resolutionDropdown != null ? resolutionDropdown.value : 0);
         }
 
         private int GetCurrentResolutionIndex()
         {
-            for (int i = 0; i < resolutionOptions.Length; i++)
+            if (resolutionOptions == null || resolutionOptions.Count == 0) return 0;
+            Vector2Int saved = GraphicsSettingsManager.SavedResolution;
+            for (int i = 0; i < resolutionOptions.Count; i++)
             {
-                if (Screen.width == resolutionOptions[i].Width && Screen.height == resolutionOptions[i].Height)
-                {
-                    return i;
-                }
+                if (resolutionOptions[i] == saved) return i;
             }
 
-            return 5;
+            return resolutionOptions.Count - 1;
         }
 
         private void QuitGame()
@@ -545,24 +659,6 @@ namespace YutArena.UI
             }
         }
 
-        private struct ResolutionOption
-        {
-            public ResolutionOption(int width, int height, string aspectRatio)
-            {
-                Width = width;
-                Height = height;
-                AspectRatio = aspectRatio;
-            }
-
-            public int Width { get; }
-            public int Height { get; }
-            public string AspectRatio { get; }
-
-            public string Label
-            {
-                get { return Width + " x " + Height + " (" + AspectRatio + ")"; }
-            }
-        }
     }
 }
 

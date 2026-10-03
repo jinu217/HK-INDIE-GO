@@ -63,12 +63,12 @@ namespace YutArena.UI.CharacterScene
 
         private readonly int[] cursorIndexes = new int[MaxPlayerCount];
         private readonly bool[] selectedPlayers = new bool[MaxPlayerCount];
-        private readonly Gamepad[] playerGamepads = new Gamepad[MaxPlayerCount];
         private readonly List<CharacterData> runtimeCharacters = new List<CharacterData>();
 
         private int playerCount;
         private float remainingTime;
         private bool isFinalized;
+        private int keyboardPlayerIndex;
 
         private void Awake()
         {
@@ -76,16 +76,6 @@ namespace YutArena.UI.CharacterScene
             BuildRuntimeCharacterList();
             ResolvePlayers();
             RefreshLobbySettingsUI();
-
-            // TEMP_AUTO_CONFIRM_GAMEPAD_PLAYERS_START: 패드가 없는 로컬 테스트용입니다. P2 이상을 자동 선택 완료 처리합니다. 커밋 전 삭제하세요.
-            for (int playerIndex = 1; playerIndex < playerCount; playerIndex++)
-            {
-                cursorIndexes[playerIndex] = runtimeCharacters.Count > 0
-                    ? playerIndex % runtimeCharacters.Count
-                    : 0;
-                selectedPlayers[playerIndex] = true;
-            }
-            // TEMP_AUTO_CONFIRM_GAMEPAD_PLAYERS_END
 
             remainingTime = selectionTimeSeconds;
 
@@ -254,14 +244,6 @@ namespace YutArena.UI.CharacterScene
                 ? Mathf.Clamp(settings.playerCount, 1, MaxPlayerCount)
                 : Mathf.Clamp(fallbackPlayerCount, 1, MaxPlayerCount);
 
-            // P1 uses the keyboard. P2-P4 use gamepads in connection order.
-            for (int playerIndex = 1; playerIndex < playerCount; playerIndex++)
-            {
-                int gamepadIndex = playerIndex - 1;
-                playerGamepads[playerIndex] = gamepadIndex < Gamepad.all.Count
-                    ? Gamepad.all[gamepadIndex]
-                    : null;
-            }
         }
 
         private void InitializeCards()
@@ -343,40 +325,92 @@ namespace YutArena.UI.CharacterScene
 
         private void ProcessInputs()
         {
-            for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
+            LocalSelectionInput.Poll(playerCount);
+            keyboardPlayerIndex = -1;
+            int lastKeyboardPlayer = -1;
+            for (int i = 0; i < playerCount; i++)
             {
-                if (playerIndex == 0)
+                Gamepad pad = LocalSelectionInput.GetGamepad(i);
+                if (pad != null)
                 {
-                    ProcessKeyboardInput();
+                    // Joining must not also confirm the default character on the same A press.
+                    if (!LocalSelectionInput.JoinedThisFrame(i)) ProcessGamepadInput(i, pad);
+                    continue;
                 }
-                else
-                {
-                    ProcessGamepadInput(playerIndex, playerGamepads[playerIndex]);
-                }
+                lastKeyboardPlayer = i;
+                if (keyboardPlayerIndex < 0 && !selectedPlayers[i]) keyboardPlayerIndex = i;
             }
+            if (keyboardPlayerIndex < 0) keyboardPlayerIndex = lastKeyboardPlayer;
+            if (keyboardPlayerIndex < 0) return;
+            Keyboard keyboard = Keyboard.current;
+            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) ||
+                (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame))
+            {
+                if (!selectedPlayers[keyboardPlayerIndex])
+                {
+                    for (int i = keyboardPlayerIndex - 1; i >= 0; i--)
+                        if (LocalSelectionInput.GetGamepad(i) == null)
+                        {
+                            keyboardPlayerIndex = i;
+                            break;
+                        }
+                }
+                selectedPlayers[keyboardPlayerIndex] = false;
+                return;
+            }
+            ProcessKeyboardInput(keyboardPlayerIndex);
         }
 
-        private void ProcessKeyboardInput()
+        private void ProcessKeyboardInput(int playerIndex)
         {
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+                !selectedPlayers[playerIndex] && cardViews != null)
+            {
+                Vector2 pointer = Mouse.current.position.ReadValue();
+                for (int i = 0; i < Mathf.Min(cardViews.Length, runtimeCharacters.Count); i++)
+                {
+                    Canvas canvas = cardViews[i] != null ? cardViews[i].GetComponentInParent<Canvas>() : null;
+                    Camera camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                        ? canvas.worldCamera : null;
+                    if (cardViews[i] != null && RectTransformUtility.RectangleContainsScreenPoint(
+                        cardViews[i].transform as RectTransform, pointer, camera))
+                    {
+                        cursorIndexes[playerIndex] = i;
+                        selectedPlayers[playerIndex] = true;
+                        return;
+                    }
+                }
+            }
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return;
 
-            if (!selectedPlayers[0])
+            if (!selectedPlayers[playerIndex])
             {
-                if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) MoveCursor(0, -1, 0);
-                if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame) MoveCursor(0, 1, 0);
-                if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) MoveCursor(0, 0, -1);
-                if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) MoveCursor(0, 0, 1);
+                if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) MoveCursor(playerIndex, -1, 0);
+                if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame) MoveCursor(playerIndex, 1, 0);
+                if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, -1);
+                if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, 1);
 
                 if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
                 {
-                    selectedPlayers[0] = true;
+                    selectedPlayers[playerIndex] = true;
                 }
             }
             else if (keyboard.escapeKey.wasPressedThisFrame)
             {
-                selectedPlayers[0] = false;
+                selectedPlayers[playerIndex] = false;
             }
+        }
+
+        private void OnGUI()
+        {
+            if (isFinalized) return;
+            GUI.Label(new Rect(16, 16, 800, 28),
+                $"Keyboard P{keyboardPlayerIndex + 1}: WASD / Arrows / Enter / Esc | Gamepads: A to join / confirm, B to cancel");
+            string devices = string.Empty;
+            for (int i = 0; i < playerCount; i++)
+                devices += $"P{i + 1}: {(LocalSelectionInput.GetGamepad(i) != null ? "Gamepad" : "Keyboard")}  ";
+            GUI.Label(new Rect(16, 46, 800, 28), devices);
         }
 
         private void ProcessGamepadInput(int playerIndex, Gamepad gamepad)

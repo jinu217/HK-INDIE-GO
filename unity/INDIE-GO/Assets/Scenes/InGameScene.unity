@@ -3083,7 +3083,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 321.4, y: -292.5}
+  m_AnchoredPosition: {x: 321.4, y: -278}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &805834273
@@ -3803,6 +3803,10 @@ MonoBehaviour:
   activeSkillButtonController: {fileID: 832748596}
   passiveSkillTooltip: {fileID: 674901120}
   activeSkillTooltip: {fileID: 832748595}
+  spContainer: {fileID: 1079557976}
+  spSprite: {fileID: 8037683248589123915, guid: 237d8071e8ea9e84c9f1f603176f45be, type: 3}
+  spImageSize: {x: 32, y: 32}
+  spSpacing: 3
 --- !u!4 &920429098
 Transform:
   m_ObjectHideFlags: 0
@@ -4103,6 +4107,81 @@ CanvasRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1063866272}
+  m_CullTransparentMesh: 1
+--- !u!1 &1079557975
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1079557976}
+  - component: {fileID: 1079557978}
+  - component: {fileID: 1079557977}
+  m_Layer: 5
+  m_Name: SpPanel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1079557976
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1079557975}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1858767326}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 323, y: -483}
+  m_SizeDelta: {x: -1780, y: -1029.6362}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1079557977
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1079557975}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.392}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 10907, guid: 0000000000000000f000000000000000, type: 0}
+  m_Type: 1
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &1079557978
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1079557975}
   m_CullTransparentMesh: 1
 --- !u!1 &1082433108
 GameObject:
@@ -5327,37 +5406,6 @@ Transform:
   m_Children:
   - {fileID: 1901000001}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1901000000
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1901000001}
-  m_Layer: 0
-  m_Name: CarriedPieceStorageAnchor
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1901000001
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1901000000}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1376455555}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1433302049
 GameObject:
@@ -7884,6 +7932,7 @@ RectTransform:
   - {fileID: 2085568673}
   - {fileID: 1560903127}
   - {fileID: 1063866273}
+  - {fileID: 1079557976}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -9376,6 +9425,37 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.BoardTileAnchor
   tileId: 30
+--- !u!1 &1901000000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1901000001}
+  m_Layer: 0
+  m_Name: CarriedPieceStorageAnchor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1901000001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1901000000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1376455555}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1922777480
 GameObject:
   m_ObjectHideFlags: 0
@@ -9543,13 +9623,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MoveDestinationSelector
   turnManager: {fileID: 0}
-  pieceMovementManager: {fileID: 0}
   playerManager: {fileID: 0}
+  pieceMovementManager: {fileID: 0}
   mapManager: {fileID: 0}
   pieceDebugController: {fileID: 0}
   finishMarkerAnchor: {fileID: 0}
-  markerColor: {r: 1, g: 0.92, b: 0.3, a: 0.75}
-  markerScale: 0.55
+  pieceArrowColor: {r: 0.45, g: 0.85, b: 1, a: 1}
+  pieceArrowScale: 0.35
+  pieceArrowHeight: 1.15
+  destColor: {r: 1, g: 0.86, b: 0.35, a: 1}
+  destScale: 0.45
+  arrowHeightEmptyTile: 0.18
+  arrowHeightAbovePiece: 0.12
+  outlineTileSize: 1.25
+  outlineAngleDeg: 0
+  outlineAngleDegDiagonal: 45
+  outlineThickness: 0.07
+  outlineCornerRadius: 0.16
+  outlineColor: {r: 0.95, g: 0.72, b: 0.28, a: 0.55}
+  outlineHoverColor: {r: 1, g: 0.85, b: 0.4, a: 1}
+  bottomUiPixels: 210
+  topUiPixels: 140
   verboseLog: 1
 --- !u!4 &1954210364
 Transform:

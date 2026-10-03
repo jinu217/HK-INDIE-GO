@@ -1,5 +1,7 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
@@ -135,6 +137,20 @@ namespace YutArena.UI
         private bool isTeamMode;
         private int[] playerTeamIndexes = { 0, 0, 0, 0 };
         private ButtonSound startButtonSound;
+        private int navigationRow = -1;
+        private Button navigationButton;
+        private TMP_Text highlightedText;
+        private Color highlightedTextColor;
+        private EventSystem navigationEventSystem;
+        private bool previousNavigationEvents;
+
+        // The bottom option is TurnLength; the last row contains Start and Back.
+        private TMP_Text[] NavigationTexts => new[] { gameModeValueText, playerCountValueText,
+            teamModeValueText, mapValueText, gameTimeValueText, turnTimeValueText, turnLengthValueText };
+        private Button[] NavigationLeftButtons => new[] { gameModeLeftButton, playerCountLeftButton,
+            teamModeLeftButton, mapLeftButton, gameTimeLeftButton, turnTimeLeftButton, turnLengthLeftButton };
+        private Button[] NavigationRightButtons => new[] { gameModeRightButton, playerCountRightButton,
+            teamModeRightButton, mapRightButton, gameTimeRightButton, turnTimeRightButton, turnLengthRightButton };
 
         private GameMode SelectedGameMode
         {
@@ -159,8 +175,91 @@ namespace YutArena.UI
 
         private void Update()
         {
+            LocalSelectionInput.Poll(selectedPlayerCount);
+            ProcessNavigation();
             RefreshStartAvailability();
         }
+
+        private void ProcessNavigation()
+        {
+            if (navigationEventSystem == null && EventSystem.current != null)
+            {
+                navigationEventSystem = EventSystem.current;
+                previousNavigationEvents = navigationEventSystem.sendNavigationEvents;
+                navigationEventSystem.sendNavigationEvents = false;
+            }
+            Keyboard keyboard = Keyboard.current;
+            bool up = keyboard != null && keyboard.upArrowKey.wasPressedThisFrame;
+            bool down = keyboard != null && keyboard.downArrowKey.wasPressedThisFrame;
+            bool left = keyboard != null && keyboard.leftArrowKey.wasPressedThisFrame;
+            bool right = keyboard != null && keyboard.rightArrowKey.wasPressedThisFrame;
+            bool submit = keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame);
+            // Assigned controllers can also operate the common lobby options.
+            {
+                for (int i = 1; i < selectedPlayerCount; i++)
+                {
+                    Gamepad pad = LocalSelectionInput.GetGamepad(i);
+                    if (pad == null || LocalSelectionInput.JoinedThisFrame(i)) continue;
+                    up |= pad.dpad.up.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame;
+                    down |= pad.dpad.down.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame;
+                    left |= pad.dpad.left.wasPressedThisFrame || pad.leftStick.left.wasPressedThisFrame;
+                    right |= pad.dpad.right.wasPressedThisFrame || pad.leftStick.right.wasPressedThisFrame;
+                    submit |= pad.buttonSouth.wasPressedThisFrame;
+                }
+            }
+            if (up || down)
+            {
+                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : 7)) % 8;
+                HighlightNavigationRow();
+                return;
+            }
+            if (navigationRow < 0) return;
+            if (left || right)
+            {
+                Button target = navigationRow == 7
+                    ? (navigationButton == startGameButton ? backButton : startGameButton)
+                    : (left ? NavigationLeftButtons[navigationRow] : NavigationRightButtons[navigationRow]);
+                SelectNavigationButton(target);
+                if (navigationRow != 7 && target != null && target.isActiveAndEnabled && target.IsInteractable())
+                    target.onClick.Invoke();
+                return;
+            }
+            if (submit && navigationRow == 7 && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
+                navigationButton.onClick.Invoke();
+        }
+
+        private void HighlightNavigationRow()
+        {
+            if (highlightedText != null) highlightedText.color = highlightedTextColor;
+            highlightedText = null;
+            SelectNavigationButton(null);
+            if (navigationRow == 7)
+                SelectNavigationButton(startGameButton);
+            else
+            {
+                highlightedText = NavigationTexts[navigationRow];
+                if (highlightedText != null)
+                {
+                    highlightedTextColor = highlightedText.color;
+                    highlightedText.color = Color.yellow;
+                }
+            }
+        }
+
+        private void SelectNavigationButton(Button button)
+        {
+            navigationButton = button;
+            if (navigationEventSystem != null)
+                navigationEventSystem.SetSelectedGameObject(button != null && button.isActiveAndEnabled
+                    ? button.gameObject : null);
+        }
+
+        private void OnDestroy()
+        {
+            if (highlightedText != null) highlightedText.color = highlightedTextColor;
+            if (navigationEventSystem != null) navigationEventSystem.sendNavigationEvents = previousNavigationEvents;
+        }
+
 
         private void BindButtons()
         {
@@ -360,18 +459,6 @@ namespace YutArena.UI
 
         private bool CanStartGame(out string reason)
         {
-            // TEMP_SKIP_GAMEPAD_CHECK_START: 패드 없이 LobbyScene -> ChampionPickScene 흐름을 확인하기 위한 임시 우회입니다. 커밋 전 삭제하세요.
-            /*
-            int connectedPlayerCount = GetConnectedRequiredPlayerCount();
-
-            if (connectedPlayerCount < selectedPlayerCount)
-            {
-                reason = $"컨트롤러 연결 대기 중 ({connectedPlayerCount}/{selectedPlayerCount})";
-                return false;
-            }
-            */
-            // TEMP_SKIP_GAMEPAD_CHECK_END
-
             if (SelectedGameMode == GameMode.KillTheKing)
             {
                 reason = "Kill The King is coming soon.";
