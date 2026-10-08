@@ -195,6 +195,10 @@ public static class CharacterSkillRegistry
 
     public static void NotifyCaptureCompleted(CharacterCaptureRequest request)
     {
+        PlayerRuntimeData.PieceRuntimeData targetPiece =
+            CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId);
+        if (targetPiece == null || targetPiece.State != PieceState.Waiting)
+            return;
         if (TryGet(request.AttackerPlayerId, request.AttackerPieceId, out CharacterStatusBehaviour attacker))
             attacker.OnCaptureCompleted(request);
     }
@@ -550,22 +554,26 @@ public readonly struct CharacterActiveRequest
 
 public readonly struct CharacterActiveResult
 {
-    private CharacterActiveResult(bool succeeded, string message, bool suppressExtraThrow)
+    private CharacterActiveResult(
+        bool succeeded, string message, bool suppressExtraThrow, bool endTurnAfterResolution)
     {
         Succeeded = succeeded;
         Message = message ?? string.Empty;
         SuppressExtraThrow = suppressExtraThrow;
+        EndTurnAfterResolution = endTurnAfterResolution;
     }
 
     public bool Succeeded { get; }
     public string Message { get; }
     public bool SuppressExtraThrow { get; }
+    public bool EndTurnAfterResolution { get; }
 
     public static CharacterActiveResult Success(
         string message = "",
-        bool suppressExtraThrow = false)
+        bool suppressExtraThrow = false,
+        bool endTurnAfterResolution = false)
     {
-        return new CharacterActiveResult(true, message, suppressExtraThrow);
+        return new CharacterActiveResult(true, message, suppressExtraThrow, endTurnAfterResolution);
     }
 
     public static CharacterActiveResult Failure(string message)
@@ -573,7 +581,7 @@ public readonly struct CharacterActiveResult
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException("A failure result requires a message.", nameof(message));
 
-        return new CharacterActiveResult(false, message, false);
+        return new CharacterActiveResult(false, message, false, false);
     }
 }
 
@@ -599,7 +607,8 @@ public readonly struct CharacterMoveRecord
         BoardTileId from,
         BoardTileId to,
         IReadOnlyList<BoardTileId> path,
-        bool ignoresInstalledItems = false)
+        bool ignoresInstalledItems = false,
+        bool isSimpleMove = false)
     {
         PlayerId = playerId;
         PieceId = pieceId;
@@ -607,6 +616,7 @@ public readonly struct CharacterMoveRecord
         To = to;
         Path = path ?? Array.Empty<BoardTileId>();
         IgnoresInstalledItems = ignoresInstalledItems;
+        IsSimpleMove = isSimpleMove;
     }
 
     public int PlayerId { get; }
@@ -615,6 +625,7 @@ public readonly struct CharacterMoveRecord
     public BoardTileId To { get; }
     public IReadOnlyList<BoardTileId> Path { get; }
     public bool IgnoresInstalledItems { get; }
+    public bool IsSimpleMove { get; }
 }
 
 public enum CharacterSkillInputStep

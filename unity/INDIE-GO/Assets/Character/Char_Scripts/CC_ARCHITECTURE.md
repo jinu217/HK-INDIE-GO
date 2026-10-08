@@ -41,9 +41,9 @@ foreach (CcState effect in cc.Effects) { /* Type, RemainingOwnerTurns, Value, So
 
 ## 지속시간
 
-기존 매니저 계약인 **대상 소유자 턴 시작 감소**를 유지한다. 0은 소비/명시적 해제까지 유지한다. 상대에게 한 턴 행동 불가를 주려면 2를 저장한다(다음 턴 시작 2→1, 그다음 시작 1→0). Protection=1은 다음 소유자 턴 시작까지, Hidden/Parts=3은 세 번째 소유자 턴 시작까지다. 같은 Stun/Silence/Protection/Hidden 재적용은 기존의 더 긴 지속시간을 줄이지 않는다.
+기존 매니저 계약인 **대상 소유자 턴 시작 감소**를 유지한다. 0은 소비/명시적 해제까지 유지한다. 상대에게 한 턴 행동 불가를 주려면 2를 저장한다(다음 턴 시작 2→1, 그다음 시작 1→0). Protection/TalismanProtection=1은 다음 소유자 턴 시작까지, Hidden/Parts=3은 세 번째 소유자 턴 시작까지다. 같은 Stun/Silence/Protection/TalismanProtection/Hidden 재적용은 기존의 더 긴 지속시간을 줄이지 않는다.
 
-SP/쿨다운/첫 진입 여부 같은 **발동 조건**은 캐릭터/Registry에 남는다. 은신 여부·분신 수·보호 횟수·이동 배율 등 **이미 부여된 효과 상태**는 CC에만 있다. WindPath의 활성 경로는 CC에, 다음 활성화를 위해 수집 중인 이동 기록은 캐릭터에 둔다.
+SP/쿨다운/첫 진입 여부 같은 **발동 조건**은 캐릭터/Registry에 남는다. 은신 여부·분신 수·보호 횟수 등 **이미 부여된 효과 상태**는 CC에 저장한다. 전우치의 다음 윷 결과 배율은 결과 목록의 특정 항목과 묶어야 하므로 캐릭터가 예약 상태로 관리한다. WindPath의 활성 경로는 CC에, 다음 활성화를 위해 수집 중인 이동 기록은 캐릭터에 둔다.
 
 ## 캐릭터별 연결
 
@@ -51,19 +51,19 @@ SP/쿨다운/첫 진입 여부 같은 **발동 조건**은 캐릭터/Registry에
 |---|---|---|
 | 001_1 | 첫 이동과 착지 처리를 마친 뒤 별도 Move(도 1칸), 리타이어 시 해당 말 재사용 | DoOrMo |
 | 001_2 | SkillPoint | ExtraThrow |
-| 002 | Protection | DoubleMove |
-| 003 | LimitCapture | Clone |
+| 002 | TalismanProtection | 다음 던지기 결과 예약 → 해당 결과 이동 수 2배 |
+| 003 | 방어측 말 수(분신 포함)가 공격측보다 많을 때 분신 → 업힌 실제 말 → 선두 말 순서로 공격측 말 수만큼 소모 | Clone |
 | 004 | Protection | Hidden |
 | 005 | RemoveBackDo | Retire + MovePath |
-| 006 | Protection | Kill(방어 판정 후) |
+| 006 | Stun·Binding·Silence 면역 | 현재 칸과 앞 1칸의 모든 적 Retire, 실제 퇴장 수만큼 ExtraThrow |
 | 007 | SkillPoint | MovePath + Stun |
-| 008 | WindPath → Move | Stun |
+| 008 | WindPath → 포획 없는 MovePath | Binding(이동만 금지) |
 | 009 | Parts → 부활 또는 Retire | 범위 Retire |
-| 010 | MoveBonus | Move(-1) |
-| 018 | Mark → SkillPoint | MovePath + Kill |
-| 019 | YutMoExtraThrow | ReverseExtraThrow |
+| 010 | 원래 이동 착지 후 업은 말 수만큼 별도 Move | 업은 말 수 + 1칸 후진 후 턴 종료 |
 
 일반 잡기와 검기/암살은 방어 판정을 거친다. 자폭은 종전 규칙대로 범위의 아군/자신을 포함해 직접 Retire한다. 잡기/SP/추가 던지기/완주 결과는 UI 호출 여부와 관계없이 Registry의 성공 경로에서 반영된다.
+
+003의 분신은 실제 말 수에 포함되지 않고 완주 점수를 주지 않는다. 분신을 잡은 공격에는 잡기 추가 던지기를 부여하지 않으며, 같은 공격으로 실제 말도 리타이어하는 경우 역시 추가 던지기를 부여하지 않는다. 방어측 수가 공격측 이하이고 분신이 없으면 일반 잡기 규칙을 따른다.
 
 ## 선택 흐름 확장
 
@@ -78,7 +78,7 @@ SP/쿨다운/첫 진입 여부 같은 **발동 조건**은 캐릭터/Registry에
 - Scripts/InGame/MoveDestinationSelector.cs: 목적지 표시도 공통 CC 이동 제한 사용(1줄).
 - Scripts/InGame/CcDefine.cs 및 meta: 정의를 Character/Char_Scripts/CcEffectService.cs에 통합하고 옛 위치에 중복 정의를 남기지 않음.
 
-씬/프리팹/SO/프로젝트 설정은 수정하지 않았다. 기존 CharacterBoardUtility의 효과 구현은 CcBoardEffects로 옮기고 기존 API는 위임 함수로 유지했다. 공통 기반/Registry/조회 도구는 아직 사용되므로 삭제하지 않았다.
+기존 CharacterBoardUtility의 효과 구현은 CcBoardEffects로 옮기고 기존 API는 위임 함수로 유지했다. 공통 기반/Registry/조회 도구는 계속 사용한다. 현재 데이터베이스에는 001~010만 유지하며 018/019의 SO·프리팹·스크립트와 참조는 제거했다.
 
 Char_Scripts는 폴더를 추가하지 않고 7개 C# 파일로 유지한다. CcDefine/CcState는 CcEffectService에, CcBoardEffects/CcCloneView는 CharacterBoardUtility에, 요청·결과·선택 단계 자료형은 CharacterSkillRegistry에, CC 검증기와 읽기 전용 Inspector는 CharacterSkillRuntimeVerifier에 통합했다. 외부에서 사용하는 타입과 함수 이름은 그대로 유지한다.
 
@@ -86,28 +86,22 @@ Char_Scripts는 폴더를 추가하지 않고 7개 C# 파일로 유지한다. Cc
 
 ## 검증
 
-PlayerManager가 없는 씬(예: StartScene)의 Edit Mode에서 Tools → Character → Verify CC Pipeline. 임시 additive 씬과 메모리 SO 복사본으로 검증 후 정리하며 결과는 Temp/cc-verification.log에 기록한다. 실제 SO 값은 변경하지 않는다. 이 검증은 CC 로직/13개 캐릭터/API 연결의 회귀 검증이며, 실제 게임 화면의 클릭/애니메이션 전체를 자동 검증하는 테스트는 아니다.
+PlayerManager가 없는 씬(예: StartScene)의 Edit Mode에서 Tools → Character → Verify CC Pipeline. 임시 additive 씬과 메모리 SO 복사본으로 검증 후 정리하며 결과는 Temp/cc-verification.log에 기록한다. 실제 SO 값은 변경하지 않는다. InGameScene의 CharacterSkillRuntimeVerifier는 001~010의 등록·효과·교차 상호작용·Classic 종료를 플레이 모드에서 확인한다. 실제 화면의 클릭과 애니메이션 전체를 자동 검증하는 테스트는 아니다.
 
 ## 기존 Character 안내문과의 관계
 
-`Character/PLAYER_SYSTEM_OVERVIEW.md`와 `Character/BOARD_TILE_RUNTIME_SKILL_GUIDE.md`를 함께 확인했다. 기존 안내문은 수정하지 않았다.
+`Character/PLAYER_SYSTEM_OVERVIEW.md`와 `Character/BOARD_TILE_RUNTIME_SKILL_GUIDE.md`를 함께 확인했다. 현재 구현과 어긋난 캐릭터별 설명은 갱신했다.
 
 - 시스템 개요의 `Scripts/Player` 경로와 일부 효과 설명은 이전 구현 기준이다. 현재 파일 위치는 `Character`이며, 이번 변경의 책임 분리와 CC 저장 방식은 이 문서를 따른다.
 - 기존 Registry 호출 계약, 말 등록, 공유 SP/액티브 쿨다운, 턴/이동/승리 매니저의 소유권은 유지한다. 외부 매니저에는 개별 캐릭터 타입 분기를 추가하지 않는다.
 - 보드 설치 API는 설치 정보와 선택적 표시 프리팹의 저장소다. 실제 CC 실행, 발동 조건, 카운터 차감 책임을 해당 매니저로 옮기지 않는다.
 - 현재 WindPath는 말의 CC에 경로를 저장하는 기존 동작을 이관했다. `BoardTileRuntimeStateManager`에 타일 설치물을 등록하거나 설치형 VFX를 생성하는 기능까지 추가한 것은 아니다. 향후 설치형 스킬은 안내문의 API로 설치 정보를 관리하고, 발동 시 `CcEffectService`로 말에 효과를 적용한다.
-- 기존 안내문에 명시된 것처럼 로직 검증 통과와 실제 게임 화면 전체 검증은 구분한다.
+- 로직 검증 통과와 실제 게임 화면 전체 검증은 구분한다.
 
 ## 참고 테이블과의 관계
 
-사용자가 제공한 '윷 아레나 캐릭터 스킬 테이블.xlsx'는 의도와 용어를 확인하는 참고자료다. 표와 동일하게 만드는 작업이 아니며, 기존 SO의 비용/쿨다운은 일괄 변경하지 않았다. 폴더 생성/삭제/이동 없이 기존 폴더 안에서 작업한다.
+사용자가 제공한 '윷 아레나 캐릭터 스킬 테이블.xlsx'와 프로그래밍 가이드 플로우를 001~010의 규칙 검증에 사용했다. SO의 비용/쿨다운 수치는 일괄 변경하지 않았다. 특히 속박은 스턴과 분리하여 이동만 제한하고 스킬 사용은 허용한다.
 
-별도 기획 판단이 필요한 대표 차이(이번 이관에서 표 기준으로 변경하지 않음):
-
-- CHAR_006: 기존 25% 잡기 회피/선택한 적 1개 대상. 표에는 디버프 면역/두 칸의 모든 적 대상이 있다(Character_Data D10/F10).
-- CHAR_007: 기존 경로의 첫 적만 스턴. 표는 경로의 모든 적이다(F11).
-- CHAR_008: 기존 효과는 Stun이다. 표는 스킬 사용이 가능한 이동 제한 Binding을 구별한다(F12 및 효과, 상태이상_Data C18/D18).
-- CHAR_009: 기존은 세 번째 소유자 턴 시작 만료/아군이 1칸 이내에 도착하면 부활. 표에는 2턴/같은 칸 부활 후 업기가 있다(D13).
-- CHAR_010: 기존 후퇴는 1칸. 표에는 업힌 말 수 추가 후퇴/즉시 턴 종료가 있다(D14/F14).
-- 표의 보호/방어/유혹은 방어 범위를 세분화한다. 이번 Protection CC는 기존 1회 잡기 방어 의미를 유지한다.
+추가 참고 사항:
+- Protection CC는 잡기와 직접 부여되는 해로운 상태이상을 횟수만큼 막는다. 전우치의 TalismanProtection은 별도 상태로 다음 대상 소유자 턴 시작까지 지속하며, 다른 보호 효과의 지속시간과 합쳐지지 않는다.
 - 표에만 있는 미구현 캐릭터/아이템은 이 구조 변경을 이유로 새로 생성하지 않는다.

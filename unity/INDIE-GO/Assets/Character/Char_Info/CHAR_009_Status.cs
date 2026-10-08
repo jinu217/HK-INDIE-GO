@@ -4,17 +4,31 @@ using YutArena.InGame;
 
 public sealed class CHAR_009_Status : CharacterStatusBehaviour
 {
-    public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
+    private bool partsAlreadyActive;
+
+    // CcEffectService calls this only for an actual Retire effect. A Kill does
+    // not become Parts, and expired Parts cannot immediately recreate itself.
+    internal bool TryEnterParts(PlayerRuntimeData.PieceRuntimeData piece)
     {
-        var existing = base.EvaluateIncomingCapture(request);
-        if (existing != CharacterCaptureDecision.Proceed) return existing;
-        if (!TryGetPiece(out var piece) || piece.State != PieceState.InBoard ||
-            !TryStartPassiveCooldown()) return CharacterCaptureDecision.Proceed;
-        ApplyEffect(CcDefine.Parts, 3);
-        return CharacterCaptureDecision.ConvertToParts;
+        if (partsAlreadyActive || piece.State != PieceState.InBoard ||
+            !IsPassiveReady || !CcEffectService.Apply(piece, CcDefine.Parts, 3,
+                sourcePlayerId: PlayerId, sourcePieceId: PieceId))
+            return false;
+        partsAlreadyActive = true;
+        TryStartPassiveCooldown();
+        return true;
     }
 
-    public override void OnPieceRetired() { ResetPassiveCooldown(); }
+    public override void OnPieceEnteredBoard()
+    {
+        partsAlreadyActive = false;
+    }
+
+    public override void OnPieceRetired()
+    {
+        partsAlreadyActive = false;
+        ResetPassiveCooldown();
+    }
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
@@ -24,19 +38,22 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("Self Destruct requires a piece on the board.");
 
         BoardTileId origin = caster.CurrentTileId;
+        var affectedTiles = new HashSet<BoardTileId>
+        {
+            origin,
+            CharacterBoardUtility.GetNextForwardTile(origin, caster.PreviousTileId, true),
+            CharacterBoardUtility.GetNextBackwardTile(origin, caster.PreviousTileId)
+        };
         List<CharacterPieceReference> pieces = CharacterBoardUtility.GetPiecesOnBoard(Players);
         int retiredCount = 0;
 
         foreach (CharacterPieceReference reference in pieces)
         {
-            bool isCaster = reference.Player.PlayerId == PlayerId &&
-                            reference.Piece.PieceId == PieceId;
-            if (!isCaster &&
-                !CharacterBoardUtility.IsWithinDistance(origin, reference.Piece.CurrentTileId, 1))
+            if (!affectedTiles.Contains(reference.Piece.CurrentTileId))
                 continue;
 
             CharacterBoardUtility.Retire(reference, false);
-            retiredCount++;
+            if (reference.Piece.State == PieceState.Waiting) retiredCount++;
         }
 
         UnityEngine.Debug.Log(
@@ -44,7 +61,7 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             $"{retiredCount} piece(s). Player={PlayerId}, Piece={PieceId}",
             this);
         return CharacterActiveResult.Success(
-            $"Self Destruct retired {retiredCount} piece(s), including allies and the caster.",
+            $"Self Destruct retired {retiredCount} piece(s) on this tile and its adjacent route tiles.",
             suppressExtraThrow: true);
     }
 

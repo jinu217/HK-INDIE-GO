@@ -1,19 +1,127 @@
+using System;
+using System.Collections.Generic;
+using YutArena.Common;
 using YutArena.InGame;
 
-// 스킬 발동 조건만 담당합니다. 분신 수/표현/업기/소모는 Clone CC가 관리합니다.
+// Capture callbacks arrive once per real piece. Plan the whole stack on the
+// first callback so piece iteration order cannot retire the carrier first.
 public sealed class CHAR_003_Status : CharacterStatusBehaviour
 {
+    private bool hasCapturePlan;
+    private int plannedAttackerPlayerId;
+    private int plannedAttackerPieceId;
+    private BoardTileId plannedTile;
+    private int plannedCloneLoss;
+    private CharacterCaptureDecision plannedDecision;
+
+    public override bool CanSelectAsActiveCaster(PlayerRuntimeData.PieceRuntimeData piece) =>
+        base.CanSelectAsActiveCaster(piece) && CcBoardEffects.CountStackUnits(Owner, piece) < 4;
+
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        var existing = base.EvaluateIncomingCapture(request);
-        if (existing != CharacterCaptureDecision.Proceed) return existing;
-        if (request.AttackingPieceCount > 0 && TryStartPassiveCooldown())
+        if (!TryGetPiece(out var target)) return base.EvaluateIncomingCapture(request);
+        if (hasCapturePlan)
         {
-            ApplyEffect(CcDefine.LimitCapture);
-            return base.EvaluateIncomingCapture(request);
+            bool matches = plannedAttackerPlayerId == request.AttackerPlayerId &&
+                           plannedAttackerPieceId == request.AttackerPieceId &&
+                           plannedTile == target.CurrentTileId;
+            if (matches) return ExecuteCapturePlan(request, target);
+            hasCapturePlan = false;
         }
-        return CharacterCaptureDecision.Proceed;
+
+        if (request.AttackingPieceCount <= 0 || target.State != PieceState.InBoard)
+            return base.EvaluateIncomingCapture(request);
+
+        var defenders = new List<PlayerRuntimeData.PieceRuntimeData>();
+        int defendingCount = 0;
+        bool hasClone = false;
+        foreach (var piece in Owner.RuntimeData.Pieces)
+        {
+            if (piece.State != PieceState.InBoard || piece.CurrentTileId != target.CurrentTileId ||
+                (target.IsStacked ? piece.StackGroupId != target.StackGroupId : piece != target))
+                continue;
+            defenders.Add(piece);
+            int clones = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+            defendingCount += 1 + clones;
+            hasClone |= clones > 0;
+        }
+
+        bool limitCapture = defendingCount > request.AttackingPieceCount && IsPassiveReady;
+        if (!hasClone && !limitCapture) return base.EvaluateIncomingCapture(request);
+
+        // An incomplete character stack keeps the ordinary CC path.
+        var statuses = new List<CHAR_003_Status>();
+        foreach (var piece in defenders)
+        {
+            if (!CharacterSkillRegistry.TryGet(PlayerId, piece.PieceId, out var status) ||
+                !(status is CHAR_003_Status gildong))
+                return base.EvaluateIncomingCapture(request);
+            statuses.Add(gildong);
+        }
+        if (limitCapture && !TryStartPassiveCooldown() && !hasClone)
+            return base.EvaluateIncomingCapture(request);
+
+        int remaining = request.AttackingPieceCount;
+        var cloneLosses = new int[defenders.Count];
+        var retire = new bool[defenders.Count];
+        for (int i = 0; i < defenders.Count && remaining > 0; i++)
+        {
+            if (IsProtected(defenders[i])) continue;
+            int clones = defenders[i].Cc.Get(CcDefine.Clone)?.Value ?? 0;
+            cloneLosses[i] = Math.Min(clones, remaining);
+            remaining -= cloneLosses[i];
+        }
+        // Real cargo goes before the stack leader.
+        for (int pass = 0; pass < 2 && remaining > 0; pass++)
+        {
+            for (int i = 0; i < defenders.Count && remaining > 0; i++)
+            {
+                var piece = defenders[i];
+                bool isLeader = !piece.IsStacked || piece.PieceId == piece.StackLeaderPieceId;
+                if (isLeader != (pass == 1) || IsProtected(piece)) continue;
+                retire[i] = true;
+                remaining--;
+            }
+        }
+
+        for (int i = 0; i < defenders.Count; i++)
+        {
+            var status = statuses[i];
+            status.hasCapturePlan = true;
+            status.plannedAttackerPlayerId = request.AttackerPlayerId;
+            status.plannedAttackerPieceId = request.AttackerPieceId;
+            status.plannedTile = target.CurrentTileId;
+            status.plannedCloneLoss = cloneLosses[i];
+            status.plannedDecision = retire[i]
+                ? CharacterCaptureDecision.LimitRetireToAttackingCount
+                : cloneLosses[i] > 0
+                    ? CharacterCaptureDecision.ConsumeCloneWithoutBonus
+                    : CharacterCaptureDecision.Prevent;
+        }
+        return ExecuteCapturePlan(request, target);
     }
+
+    private CharacterCaptureDecision ExecuteCapturePlan(
+        CharacterCaptureRequest request, PlayerRuntimeData.PieceRuntimeData target)
+    {
+        hasCapturePlan = false;
+        if (IsProtected(target)) return base.EvaluateIncomingCapture(request);
+        if (plannedCloneLoss > 0)
+        {
+            var clone = target.Cc.Get(CcDefine.Clone);
+            if (clone != null)
+            {
+                clone.SetValue(clone.Value - plannedCloneLoss);
+                if (clone.Value <= 0) CcEffectService.Remove(target, CcDefine.Clone);
+                else CcBoardEffects.RefreshClones(Owner, target);
+            }
+        }
+        return plannedDecision;
+    }
+
+    private static bool IsProtected(PlayerRuntimeData.PieceRuntimeData piece) =>
+        !CcEffectService.IsTargetable(piece) || piece.Cc.Has(CcDefine.TalismanProtection) ||
+        piece.Cc.Has(CcDefine.Protection);
 
     protected override CharacterActiveResult ExecuteActive(CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
@@ -25,5 +133,14 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
             : CharacterActiveResult.Failure("Clone could not be applied.");
     }
 
-    public override void OnPieceRetired() { ResetPassiveCooldown(); }
+    public override void OnPieceRetired()
+    {
+        hasCapturePlan = false;
+        ResetPassiveCooldown();
+    }
+
+    public override void OnAnyPieceMoveCompleted(CharacterMoveRecord record)
+    {
+        hasCapturePlan = false;
+    }
 }

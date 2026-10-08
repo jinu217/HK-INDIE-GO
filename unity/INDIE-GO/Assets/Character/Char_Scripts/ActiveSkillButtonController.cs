@@ -91,6 +91,14 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         }
         UpdateButtonCooldownState();
 
+        // The guide uses F for the same select / confirm flow as the button.
+        if (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame &&
+            skillButton != null && skillButton.IsInteractable())
+        {
+            HandleActiveSkillButtonClicked();
+            return;
+        }
+
         if ((!isSelectingCaster && !isSelectingTarget) ||
             (isSelectingCaster && Time.frameCount == casterSelectionStartedFrame) ||
             (isSelectingTarget && Time.frameCount == targetSelectionStartedFrame))
@@ -102,10 +110,23 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             return;
         }
 
+        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+        {
+            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
+            return;
+        }
+
         if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
             return;
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
+
+        if (Camera.main != null && !DebugPieceView.TryFindAtScreenPosition(
+                Camera.main, Mouse.current.position.ReadValue(), out _))
+        {
+            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
+            return;
+        }
 
         if (isSelectingTarget)
             TrySelectTargetAtPointer();

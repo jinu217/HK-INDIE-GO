@@ -1,20 +1,20 @@
-using System.Collections.Generic;
 using YutArena.InGame;
 using YutArena.Common;
 
 public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
 {
-    private static readonly Dictionary<(int playerId, int stackGroupId), int>
-        ObservedStackSizes = new Dictionary<(int, int), int>();
+    private int stackSizeBeforeMove;
+    private bool observingOwnMove;
 
     //수정: 한번 더는 특정 말이 아닌 현재 플레이어의 턴에 추가 던지기를 예약합니다.
     public override bool RequiresCasterPieceSelection => false;
 
-    [UnityEngine.RuntimeInitializeOnLoadMethod(
-        UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetRuntimeState()
+    public override int ModifyMoveCount(CharacterMoveRequest request)
     {
-        ObservedStackSizes.Clear();
+        // 이동 전에 크기를 기록해야 기존 스택의 단순 이동과 새 업기를 구별할 수 있습니다.
+        observingOwnMove = TryGetPiece(out PlayerRuntimeData.PieceRuntimeData piece);
+        stackSizeBeforeMove = observingOwnMove ? GetStackPieceCount(piece) : 0;
+        return base.ModifyMoveCount(request);
     }
 
     public override void OnCaptureCompleted(CharacterCaptureRequest request)
@@ -27,28 +27,21 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
 
     public override void OnMoveCompleted(CharacterMoveRecord record)
     {
-        if (record.PlayerId != PlayerId ||
-            record.PieceId != PieceId ||
-            !TryGetPiece(out PlayerRuntimeData.PieceRuntimeData movedPiece) ||
-            movedPiece.State != PieceState.InBoard ||
-            !movedPiece.IsStacked)
-        {
-            return;
-        }
-
-        int stackSize = GetStackPieceCount(movedPiece);
-        if (stackSize < 2)
+        if (record.PlayerId != PlayerId || record.PieceId != PieceId || !observingOwnMove)
             return;
 
-        var key = (PlayerId, movedPiece.StackGroupId);
-        if (ObservedStackSizes.TryGetValue(key, out int observedSize) &&
-            stackSize <= observedSize)
-        {
+        observingOwnMove = false;
+        if (!TryGetPiece(out PlayerRuntimeData.PieceRuntimeData movedPiece) ||
+            movedPiece.State != PieceState.InBoard || !movedPiece.IsStacked)
             return;
-        }
 
-        ObservedStackSizes[key] = stackSize;
-        GrantPassiveSkillPoint("friendly stack");
+        if (GetStackPieceCount(movedPiece) > stackSizeBeforeMove)
+            GrantPassiveSkillPoint("friendly stack");
+    }
+
+    public override void OnPieceRetired()
+    {
+        observingOwnMove = false;
     }
 
     private void GrantPassiveSkillPoint(string trigger)

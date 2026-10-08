@@ -54,32 +54,59 @@ public static class CharacterBoardUtility
         int ownerPlayerId)
     {
         List<CharacterPieceReference> all = GetPiecesOnBoard(players);
-        all.RemoveAll(reference => reference.Player.PlayerId == ownerPlayerId);
+        all.RemoveAll(reference => AreAllies(ownerPlayerId, reference.Player.PlayerId));
         return all;
+    }
+
+    public static bool AreAllies(int firstPlayerId, int secondPlayerId,
+        GameStartSettings settings = null)
+    {
+        if (firstPlayerId == secondPlayerId) return true;
+        if (settings == null)
+            settings = UnityEngine.Object.FindFirstObjectByType<YutArena.Managers.TestTurnManager>()?.Settings;
+        if (settings == null || !settings.isTeamMode) return false;
+        TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)firstPlayerId);
+        return team != TeamSlot.None &&
+            team == MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)secondPlayerId);
     }
 
     public static CharacterPieceReference? FindNearestAlly(
         PlayerManager players,
         int ownerPlayerId,
         int sourcePieceId,
-        BoardTileId sourceTile)
+        BoardTileId sourceTile,
+        GameStartSettings settings = null)
     {
-        if (players == null || !players.TryGetPlayer(ownerPlayerId, out PlayerController owner))
+        if (players == null || !players.TryGetPlayer(ownerPlayerId, out _))
             return null;
 
         CharacterPieceReference? nearest = null;
         int nearestDistance = int.MaxValue;
+        TeamSlot sourceTeam = settings != null
+            ? MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)ownerPlayerId)
+            : TeamSlot.None;
 
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+        foreach (PlayerController player in players.ActivePlayers)
         {
-            if (piece.PieceId == sourcePieceId || piece.State != PieceState.InBoard)
+            if (player == null || player.RuntimeData == null ||
+                (player.PlayerId != ownerPlayerId &&
+                 (sourceTeam == TeamSlot.None ||
+                  MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)player.PlayerId) != sourceTeam)))
                 continue;
 
-            int distance = GetDistance(sourceTile, piece.CurrentTileId);
-            if (distance < nearestDistance)
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
-                nearest = new CharacterPieceReference(owner, piece);
-                nearestDistance = distance;
+                if ((player.PlayerId == ownerPlayerId && piece.PieceId == sourcePieceId) ||
+                    piece.State != PieceState.InBoard || piece.Cc.Has(CcDefine.Parts) ||
+                    (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId))
+                    continue;
+
+                int distance = GetDistance(sourceTile, piece.CurrentTileId);
+                if (distance < nearestDistance)
+                {
+                    nearest = new CharacterPieceReference(player, piece);
+                    nearestDistance = distance;
+                }
             }
         }
 
@@ -251,9 +278,10 @@ public static class CharacterBoardUtility
 
     public static void MoveStackAlongPath(PlayerController owner,
         PlayerRuntimeData.PieceRuntimeData caster, IReadOnlyList<BoardTileId> path,
-        bool ignoresInstalledItems = false) =>
+        bool ignoresInstalledItems = false, bool isSimpleMove = true) =>
         CcEffectService.Apply(caster, CcDefine.MovePath, value: ignoresInstalledItems ? 2 : 1,
-            sourcePlayerId: owner.PlayerId, sourcePieceId: caster.PieceId, path: path);
+            sourcePlayerId: owner.PlayerId, sourcePieceId: caster.PieceId, path: path,
+            isSimpleMove: isSimpleMove);
 
     private static Dictionary<BoardTileId, List<BoardTileId>> BuildGraph()
     {
@@ -350,6 +378,8 @@ public static class CcBoardEffects
             decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
         CcEffectService.RewardMarks(target.Piece, request);
         Retire(target, finalExtraThrow);
+        if (target.Piece.State != PieceState.Waiting)
+            return false;
         CharacterSkillRegistry.NotifyCaptureCompleted(request);
         return true;
     }
@@ -358,7 +388,8 @@ public static class CcBoardEffects
         PlayerController owner,
         PlayerRuntimeData.PieceRuntimeData caster,
         IReadOnlyList<BoardTileId> path,
-        bool ignoresInstalledItems = false)
+        bool ignoresInstalledItems = false,
+        bool isSimpleMove = true)
     {
         if (owner == null) throw new ArgumentNullException(nameof(owner));
         if (caster == null) throw new ArgumentNullException(nameof(caster));
@@ -400,7 +431,8 @@ public static class CcBoardEffects
                     startingTile,
                     piece.CurrentTileId,
                     path,
-                    ignoresInstalledItems));
+                    ignoresInstalledItems,
+                    isSimpleMove));
         }
     }
 
@@ -464,6 +496,37 @@ public static class CcBoardEffects
         var view = source.GetComponent<CcCloneView>();
         if (view == null && count > 0) view = source.gameObject.AddComponent<CcCloneView>();
         if (view != null) view.Refresh(piece, source);
+    }
+
+    internal static int CountStackUnits(PlayerController owner,
+        PlayerRuntimeData.PieceRuntimeData leader)
+    {
+        if (owner == null || leader == null) return 0;
+        int count = 0;
+        foreach (var piece in owner.RuntimeData.Pieces)
+            if (piece.State == PieceState.InBoard &&
+                (piece == leader || (leader.IsStacked && piece.StackGroupId == leader.StackGroupId)))
+                count += 1 + (piece.Cc.Get(CcDefine.Clone)?.Value ?? 0);
+        return count;
+    }
+
+    internal static void EnforceCloneCapacity(PlayerController owner,
+        PlayerRuntimeData.PieceRuntimeData moved)
+    {
+        int excess = CountStackUnits(owner, moved) - 4;
+        if (excess <= 0) return;
+        foreach (var piece in owner.RuntimeData.Pieces)
+        {
+            if (piece != moved && (!moved.IsStacked || piece.StackGroupId != moved.StackGroupId)) continue;
+            var clone = piece.Cc.Get(CcDefine.Clone);
+            if (clone == null) continue;
+            int removed = Math.Min(clone.Value, excess);
+            clone.SetValue(clone.Value - removed);
+            excess -= removed;
+            if (clone.Value == 0) CcEffectService.Remove(piece, CcDefine.Clone);
+            else RefreshClones(owner, piece);
+            if (excess == 0) break;
+        }
     }
 
     internal static void NormalizeStack(PlayerController owner, int groupId)

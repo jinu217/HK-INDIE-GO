@@ -311,6 +311,13 @@ public sealed class PieceMovementManager : MonoBehaviour
 
             //수정: 공격 말 수만큼만 퇴장시키는 스킬 결과를 계산합니다.
             int limitedRetiredCount = 0;
+            // 먼저 잡힌 선두가 스택을 정리해도 업힌 말의 원래 역할을 유지합니다.
+            var wasStackLeader = new Dictionary<int, bool>();
+            foreach (PlayerRuntimeData.PieceRuntimeData candidate in otherPlayer.RuntimeData.Pieces)
+                if (candidate.State == PieceState.InBoard && candidate.CurrentTileId == landingTile)
+                    wasStackLeader[candidate.PieceId] =
+                        !candidate.IsStacked ||
+                        candidate.PieceId == candidate.StackLeaderPieceId;
             foreach (PlayerRuntimeData.PieceRuntimeData targetPiece in otherPlayer.RuntimeData.Pieces)
             {
                 if (targetPiece.State != PieceState.InBoard || targetPiece.CurrentTileId != landingTile)
@@ -348,7 +355,7 @@ public sealed class PieceMovementManager : MonoBehaviour
                 }
                 else
                 {
-                    captureCc = GetCaptureCc(targetPiece, moveCount);
+                    captureCc = GetCaptureCc(wasStackLeader[targetPiece.PieceId], moveCount);
                 }
 
                 //수정: 표식 보상 및 CC 적용은 Character 효과 처리기에 위임합니다.
@@ -366,15 +373,14 @@ public sealed class PieceMovementManager : MonoBehaviour
         return moveCount == -1 || (moveCount >= 1 && moveCount <= 3);
     }
 
-    private static CcDefine GetCaptureCc(PlayerRuntimeData.PieceRuntimeData targetPiece, int moveCount)
+    private static CcDefine GetCaptureCc(bool wasStackLeader, int moveCount)
     {
         //수정: 중복된 추가 던지기 조건을 공통 함수로 통일했습니다.
         bool grantsExtraThrow = GrantsCaptureExtraThrow(moveCount);
 
         // A stacked group grants only one extra throw: its carrier is Kill,
         // and all carried pieces are Retire.
-        if (grantsExtraThrow && (!targetPiece.IsStacked ||
-                                 targetPiece.PieceId == targetPiece.StackLeaderPieceId))
+        if (grantsExtraThrow && wasStackLeader)
         {
             return CcDefine.Kill;
         }

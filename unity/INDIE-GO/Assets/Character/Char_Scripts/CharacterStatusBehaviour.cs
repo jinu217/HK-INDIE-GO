@@ -37,6 +37,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
     public virtual bool IsTargetable => TryGetPiece(out var piece) && CcEffectService.IsTargetable(piece);
+    public virtual bool IsImmuneToEffect(CcDefine type) => false;
     //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
     public virtual bool RequiresCasterPieceSelection => true;
     public virtual bool RequiresTargetPieceSelection => false;
@@ -302,7 +303,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public virtual bool CanSelectActiveTarget(int targetPlayerId, int targetPieceId)
     {
-        return targetPlayerId != PlayerId &&
+        return !CharacterBoardUtility.AreAllies(PlayerId, targetPlayerId) &&
             TryGetPiece(targetPlayerId, targetPieceId, out var target) &&
             target.Piece.State == PieceState.InBoard &&
             CcEffectService.IsTargetable(target.Piece);

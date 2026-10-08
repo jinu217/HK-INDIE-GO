@@ -17,11 +17,26 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 
     public override void OnMoveCompleted(CharacterMoveRecord record)
     {
-        PendingLastPaths[PlayerId] = record.Path;
+        // An earlier stack member can already have moved the whole stack via Wind.
+        // Its remaining original notifications must not replace the final path.
+        var moved = CcEffectService.GetPiece(record.PlayerId, record.PieceId);
+        if (moved != null && moved.CurrentTileId != record.To) return;
+        if (CcEffectService.IsResolvingWindMove &&
+            PendingLastPaths.TryGetValue(PlayerId, out IReadOnlyList<BoardTileId> previous))
+        {
+            var combined = new List<BoardTileId>(previous);
+            foreach (BoardTileId tile in record.Path)
+                if (combined.Count == 0 || combined[combined.Count - 1] != tile)
+                    combined.Add(tile);
+            PendingLastPaths[PlayerId] = combined;
+        }
+        else PendingLastPaths[PlayerId] = new List<BoardTileId>(record.Path);
     }
 
     public override void OnOwnerTurnEnded()
     {
+        if (TryGetPiece(out var currentPiece))
+            CcEffectService.Remove(currentPiece, CcDefine.WindPath);
         if (!PendingLastPaths.TryGetValue(PlayerId, out IReadOnlyList<BoardTileId> path))
             return;
 
@@ -55,7 +70,8 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Spirit Arrow requires a piece on the board.");
-        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
+        if (CharacterBoardUtility.AreAllies(PlayerId, target.Player.PlayerId) ||
+            target.Piece.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Spirit Arrow can target only an enemy on the board.");
         if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
             return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
@@ -67,7 +83,7 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 
         // CC is decremented at the start of its owner's turn. Two stored
         // ticks therefore produce one complete turn in which movement is blocked.
-        CcEffectService.Apply(target.Piece, CcDefine.Stun, 2,
+        CcEffectService.Apply(CcEffectService.StackLeader(target.Piece), CcDefine.Binding, 2,
             sourcePlayerId: PlayerId, sourcePieceId: PieceId);
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_008_Status)} activated against " +

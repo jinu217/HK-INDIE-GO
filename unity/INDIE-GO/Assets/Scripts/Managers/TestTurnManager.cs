@@ -700,6 +700,20 @@ namespace YutArena.Managers
             AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  스킬로 인한 잡기 보너스도 시간 더해줌
         }
 
+        // 스킬의 SP/쿨다운과 결과 반영을 마친 뒤 현재 플레이어의 턴을 종료합니다.
+        public bool EndTurnAfterSkill(int expectedPlayerId)
+        {
+            if (CurrentTurn == null || CurrentTurn.isGameEnded ||
+                CurrentTurn.currentPhase != TurnPhase.WaitAction ||
+                (int)CurrentTurn.currentPlayer != expectedPlayerId)
+                return false;
+
+            pendingResults.Clear();
+            OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+            EndTurn();
+            return true;
+        }
+
         // ===================================================================
         //  항복/탈주 처리용: 팀 전체가 아니라 "이 사람 한 명만" 턴 순서에서 뺌
         // (팀전에서 한 명만 나가고 팀원은 남아있는 경우 씀. 팀원끼리는 남은 사람들끼리

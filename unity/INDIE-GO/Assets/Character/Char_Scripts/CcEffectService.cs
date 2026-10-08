@@ -30,7 +30,9 @@ namespace YutArena.InGame
         Mark = 18,
         WindPath = 19,
         LimitCapture = 20,
-        YutMoExtraThrow = 21
+        YutMoExtraThrow = 21,
+        TalismanProtection = 22,
+        Binding = 23
     }
 }
 
@@ -54,7 +56,6 @@ namespace YutArena.InGame
         public int SourcePieceId => sourcePieceId;
         public BoardTileId Tile => tile;
         public IReadOnlyList<BoardTileId> Path => path;
-        internal readonly HashSet<int> TriggeredPieces = new HashSet<int>();
         internal CcState(CcDefine type, int turns, int value, int sourcePlayerId,
             int sourcePieceId, BoardTileId tile, IReadOnlyList<BoardTileId> path)
         {
@@ -87,7 +88,7 @@ namespace YutArena.InGame
             get
             {
                 foreach (var type in new[] { CcDefine.Kill, CcDefine.Retire, CcDefine.Stun,
-                    CcDefine.Silence, CcDefine.Parts })
+                    CcDefine.Binding, CcDefine.Silence, CcDefine.Parts })
                     if (Has(type)) return type;
                 return effects.Count == 0 ? CcDefine.None : effects[0].Type;
             }
@@ -105,24 +106,45 @@ namespace YutArena.InGame
     {
         // 즉시 효과도 Added -> 실행 -> Removed 순서로 알려 결과 UI/VFX가 구독할 수 있습니다.
         public static event Action<PlayerRuntimeData.PieceRuntimeData, CcState, bool> Changed;
+        private static int windMoveDepth;
+        internal static bool IsResolvingWindMove => windMoveDepth > 0;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetRuntime() { Changed = null; }
+        private static void ResetRuntime() { Changed = null; windMoveDepth = 0; }
 
         public static bool CanMove(PlayerRuntimeData.PieceRuntimeData piece) =>
             piece != null && piece.State != PieceState.Goal &&
-            !piece.Cc.Has(CcDefine.Stun) && !piece.Cc.Has(CcDefine.Parts);
+            (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId) &&
+            !piece.Cc.Has(CcDefine.Stun) && !piece.Cc.Has(CcDefine.Binding) &&
+            !piece.Cc.Has(CcDefine.Parts);
 
         public static bool CanUseSkill(PlayerRuntimeData.PieceRuntimeData piece) =>
-            CanMove(piece) && !piece.Cc.Has(CcDefine.Silence) &&
+            piece != null && piece.State != PieceState.Goal &&
+            !piece.Cc.Has(CcDefine.Stun) && !piece.Cc.Has(CcDefine.Silence) &&
+            !piece.Cc.Has(CcDefine.Parts) &&
             (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId);
 
-        public static bool IsTargetable(PlayerRuntimeData.PieceRuntimeData piece) =>
-            piece != null && !piece.Cc.Has(CcDefine.Hidden) && !piece.Cc.Has(CcDefine.Parts);
+        internal static PlayerRuntimeData.PieceRuntimeData StackLeader(
+            PlayerRuntimeData.PieceRuntimeData piece)
+        {
+            if (piece != null && piece.IsStacked)
+            {
+                var owner = FindOwner(piece);
+                if (owner != null && owner.TryGetPieceData(piece.StackLeaderPieceId, out var leader))
+                    return leader;
+            }
+            return piece;
+        }
+
+        public static bool IsTargetable(PlayerRuntimeData.PieceRuntimeData piece)
+        {
+            piece = StackLeader(piece);
+            return piece != null && !piece.Cc.Has(CcDefine.Hidden) && !piece.Cc.Has(CcDefine.Parts);
+        }
 
         public static bool Apply(PlayerRuntimeData.PieceRuntimeData piece, CcDefine type,
             int turns = 0, int value = 1, int sourcePlayerId = -1, int sourcePieceId = -1,
-            IReadOnlyList<BoardTileId> path = null)
+            IReadOnlyList<BoardTileId> path = null, bool isSimpleMove = true)
         {
             if (piece == null) return false;
             if (!Enum.IsDefined(typeof(CcDefine), type)) throw new ArgumentOutOfRangeException(nameof(type));
@@ -131,10 +153,32 @@ namespace YutArena.InGame
                 throw new ArgumentOutOfRangeException(nameof(value));
             if (type == CcDefine.None) { Clear(piece); return true; }
 
+            PlayerController owner = FindOwner(piece);
+            int effectivePieceId = piece.IsStacked ? piece.StackLeaderPieceId : piece.PieceId;
+            if (owner != null &&
+                CharacterSkillRegistry.TryGet(owner.PlayerId, effectivePieceId, out var status) &&
+                status.IsImmuneToEffect(type))
+                return false;
+
+            // 보호는 잡기뿐 아니라 직접 부여되는 해로운 상태이상도 막습니다.
+            if ((type == CcDefine.Stun || type == CcDefine.Binding ||
+                 type == CcDefine.Silence ||
+                 type == CcDefine.Retire || type == CcDefine.Kill ||
+                 type == CcDefine.Parts || type == CcDefine.Mark) &&
+                (piece.Cc.Has(CcDefine.TalismanProtection) || ConsumeProtection(piece)))
+                return false;
+
+            if (type == CcDefine.Retire && owner != null &&
+                CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var targetStatus) &&
+                targetStatus is CHAR_009_Status robot && robot.TryEnterParts(piece))
+                return true;
+
             bool needsOwner = type == CcDefine.Clone || type == CcDefine.ExtraThrow ||
                 type == CcDefine.SkillPoint || type == CcDefine.Move || type == CcDefine.MovePath;
-            PlayerController owner = FindOwner(piece);
             if (needsOwner && owner == null) return false;
+            if (type == CcDefine.Clone &&
+                (piece.State != PieceState.InBoard || CcBoardEffects.CountStackUnits(owner, piece) + value > 4))
+                return false;
             TestTurnManager turnsManager = null;
             PieceMovementManager movement = null;
             if (type == CcDefine.ExtraThrow)
@@ -162,7 +206,9 @@ namespace YutArena.InGame
             {
                 CcState previous = piece.Cc.Get(type);
                 if (type == CcDefine.Clone && previous != null) value += previous.Value;
-                if (previous != null && (type == CcDefine.Protection || type == CcDefine.Stun ||
+                if (previous != null && (type == CcDefine.Protection ||
+                    type == CcDefine.TalismanProtection || type == CcDefine.Stun ||
+                    type == CcDefine.Binding ||
                     type == CcDefine.Silence || type == CcDefine.Hidden))
                 {
                     turns = previous.RemainingOwnerTurns == 0 || turns == 0
@@ -200,7 +246,7 @@ namespace YutArena.InGame
                 case CcDefine.ExtraThrow: turnsManager.GrantSkillExtraThrow(); break;
                 case CcDefine.SkillPoint: CharacterSkillRegistry.RequestSkillPoint(owner.PlayerId, value); break;
                 case CcDefine.Move: succeeded = movement.TryMovePiece(owner.PlayerId, piece.PieceId, value, true); break;
-                case CcDefine.MovePath: CcBoardEffects.MoveStackAlongPath(owner, piece, path, value > 1); break;
+                case CcDefine.MovePath: CcBoardEffects.MoveStackAlongPath(owner, piece, path, value > 1, isSimpleMove); break;
             }
             if (type == CcDefine.ExtraThrow || type == CcDefine.SkillPoint ||
                 type == CcDefine.Move || type == CcDefine.MovePath) Remove(piece, state);
@@ -251,11 +297,12 @@ namespace YutArena.InGame
         {
             if (piece == null) return CharacterCaptureDecision.Proceed;
             if (!IsTargetable(piece)) return CharacterCaptureDecision.Prevent;
+            if (piece.Cc.Has(CcDefine.TalismanProtection))
+                return CharacterCaptureDecision.Prevent;
             CcState shield = piece.Cc.Get(CcDefine.Protection);
             if (shield != null)
             {
-                shield.SetValue(shield.Value - 1);
-                if (shield.Value <= 0) Remove(piece, shield);
+                ConsumeProtection(piece);
                 return CharacterCaptureDecision.Prevent;
             }
             CcState clone = piece.Cc.Get(CcDefine.Clone);
@@ -326,15 +373,21 @@ namespace YutArena.InGame
         {
             if (owner == null || owner.RuntimeData == null) return;
             foreach (var piece in owner.RuntimeData.Pieces)
-            foreach (CcState state in Snapshot(piece))
             {
-                if (state.Type == CcDefine.WindPath) state.TriggeredPieces.Clear();
-                if (state.RemainingOwnerTurns == 0) continue;
-                state.Tick();
-                if (state.RemainingOwnerTurns > 0) continue;
-                if (state.Type == CcDefine.Parts)
+                bool retireExpiredParts = false;
+                foreach (CcState state in Snapshot(piece))
+                {
+                    if (state.RemainingOwnerTurns == 0) continue;
+                    state.Tick();
+                    if (state.RemainingOwnerTurns > 0) continue;
+                    if (state.Type == CcDefine.Parts)
+                        retireExpiredParts = true;
+                    Remove(piece, state);
+                }
+
+                // 같은 턴에 만료되는 보호를 먼저 제거하고 부품 퇴장을 판정합니다.
+                if (retireExpiredParts)
                     CcBoardEffects.Retire(new CharacterPieceReference(owner, piece), false);
-                else Remove(piece, state);
             }
         }
 
@@ -370,38 +423,79 @@ namespace YutArena.InGame
             if (turns == null || turns.CurrentTurn == null) return;
             turns.ResolveSkillResult(result.SuppressExtraThrow);
             int newlyFinished = CountFinishedPieces(request.PlayerId) - finishedBefore;
-            if (newlyFinished <= 0 || turns.Settings == null) return;
-            // 스킬 이동으로 완주한 말도 기존 승리 판정 API에 결과만 전달합니다.
-            var wins = UnityEngine.Object.FindFirstObjectByType<TestWinConditionManager>();
-            if (wins != null) wins.OnPieceMoveResolved((PlayerSlot)request.PlayerId,
-                MatchCompositionRule.GetTeamSlot(turns.Settings, (PlayerSlot)request.PlayerId), true, newlyFinished);
-            if (turns.Settings.gameMode == GameMode.Escape)
-                foreach (var piece in PlayerPieces(request.PlayerId))
-                    if (piece.IsFinished) piece.State = PieceState.Waiting;
+            if (newlyFinished > 0 && turns.Settings != null)
+            {
+                // 스킬 이동으로 완주한 말도 기존 승리 판정 API에 결과만 전달합니다.
+                var wins = UnityEngine.Object.FindFirstObjectByType<TestWinConditionManager>();
+                if (wins != null) wins.OnPieceMoveResolved((PlayerSlot)request.PlayerId,
+                    MatchCompositionRule.GetTeamSlot(turns.Settings, (PlayerSlot)request.PlayerId), true, newlyFinished);
+                if (turns.Settings.gameMode == GameMode.Escape)
+                    foreach (var piece in PlayerPieces(request.PlayerId))
+                        if (piece.IsFinished) piece.State = PieceState.Waiting;
+            }
+            if (result.EndTurnAfterResolution)
+                turns.EndTurnAfterSkill(request.PlayerId);
         }
 
         public static void OnMoveCompleted(CharacterMoveRecord record)
         {
+            var movedOwner = FindOwner(GetPiece(record.PlayerId, record.PieceId));
+            var movedPiece = GetPiece(record.PlayerId, record.PieceId);
+            if (movedOwner != null && movedPiece != null)
+                CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
+            PropagateDurableProtectionToStack(record.PlayerId, record.PieceId);
             foreach (var piece in PlayerPieces(record.PlayerId))
             {
                 CcState parts = piece.Cc.Get(CcDefine.Parts);
                 if (parts != null && piece.PieceId != record.PieceId &&
-                    CharacterBoardUtility.IsWithinDistance(record.To, parts.Tile, 1))
+                    record.To == parts.Tile)
                 {
+                    PlayerController partsOwner = FindOwner(piece);
+                    if (partsOwner == null ||
+                        !partsOwner.TryGetPieceData(record.PieceId, out var arrived) ||
+                        arrived.State != PieceState.InBoard)
+                        continue;
                     piece.MoveTo(parts.Tile);
                     Remove(piece, parts);
+                    int groupId = arrived.IsStacked
+                        ? arrived.StackGroupId : partsOwner.RuntimeData.CreateStackGroupId();
+                    int leaderId = arrived.IsStacked
+                        ? arrived.StackLeaderPieceId : arrived.PieceId;
+                    arrived.SetStackGroup(groupId, leaderId);
+                    piece.SetStackGroup(groupId, leaderId);
+                    CharacterSkillRegistry.NotifyPieceEnteredBoard(record.PlayerId, piece.PieceId);
                 }
-                CcState wind = piece.Cc.Get(CcDefine.WindPath);
-                if (wind == null || wind.TriggeredPieces.Contains(record.PieceId) ||
-                    !new List<BoardTileId>(wind.Path).Contains(record.To)) continue;
-                // 스택별 이동 알림과 효과 이동 재진입에도 같은 말은 한 턴에 한 번만 발동.
-                if (!CharacterSkillRegistry.TryGet(record.PlayerId, piece.PieceId, out var source) ||
-                    !source.TryTriggerPassiveCooldown()) continue;
-                wind.TriggeredPieces.Add(record.PieceId);
-                PlayerController owner = FindOwner(piece);
-                if (owner != null && owner.TryGetPieceData(record.PieceId, out var moved))
-                    Apply(moved, CcDefine.Move, value: 1, sourcePlayerId: record.PlayerId,
-                        sourcePieceId: piece.PieceId);
+            }
+            if (movedOwner != null && movedPiece != null)
+                CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
+
+            if (record.IsSimpleMove || IsResolvingWindMove || movedPiece == null ||
+                movedPiece.State != PieceState.InBoard || movedPiece.CurrentTileId != record.To ||
+                record.Path.Count == 0 || record.Path[record.Path.Count - 1] != record.To) return;
+            var movedLeader = movedPiece.IsStacked
+                ? GetPiece(record.PlayerId, movedPiece.StackLeaderPieceId) : movedPiece;
+            if (!CanMove(movedLeader)) return;
+            var players = UnityEngine.Object.FindFirstObjectByType<PlayerManager>();
+            if (players == null) return;
+            foreach (var windOwner in players.ActivePlayers)
+            {
+                if (!CharacterBoardUtility.AreAllies(record.PlayerId, windOwner.PlayerId)) continue;
+                foreach (var sourcePiece in windOwner.RuntimeData.Pieces)
+                {
+                    CcState wind = sourcePiece.Cc.Get(CcDefine.WindPath);
+                    if (wind == null || !new List<BoardTileId>(wind.Path).Contains(record.To)) continue;
+                    if (!CharacterSkillRegistry.TryGet(windOwner.PlayerId, sourcePiece.PieceId, out var source) ||
+                        !source.TryTriggerPassiveCooldown()) continue;
+                    windMoveDepth++;
+                    try
+                    {
+                        Apply(movedLeader, CcDefine.MovePath, sourcePlayerId: windOwner.PlayerId,
+                            sourcePieceId: sourcePiece.PieceId,
+                            path: CharacterBoardUtility.GetForwardPath(movedLeader, 1));
+                    }
+                    finally { windMoveDepth--; }
+                    return; // 하나의 착지는 한 개의 바람 이동만 일으킵니다.
+                }
             }
         }
 
@@ -430,6 +524,7 @@ namespace YutArena.InGame
 
         internal static PlayerController FindOwner(PlayerRuntimeData.PieceRuntimeData piece)
         {
+            if (piece == null) return null;
             var players = UnityEngine.Object.FindFirstObjectByType<PlayerManager>();
             if (players == null) return null;
             foreach (var owner in players.ActivePlayers)
@@ -459,6 +554,58 @@ namespace YutArena.InGame
             for (int i = 0; i < table.Count; i++)
                 if (table[i].Item1 == result) { table[i] = (result, table[i].Item2 + weight); return; }
             table.Add((result, weight));
+        }
+
+        private static bool ConsumeProtection(PlayerRuntimeData.PieceRuntimeData piece)
+        {
+            CcState shield = piece.Cc.Get(CcDefine.Protection);
+            if (shield == null) return false;
+
+            shield.SetValue(shield.Value - 1);
+            if (shield.Value <= 0) Remove(piece, shield);
+            return true;
+        }
+
+        private static void PropagateDurableProtectionToStack(int playerId, int movedPieceId)
+        {
+            IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> pieces = PlayerPieces(playerId);
+            PlayerRuntimeData.PieceRuntimeData moved = null;
+            PlayerRuntimeData.PieceRuntimeData leader = null;
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
+            {
+                if (piece.PieceId == movedPieceId) moved = piece;
+            }
+            if (moved == null || !moved.IsStacked) return;
+
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
+            {
+                if (piece.PieceId == moved.StackLeaderPieceId &&
+                    piece.StackGroupId == moved.StackGroupId)
+                {
+                    leader = piece;
+                    break;
+                }
+            }
+
+            CcState shield = leader?.Cc.Get(CcDefine.TalismanProtection);
+            if (shield == null || shield.RemainingOwnerTurns <= 0)
+                return;
+
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
+            {
+                if (piece.State != PieceState.InBoard ||
+                    piece.StackGroupId != leader.StackGroupId || piece == leader)
+                    continue;
+
+                CcState existing = piece.Cc.Get(CcDefine.TalismanProtection);
+                if (existing != null && existing.Value >= shield.Value &&
+                    (existing.RemainingOwnerTurns == 0 ||
+                     existing.RemainingOwnerTurns >= shield.RemainingOwnerTurns))
+                    continue;
+
+                Apply(piece, CcDefine.TalismanProtection, shield.RemainingOwnerTurns, shield.Value,
+                    shield.SourcePlayerId, shield.SourcePieceId);
+            }
         }
     }
 }

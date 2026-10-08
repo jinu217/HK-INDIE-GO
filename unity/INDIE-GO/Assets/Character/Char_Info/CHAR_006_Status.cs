@@ -1,27 +1,13 @@
+using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
 using YutArena.InGame;
 
 public sealed class CHAR_006_Status : CharacterStatusBehaviour
 {
-    public override bool RequiresTargetPieceSelection => true;
-
-    public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
-    {
-        var existing = base.EvaluateIncomingCapture(request);
-        if (existing != CharacterCaptureDecision.Proceed) return existing;
-        if (IsPassiveReady && Random.value < 0.25f && TryStartPassiveCooldown())
-        {
-            Debug.Log(
-                $"[CharacterSkill][Passive] {nameof(CHAR_006_Status)} prevented capture. " +
-                $"Player={PlayerId}, Piece={PieceId}",
-                this);
-            ApplyEffect(CcDefine.Protection);
-            return base.EvaluateIncomingCapture(request);
-        }
-
-        return CharacterCaptureDecision.Proceed;
-    }
+    // Capture and retirement still work; the existing harmful status effects do not.
+    public override bool IsImmuneToEffect(CcDefine type) =>
+        type == CcDefine.Stun || type == CcDefine.Binding || type == CcDefine.Silence;
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
@@ -29,82 +15,31 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Sword Aura requires a piece on the board.");
-        CharacterPieceReference target;
-        if (request.HasTarget)
-        {
-            if (!TryGetPiece(request.TargetPlayerId, request.TargetPieceId, out target))
-                return CharacterActiveResult.Failure("The selected target does not exist.");
-        }
-        else if (!TryFindAutomaticTarget(caster, out target))
-        {
-            return CharacterActiveResult.Failure(
-                "There is no target on the caster's tile or the next tile.");
-        }
-
-        if (target.Player.PlayerId == PlayerId || target.Piece.State != PieceState.InBoard)
-            return CharacterActiveResult.Failure("Sword Aura can target only an enemy on the board.");
-        if (!CharacterSkillRegistry.IsTargetable(target.Player.PlayerId, target.Piece.PieceId))
-            return CharacterActiveResult.Failure("The selected enemy cannot currently be targeted.");
 
         BoardTileId forward = CharacterBoardUtility.GetNextForwardTile(
-            caster.CurrentTileId,
-            caster.PreviousTileId,
-            true);
-        if (target.Piece.CurrentTileId != caster.CurrentTileId &&
-            target.Piece.CurrentTileId != forward)
-            return CharacterActiveResult.Failure("The enemy is not on the caster's tile or the next tile.");
-
-        bool captured = CharacterBoardUtility.TryCapture(
-            PlayerId,
-            PieceId,
-            target,
-            GetStackPieceCount(caster),
-            true,
-            out CharacterCaptureDecision decision);
-        Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_006_Status)} activated against " +
-            $"Player={target.Player.PlayerId}, Piece={target.Piece.PieceId}. " +
-            $"Owner={PlayerId}, Piece={PieceId}",
-            this);
-        return CharacterActiveResult.Success(
-            captured
-                ? "The selected enemy was captured by Sword Aura."
-                : $"Sword Aura was resolved with {decision}.");
-    }
-
-    public override bool CanSelectActiveTarget(int targetPlayerId, int targetPieceId)
-    {
-        if (!base.CanSelectActiveTarget(targetPlayerId, targetPieceId) ||
-            !TryGetPiece(out var caster) || !TryGetPiece(targetPlayerId, targetPieceId, out var target))
-            return false;
-        return target.Piece.CurrentTileId == caster.CurrentTileId ||
-            target.Piece.CurrentTileId == CharacterBoardUtility.GetNextForwardTile(
-                caster.CurrentTileId, caster.PreviousTileId, true);
-    }
-
-    private bool TryFindAutomaticTarget(
-        PlayerRuntimeData.PieceRuntimeData caster,
-        out CharacterPieceReference target)
-    {
-        BoardTileId forward = CharacterBoardUtility.GetNextForwardTile(
-            caster.CurrentTileId,
-            caster.PreviousTileId,
-            true);
+            caster.CurrentTileId, caster.PreviousTileId, true);
+        var affectedTiles = new HashSet<BoardTileId> { caster.CurrentTileId, forward };
+        int retiredCount = 0;
         foreach (CharacterPieceReference enemy in
                  CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
         {
-            if ((enemy.Piece.CurrentTileId == caster.CurrentTileId ||
-                 enemy.Piece.CurrentTileId == forward) &&
-                CharacterSkillRegistry.IsTargetable(
-                    enemy.Player.PlayerId,
-                    enemy.Piece.PieceId))
-            {
-                target = enemy;
-                return true;
-            }
+            if (!affectedTiles.Contains(enemy.Piece.CurrentTileId)) continue;
+
+            // Sword Aura is a retirement effect, so capture-only defenses and
+            // capture bonus throws do not apply.
+            CcBoardEffects.Retire(enemy, false);
+            if (enemy.Piece.State == PieceState.Waiting)
+                retiredCount++;
         }
 
-        target = default;
-        return false;
+        for (int i = 0; i < retiredCount; i++)
+            Turns.GrantSkillExtraThrow();
+
+        Debug.Log(
+            $"[CharacterSkill][Active] {nameof(CHAR_006_Status)} retired {retiredCount} " +
+            $"piece(s). Player={PlayerId}, Piece={PieceId}", this);
+        return CharacterActiveResult.Success(
+            $"Sword Aura retired {retiredCount} enemy piece(s) and granted the same number of throws.",
+            suppressExtraThrow: true);
     }
 }

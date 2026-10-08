@@ -29,20 +29,16 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
         if (path.Count == 0)
             return CharacterActiveResult.Failure("No forward straight path is available.");
 
-        CharacterPieceReference? firstEnemy = FindFirstEnemyOnPath(path);
+        var enemiesOnPath = FindEnemiesOnPath(path);
         CharacterBoardUtility.MoveStackAlongPath(
             Owner,
             caster,
             path,
             ignoresInstalledItems: true);
 
-        if (firstEnemy.HasValue &&
-            CharacterSkillRegistry.IsTargetable(
-                firstEnemy.Value.Player.PlayerId,
-                firstEnemy.Value.Piece.PieceId))
-            // CC is decremented at the start of its owner's turn. Two stored
-            // ticks therefore produce one complete turn in which movement is blocked.
-            CcEffectService.Apply(firstEnemy.Value.Piece, CcDefine.Stun, 2,
+        foreach (CharacterPieceReference enemy in enemiesOnPath)
+            // Two owner-turn ticks leave the target blocked for one full turn.
+            CcEffectService.Apply(enemy.Piece, CcDefine.Stun, 2,
                 sourcePlayerId: PlayerId, sourcePieceId: PieceId);
 
         UnityEngine.Debug.Log(
@@ -50,7 +46,7 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
             $"Player={PlayerId}, Piece={PieceId}",
             this);
         return CharacterActiveResult.Success(
-            "Charged to the end of the straight path and stunned the first enemy ahead.");
+            $"Charged to the end of the straight path and stunned {enemiesOnPath.Count} enemy piece(s).");
     }
 
     private List<BoardTileId> GetPathToStraightEnd(PlayerRuntimeData.PieceRuntimeData caster)
@@ -58,6 +54,12 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
         var path = new List<BoardTileId>();
         BoardTileId current = caster.CurrentTileId;
         BoardTileId previous = caster.PreviousTileId;
+
+        if (current == BoardTileId.None && caster.State == PieceState.InBoard)
+        {
+            path.Add(BoardTileId.None);
+            return path;
+        }
 
         for (int i = 0; i < 20; i++)
         {
@@ -78,16 +80,17 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
         return path;
     }
 
-    private CharacterPieceReference? FindFirstEnemyOnPath(IReadOnlyList<BoardTileId> path)
+    private List<CharacterPieceReference> FindEnemiesOnPath(IReadOnlyList<BoardTileId> path)
     {
+        var result = new List<CharacterPieceReference>();
         foreach (BoardTileId tile in path)
         {
             foreach (CharacterPieceReference enemy in CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
             {
-                if (enemy.Piece.CurrentTileId == tile) return enemy;
+                if (enemy.Piece.CurrentTileId == tile && !result.Contains(enemy))
+                    result.Add(enemy);
             }
         }
-
-        return null;
+        return result;
     }
 }

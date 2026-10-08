@@ -19,8 +19,7 @@ MonoBehaviour:
   passive_Name: "\uC804\uD22C\uAD11"
   passive_Desc: "적을 리타이어 시키면 스킬 포인트 획득"
   active_Name: "\uAD11\uD3ED \uB3CC\uC9C4"
-  active_Desc: "\uC9C1\uC120 \uB05D\uAE4C\uC9C0 \uB3CC\uC9C4, \uC804\uBC29 \uC801\uC5D0\uAC8C
-    \uC2A4\uD134 + \uC124\uCE58\uD615 \uC544\uC774\uD15C \uBB34\uC2DC"
+  active_Desc: "꼭짓점이나 중앙까지 단순 이동하고 경로의 모든 적을 1턴간 스턴시킨다. 설치형 아이템을 무시한다."
   active_CooldownTurns: 0
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
