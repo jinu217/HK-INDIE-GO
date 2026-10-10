@@ -1060,11 +1060,17 @@ internal static class CcArchitectureVerifier
                         skill.OnPieceEnteredBoard();
                         Check("Talisman stored on nearest ally with correct source", passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
                             passiveAlly.Cc.Get(CcDefine.TalismanProtection).SourcePieceId == 0);
+                        //수정: 수신 대상은 자신과 업힌 말을 제외한 필드 위 아군 한 말입니다.
+                        Check("Talisman does not protect its own source", !piece.Cc.Has(CcDefine.TalismanProtection));
                         var joiningAlly = p1.RuntimeData.Pieces[2];
                         joiningAlly.MoveTo(BoardTileId.Outer02);
-                        Check("Talisman follows the stack leader when an ally joins",
+                        Check("Talisman does not spread to an ally joining the stack",
                             movement.TryMovePiece(1, 2, 1) &&
-                            joiningAlly.Cc.Has(CcDefine.TalismanProtection));
+                            !joiningAlly.Cc.Has(CcDefine.TalismanProtection) &&
+                            passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                        Check("Talisman rejects direct application to a carried piece",
+                            !CcEffectService.Apply(joiningAlly, CcDefine.TalismanProtection, 1,
+                                sourcePlayerId: 1, sourcePieceId: 0));
                         Check("Talisman protects for the whole turn", CharacterSkillRegistry.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 1, 1, true)) == CharacterCaptureDecision.Prevent &&
                             CharacterSkillRegistry.EvaluateIncomingCapture(
@@ -1077,6 +1083,71 @@ internal static class CcArchitectureVerifier
                         Check("Talisman expires without shortening another protection",
                             !passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
                             passiveAlly.Cc.Get(CcDefine.Protection)?.RemainingOwnerTurns == 2);
+
+                        p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                        skill.OnPieceRetired();
+                        passiveAlly.MoveTo(BoardTileId.Outer01);
+                        Check("First entry onto an ally grants only that ally a talisman",
+                            movement.TryMovePiece(1, 0, 1) && piece.IsStacked &&
+                            piece.StackLeaderPieceId == passiveAlly.PieceId &&
+                            passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
+                            !piece.Cc.Has(CcDefine.TalismanProtection));
+
+                        p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                        skill.OnPieceRetired();
+                        piece.MoveTo(BoardTileId.Outer01);
+                        passiveAlly.MoveTo(BoardTileId.Outer01);
+                        passiveAlly.SetStackGroup(80, joiningAlly.PieceId);
+                        joiningAlly.MoveTo(BoardTileId.Outer01);
+                        joiningAlly.SetStackGroup(80, joiningAlly.PieceId);
+                        p1.RuntimeData.Pieces[3].MoveTo(BoardTileId.Outer04);
+                        skill.OnPieceEnteredBoard();
+                        Check("Nearest selection skips cargo and chooses the nearby leader",
+                            joiningAlly.Cc.Has(CcDefine.TalismanProtection) &&
+                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
+                            !p1.RuntimeData.Pieces[3].Cc.Has(CcDefine.TalismanProtection) &&
+                            !piece.Cc.Has(CcDefine.TalismanProtection));
+
+                        p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                        skill.OnPieceRetired();
+                        piece.MoveTo(BoardTileId.Outer01);
+                        passiveAlly.SetGoal();
+                        joiningAlly.MoveTo(BoardTileId.Outer01);
+                        CcEffectService.Apply(joiningAlly, CcDefine.Parts, 3);
+                        var missingTileAlly = p1.RuntimeData.Pieces[3];
+                        missingTileAlly.State = PieceState.InBoard;
+                        enemy.MoveTo(BoardTileId.Outer01);
+                        Check("Nearest selection ignores goal, parts, missing tiles and enemies",
+                            !CharacterBoardUtility.FindNearestAlly(manager, 1, 0,
+                                piece.CurrentTileId, turns.Settings).HasValue);
+                        skill.OnPieceEnteredBoard();
+                        Check("No eligible ally never falls back to self",
+                            !piece.Cc.Has(CcDefine.TalismanProtection) &&
+                            !enemy.Cc.Has(CcDefine.TalismanProtection));
+                        Check("Talisman rejects self, goal and off-board targets",
+                            !CcEffectService.Apply(piece, CcDefine.TalismanProtection, 1,
+                                sourcePlayerId: 1, sourcePieceId: 0) &&
+                            !CcEffectService.Apply(passiveAlly, CcDefine.TalismanProtection, 1,
+                                sourcePlayerId: 1, sourcePieceId: 0) &&
+                            !CcEffectService.Apply(missingTileAlly, CcDefine.TalismanProtection, 1,
+                                sourcePlayerId: 1, sourcePieceId: 0));
+                        passiveAlly.Reset();
+                        skill.OnPieceEnteredBoard();
+                        Check("Waiting ally is not a talisman target",
+                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                        passiveAlly.MoveTo(BoardTileId.Outer03);
+                        skill.OnPieceEnteredBoard();
+                        Check("Missing target does not consume passive availability",
+                            passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                        CcEffectService.Remove(passiveAlly, CcDefine.TalismanProtection);
+                        skill.OnPieceEnteredBoard();
+                        Check("Passive does not repeat before retirement",
+                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                        CcEffectService.Apply(piece, CcDefine.Retire);
+                        Check("Retirement lets the next board entry use the passive again",
+                            movement.TryMovePiece(1, 0, 1) &&
+                            passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
+                            !piece.Cc.Has(CcDefine.TalismanProtection));
                         break;
                     case "003":
                         Check("Solo Hong uses ordinary capture", skill.EvaluateIncomingCapture(

@@ -154,6 +154,14 @@ namespace YutArena.InGame
             if (type == CcDefine.None) { Clear(piece); return true; }
 
             PlayerController owner = FindOwner(piece);
+            //수정: 부적 수신은 필드의 독립 말/리더만 가능하며 발동한 말은 제외합니다.
+            if (type == CcDefine.TalismanProtection &&
+                (piece.State != PieceState.InBoard || piece.CurrentTileId == BoardTileId.None ||
+                 piece.Cc.Has(CcDefine.Parts) ||
+                 (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId) ||
+                 (owner != null && owner.PlayerId == sourcePlayerId && piece.PieceId == sourcePieceId)))
+                return false;
+
             int effectivePieceId = piece.IsStacked ? piece.StackLeaderPieceId : piece.PieceId;
             if (owner != null &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, effectivePieceId, out var status) &&
@@ -443,7 +451,7 @@ namespace YutArena.InGame
             var movedPiece = GetPiece(record.PlayerId, record.PieceId);
             if (movedOwner != null && movedPiece != null)
                 CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
-            PropagateDurableProtectionToStack(record.PlayerId, record.PieceId);
+            //수정: 부적은 지정된 아군 한 말의 효과이며 업기 시 다른 말로 복사하지 않습니다.
             foreach (var piece in PlayerPieces(record.PlayerId))
             {
                 CcState parts = piece.Cc.Get(CcDefine.Parts);
@@ -566,46 +574,5 @@ namespace YutArena.InGame
             return true;
         }
 
-        private static void PropagateDurableProtectionToStack(int playerId, int movedPieceId)
-        {
-            IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> pieces = PlayerPieces(playerId);
-            PlayerRuntimeData.PieceRuntimeData moved = null;
-            PlayerRuntimeData.PieceRuntimeData leader = null;
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
-            {
-                if (piece.PieceId == movedPieceId) moved = piece;
-            }
-            if (moved == null || !moved.IsStacked) return;
-
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
-            {
-                if (piece.PieceId == moved.StackLeaderPieceId &&
-                    piece.StackGroupId == moved.StackGroupId)
-                {
-                    leader = piece;
-                    break;
-                }
-            }
-
-            CcState shield = leader?.Cc.Get(CcDefine.TalismanProtection);
-            if (shield == null || shield.RemainingOwnerTurns <= 0)
-                return;
-
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in pieces)
-            {
-                if (piece.State != PieceState.InBoard ||
-                    piece.StackGroupId != leader.StackGroupId || piece == leader)
-                    continue;
-
-                CcState existing = piece.Cc.Get(CcDefine.TalismanProtection);
-                if (existing != null && existing.Value >= shield.Value &&
-                    (existing.RemainingOwnerTurns == 0 ||
-                     existing.RemainingOwnerTurns >= shield.RemainingOwnerTurns))
-                    continue;
-
-                Apply(piece, CcDefine.TalismanProtection, shield.RemainingOwnerTurns, shield.Value,
-                    shield.SourcePlayerId, shield.SourcePieceId);
-            }
-        }
     }
 }

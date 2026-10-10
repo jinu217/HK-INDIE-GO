@@ -45,8 +45,9 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
 
     public override void OnPieceEnteredBoard()
     {
-        if (!talismanAvailable ||
-            !TryGetPiece(out PlayerRuntimeData.PieceRuntimeData source))
+        if (!talismanAvailable || !IsPassiveReady ||
+            !TryGetPiece(out PlayerRuntimeData.PieceRuntimeData source) ||
+            source.State != PieceState.InBoard || source.CurrentTileId == BoardTileId.None)
             return;
 
         CharacterPieceReference? nearest = CharacterBoardUtility.FindNearestAlly(
@@ -55,21 +56,17 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             PieceId,
             source.CurrentTileId,
             Turns != null ? Turns.Settings : null);
-        if (!nearest.HasValue || !TryStartPassiveCooldown())
+        if (!nearest.HasValue)
             return;
 
         PlayerRuntimeData.PieceRuntimeData target = nearest.Value.Piece;
-        foreach (PlayerRuntimeData.PieceRuntimeData ally in nearest.Value.Player.RuntimeData.Pieces)
-        {
-            if (ally.State != PieceState.InBoard ||
-                (ally.PieceId != target.PieceId &&
-                 (!target.IsStacked || ally.StackGroupId != target.StackGroupId)))
-                continue;
+        //수정: 선택한 아군 한 말에만 부여하며 자신이나 업힌 말로 확산하지 않습니다.
+        // 한 번 맞을 때가 아니라 대상의 다음 턴이 시작될 때까지 보호합니다.
+        if (!CcEffectService.Apply(target, CcDefine.TalismanProtection, turns: 1,
+                sourcePlayerId: PlayerId, sourcePieceId: PieceId))
+            return;
 
-            // 한 번 맞을 때가 아니라 대상의 다음 턴이 시작될 때까지 보호합니다.
-            CcEffectService.Apply(ally, CcDefine.TalismanProtection, turns: 1,
-                sourcePlayerId: PlayerId, sourcePieceId: PieceId);
-        }
+        TryStartPassiveCooldown();
         talismanAvailable = false;
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Passive] {nameof(CHAR_002_Status)} granted protection to " +

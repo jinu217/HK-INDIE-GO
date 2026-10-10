@@ -97,7 +97,8 @@ public static class CharacterBoardUtility
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
                 if ((player.PlayerId == ownerPlayerId && piece.PieceId == sourcePieceId) ||
-                    piece.State != PieceState.InBoard || piece.Cc.Has(CcDefine.Parts) ||
+                    piece.State != PieceState.InBoard || piece.CurrentTileId == BoardTileId.None ||
+                    piece.Cc.Has(CcDefine.Parts) ||
                     (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId))
                     continue;
 
