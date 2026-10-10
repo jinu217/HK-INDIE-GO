@@ -43,6 +43,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     private DebugPieceView selectedTargetView;
     private InGamePieceDebugController suspendedPieceController;
     private bool suspendedPieceControllerWasEnabled;
+    private int gamepadCandidateIndex;
 
     public event Action<CharacterActiveResult> SkillUseCompleted;
 
@@ -91,6 +92,19 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         }
         UpdateButtonCooldownState();
 
+        int playerIndex = currentPlayerId - 1;
+        if (currentPlayerId > 0 && LocalSelectionInput.SharedInputAvailable)
+        {
+            Gamepad pad = LocalSelectionInput.GetInputGamepad(playerIndex);
+            if (pad != null && !LocalSelectionInput.JoinedThisFrame(playerIndex))
+            {
+                ProcessGamepadSkillInput(pad);
+                return;
+            }
+        }
+
+        if (!LocalSelectionInput.UsesKeyboard(playerIndex)) return;
+
         if ((!isSelectingCaster && !isSelectingTarget) ||
             (isSelectingCaster && Time.frameCount == casterSelectionStartedFrame) ||
             (isSelectingTarget && Time.frameCount == targetSelectionStartedFrame))
@@ -111,6 +125,52 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             TrySelectTargetAtPointer();
         else
             TrySelectCasterAtPointer();
+    }
+
+    private void ProcessGamepadSkillInput(Gamepad pad)
+    {
+        if (pad.buttonEast.wasPressedThisFrame && (isSelectingCaster || isSelectingTarget))
+        {
+            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
+            return;
+        }
+        if (pad.buttonWest.wasPressedThisFrame)
+        {
+            HandleActiveSkillButtonClicked();
+            gamepadCandidateIndex = 0;
+            return;
+        }
+        if (!isSelectingCaster && !isSelectingTarget) return;
+        var candidates = new System.Collections.Generic.List<DebugPieceView>();
+        foreach (DebugPieceView view in FindObjectsByType<DebugPieceView>(FindObjectsSortMode.None))
+        {
+            if (isSelectingCaster)
+            {
+                if (view.PlayerId == currentPlayerId &&
+                    CharacterSkillRegistry.TryGet(currentPlayerId, view.PieceId, out CharacterStatusBehaviour character) &&
+                    character.HasActiveSkill)
+                    candidates.Add(view);
+            }
+            else if (view.PlayerId != currentPlayerId && currentCharacter != null &&
+                     currentCharacter.CanSelectActiveTarget(view.PlayerId, view.PieceId))
+                candidates.Add(view);
+        }
+        candidates.Sort((a, b) => a.PlayerId != b.PlayerId
+            ? a.PlayerId.CompareTo(b.PlayerId) : a.PieceId.CompareTo(b.PieceId));
+        if (candidates.Count == 0) return;
+        if (pad.dpad.right.wasPressedThisFrame || pad.dpad.down.wasPressedThisFrame ||
+            pad.leftStick.right.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame)
+            gamepadCandidateIndex = (gamepadCandidateIndex + 1) % candidates.Count;
+        if (pad.dpad.left.wasPressedThisFrame || pad.dpad.up.wasPressedThisFrame ||
+            pad.leftStick.left.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame)
+            gamepadCandidateIndex = (gamepadCandidateIndex + candidates.Count - 1) % candidates.Count;
+        gamepadCandidateIndex = Mathf.Clamp(gamepadCandidateIndex, 0, candidates.Count - 1);
+        if (pad.buttonSouth.wasPressedThisFrame)
+        {
+            if (isSelectingCaster) TrySelectCaster(candidates[gamepadCandidateIndex]);
+            else TrySelectTarget(candidates[gamepadCandidateIndex]);
+            gamepadCandidateIndex = 0;
+        }
     }
 
     /// <summary>
@@ -374,6 +434,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private bool UseCurrentActiveSkill()
     {
+        if (!LocalSelectionInput.SharedInputAvailable) return false;
         if (currentCharacter == null || currentPlayerId <= 0 || turnManager == null)
             return false;
 
@@ -487,6 +548,12 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         if (!DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view) ||
             view.PlayerId != currentPlayerId)
             return;
+        TrySelectCaster(view);
+    }
+
+    private void TrySelectCaster(DebugPieceView view)
+    {
+        if (view == null || view.PlayerId != currentPlayerId) return;
         if (playerManager == null ||
             !playerManager.TryGetPlayer(currentPlayerId, out PlayerController player) ||
             !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
@@ -538,6 +605,12 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         if (!DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view) ||
             view.PlayerId == currentPlayerId)
             return;
+        TrySelectTarget(view);
+    }
+
+    private void TrySelectTarget(DebugPieceView view)
+    {
+        if (view == null || view.PlayerId == currentPlayerId) return;
         if (playerManager == null ||
             !playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
             !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||

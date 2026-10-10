@@ -173,13 +173,20 @@ namespace YutArena.InGame
         private void Update()
         {
             if (playerManager == null || turnManager == null) return;
-            if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame &&
+            LocalSelectionInput.Poll(playerManager.ActivePlayers.Count);
+            if (!LocalSelectionInput.SharedInputAvailable) return;
+            int playerIndex = (int)turnManager.CurrentTurn.currentPlayer - 1;
+            bool keyboardTurn = LocalSelectionInput.UsesKeyboard(playerIndex);
+            Gamepad turnPad = LocalSelectionInput.GetInputGamepad(playerIndex);
+            if (((keyboardTurn && Keyboard.current.spaceKey.wasPressedThisFrame) ||
+                 (turnPad != null && !LocalSelectionInput.JoinedThisFrame(playerIndex) &&
+                  turnPad.buttonSouth.wasPressedThisFrame)) &&
                 turnManager.CurrentTurn.currentPhase == TurnPhase.WaitThrow)
                 turnManager.RequestThrow();
 
             // 이동 선택(WaitAction) 중에는 MoveDestinationSelector 가 클릭을 소유한다.
             // 그 외 단계에서는 종전과 동일하게 이 컨트롤러가 말 클릭을 처리한다.
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+            if (keyboardTurn && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
                 turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction)
                 TrySelectPieceAtPointer();
             RefreshPiecePositions();

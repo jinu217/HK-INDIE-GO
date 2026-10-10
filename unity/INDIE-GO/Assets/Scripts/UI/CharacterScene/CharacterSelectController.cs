@@ -24,8 +24,6 @@ namespace YutArena.UI.CharacterScene
         [SerializeField, Min(1f)] private float selectionTimeSeconds = 30f;
         [Tooltip("그리드 열 개수")]
         [SerializeField, Min(1)] private int gridColumnCount = 5;
-        [Tooltip("플레이어 표시 간격")]
-        [SerializeField, Min(0f)] private float sameCardPlayerObjectSpacing = 36f;
         [Tooltip("인게임 씬 이름")]
         [SerializeField] private string inGameSceneName = "InGameScene";
         [Tooltip("로컬 로비 씬 이름")]
@@ -34,10 +32,12 @@ namespace YutArena.UI.CharacterScene
         [Header("Common UI")]
         [Tooltip("남은 시간 텍스트")]
         [SerializeField] private TMP_Text remainingTimeText;
+        [Tooltip("선택 완료 인원 텍스트")]
+        [SerializeField] private TMP_Text selectionCompletedText;
         [Tooltip("뒤로가기 버튼")]
         [SerializeField] private Button backButton;
-        [Tooltip("게임 시작 조건 충족 시 활성화할 이미지 오브젝트")]
-        [SerializeField] private GameObject gameStartImage;
+        [Tooltip("모든 플레이어가 선택을 마치면 누를 수 있는 게임 시작 버튼")]
+        [SerializeField] private Button startGameButton;
 
         [Header("Lobby Settings UI")]
         [Tooltip("게임 모드 텍스트")]
@@ -54,15 +54,24 @@ namespace YutArena.UI.CharacterScene
         [Header("Character UI")]
         [Tooltip("캐릭터 카드 목록")]
         [SerializeField] private CharacterCardView[] cardViews;
+        [Tooltip("캐릭터 카드 앞에 표시할 랜덤 선택 카드")]
+        [SerializeField] private CharacterCardView randomCardView;
+        [Tooltip("랜덤 카드에 표시할 이미지")]
+        [SerializeField] private Sprite randomCardSprite;
+        [Tooltip("랜덤 선택 시 패널에 표시할 물음표 이미지")]
+        [SerializeField] private Sprite randomPanelSprite;
         [Tooltip("플레이어 마커 목록")]
         [SerializeField] private PlayerSelectionMarkerView[] playerMarkerViews;
-        [Tooltip("추가 플레이어 마커 이미지 목록")]
-        [SerializeField] private Image[] playerMarkerViews2;
+        [Tooltip("팀전 Red 플레이어에게 표시할 마커 이미지")]
+        [SerializeField] private Sprite redTeamMarkerSprite;
+        [Tooltip("팀전 Blue 플레이어에게 표시할 마커 이미지")]
+        [SerializeField] private Sprite blueTeamMarkerSprite;
         [Tooltip("플레이어 상세 패널 목록")]
         [SerializeField] private PlayerCharacterPanelView[] playerPanelViews;
 
         private readonly int[] cursorIndexes = new int[MaxPlayerCount];
         private readonly bool[] selectedPlayers = new bool[MaxPlayerCount];
+        private readonly CharacterData[] randomSelections = new CharacterData[MaxPlayerCount];
         private readonly List<CharacterData> runtimeCharacters = new List<CharacterData>();
 
         private int playerCount;
@@ -83,10 +92,11 @@ namespace YutArena.UI.CharacterScene
             {
                 backButton.onClick.AddListener(BackToLocalLobby);
             }
+            if (startGameButton != null)
+                startGameButton.onClick.AddListener(StartGame);
 
             InitializeCards();
             InitializePlayerMarkers();
-            SetActive(gameStartImage, false);
             RefreshUI();
         }
 
@@ -166,6 +176,8 @@ namespace YutArena.UI.CharacterScene
             {
                 backButton.onClick.RemoveListener(BackToLocalLobby);
             }
+            if (startGameButton != null)
+                startGameButton.onClick.RemoveListener(StartGame);
         }
 
         private void Update()
@@ -175,16 +187,11 @@ namespace YutArena.UI.CharacterScene
                 return;
             }
 
-            remainingTime = Mathf.Max(0f, remainingTime - Time.unscaledDeltaTime);
+            if (LocalSelectionInput.SharedInputAvailable)
+                remainingTime = Mathf.Max(0f, remainingTime - Time.unscaledDeltaTime);
             ProcessInputs();
 
-            if (AreAllPlayersSelected())
-            {
-                BeginGameStart(false);
-                return;
-            }
-
-            if (remainingTime <= 0f)
+            if (remainingTime <= 0f && LocalSelectionInput.SharedInputAvailable)
             {
                 BeginGameStart(true);
                 return;
@@ -248,6 +255,10 @@ namespace YutArena.UI.CharacterScene
 
         private void InitializeCards()
         {
+            if (randomCardView != null)
+            {
+                randomCardView.SetPortrait(randomCardSprite);
+            }
             if (cardViews == null)
             {
                 return;
@@ -267,27 +278,7 @@ namespace YutArena.UI.CharacterScene
         private void InitializePlayerMarkers()
         {
             GameStartSettings settings = GameStartSettingsHolder.Current;
-            InitializePlayerMarkers(playerMarkerViews, settings);
-            InitializePlayerMarkerImages(settings);
-        }
-
-        private void InitializePlayerMarkerImages(GameStartSettings settings)
-        {
-            if (playerMarkerViews2 == null || settings == null || !settings.isTeamMode ||
-                settings.playerTeams == null)
-                return;
-
-            int count = Mathf.Min(playerMarkerViews2.Length, settings.playerTeams.Length, playerCount);
-            for (int playerIndex = 0; playerIndex < count; playerIndex++)
-            {
-                Image image = playerMarkerViews2[playerIndex];
-                if (image != null && TryGetTeamColor(settings.playerTeams[playerIndex], out Color teamColor))
-                    image.color = teamColor;
-            }
-        }
-
-        private void InitializePlayerMarkers(PlayerSelectionMarkerView[] markers, GameStartSettings settings)
-        {
+            PlayerSelectionMarkerView[] markers = playerMarkerViews;
             if (markers == null)
             {
                 return;
@@ -300,26 +291,11 @@ namespace YutArena.UI.CharacterScene
                 PlayerSelectionMarkerView marker = markers[playerIndex];
                 if (marker == null) continue;
 
-                if (settings != null && settings.isTeamMode &&
-                    settings.playerTeams != null && playerIndex < settings.playerTeams.Length &&
-                    TryGetTeamColor(settings.playerTeams[playerIndex], out Color teamColor))
-                {
-                    marker.SetColor(teamColor);
-                }
-                marker.Initialize(playerIndex);
+                bool isTeamMode = settings != null && settings.isTeamMode;
+                int teamIndex = isTeamMode && settings.playerTeams != null && playerIndex < settings.playerTeams.Length
+                    ? settings.playerTeams[playerIndex] : 0;
+                marker.SetTeamImage(isTeamMode, teamIndex, redTeamMarkerSprite, blueTeamMarkerSprite);
                 marker.gameObject.SetActive(playerIndex < playerCount);
-            }
-        }
-
-        private static bool TryGetTeamColor(int teamIndex, out Color color)
-        {
-            switch (teamIndex)
-            {
-                case 1: color = Color.blue; return true;
-                case 2: color = Color.yellow; return true;
-                case 3: color = Color.red; return true;
-                case 4: color = Color.green; return true;
-                default: color = default; return false;
             }
         }
 
@@ -327,21 +303,27 @@ namespace YutArena.UI.CharacterScene
         {
             LocalSelectionInput.Poll(playerCount);
             keyboardPlayerIndex = -1;
-            int lastKeyboardPlayer = -1;
+            int lastSharedPlayer = -1;
             for (int i = 0; i < playerCount; i++)
             {
-                Gamepad pad = LocalSelectionInput.GetGamepad(i);
-                if (pad != null)
+                Gamepad assignedPad = LocalSelectionInput.GetGamepad(i);
+                if (assignedPad != null)
                 {
                     // Joining must not also confirm the default character on the same A press.
-                    if (!LocalSelectionInput.JoinedThisFrame(i)) ProcessGamepadInput(i, pad);
+                    if (!LocalSelectionInput.JoinedThisFrame(i)) ProcessGamepadInput(i, assignedPad);
                     continue;
                 }
-                lastKeyboardPlayer = i;
+                lastSharedPlayer = i;
                 if (keyboardPlayerIndex < 0 && !selectedPlayers[i]) keyboardPlayerIndex = i;
             }
-            if (keyboardPlayerIndex < 0) keyboardPlayerIndex = lastKeyboardPlayer;
+            if (keyboardPlayerIndex < 0) keyboardPlayerIndex = lastSharedPlayer;
             if (keyboardPlayerIndex < 0) return;
+            if (LocalSelectionInput.SharedGamepadSelected)
+            {
+                Gamepad sharedPad = LocalSelectionInput.GetInputGamepad(keyboardPlayerIndex);
+                if (sharedPad != null) ProcessGamepadInput(keyboardPlayerIndex, sharedPad);
+                return;
+            }
             Keyboard keyboard = Keyboard.current;
             if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) ||
                 (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame))
@@ -355,7 +337,7 @@ namespace YutArena.UI.CharacterScene
                             break;
                         }
                 }
-                selectedPlayers[keyboardPlayerIndex] = false;
+                CancelSelection(keyboardPlayerIndex);
                 return;
             }
             ProcessKeyboardInput(keyboardPlayerIndex);
@@ -364,19 +346,20 @@ namespace YutArena.UI.CharacterScene
         private void ProcessKeyboardInput(int playerIndex)
         {
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
-                !selectedPlayers[playerIndex] && cardViews != null)
+                !selectedPlayers[playerIndex])
             {
                 Vector2 pointer = Mouse.current.position.ReadValue();
-                for (int i = 0; i < Mathf.Min(cardViews.Length, runtimeCharacters.Count); i++)
+                for (int i = 0; i < OptionCount; i++)
                 {
-                    Canvas canvas = cardViews[i] != null ? cardViews[i].GetComponentInParent<Canvas>() : null;
+                    CharacterCardView card = GetCard(i);
+                    Canvas canvas = card != null ? card.GetComponentInParent<Canvas>() : null;
                     Camera camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
                         ? canvas.worldCamera : null;
-                    if (cardViews[i] != null && RectTransformUtility.RectangleContainsScreenPoint(
-                        cardViews[i].transform as RectTransform, pointer, camera))
+                    if (card != null && RectTransformUtility.RectangleContainsScreenPoint(
+                        card.transform as RectTransform, pointer, camera))
                     {
                         cursorIndexes[playerIndex] = i;
-                        selectedPlayers[playerIndex] = true;
+                        ConfirmSelection(playerIndex);
                         return;
                     }
                 }
@@ -393,23 +376,33 @@ namespace YutArena.UI.CharacterScene
 
                 if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
                 {
-                    selectedPlayers[playerIndex] = true;
+                    ConfirmSelection(playerIndex);
                 }
             }
             else if (keyboard.escapeKey.wasPressedThisFrame)
             {
-                selectedPlayers[playerIndex] = false;
+                CancelSelection(playerIndex);
             }
+        }
+
+        private void StartGame()
+        {
+            if (!isFinalized && AreAllPlayersSelected())
+                BeginGameStart(false);
         }
 
         private void OnGUI()
         {
             if (isFinalized) return;
             GUI.Label(new Rect(16, 16, 800, 28),
-                $"Keyboard P{keyboardPlayerIndex + 1}: WASD / Arrows / Enter / Esc | Gamepads: A to join / confirm, B to cancel");
+                $"{(LocalSelectionInput.SharedGamepadSelected ? "Shared Gamepad" : "Keyboard")} P{keyboardPlayerIndex + 1}: Select / Confirm / Cancel | Extra gamepads: A to join");
             string devices = string.Empty;
             for (int i = 0; i < playerCount; i++)
-                devices += $"P{i + 1}: {(LocalSelectionInput.GetGamepad(i) != null ? "Gamepad" : "Keyboard")}  ";
+            {
+                string device = LocalSelectionInput.GetGamepad(i) != null ? "Gamepad" :
+                    LocalSelectionInput.SharedGamepadSelected ? "Shared Gamepad" : "Keyboard";
+                devices += $"P{i + 1}: {device}  ";
+            }
             GUI.Label(new Rect(16, 46, 800, 28), devices);
         }
 
@@ -429,18 +422,18 @@ namespace YutArena.UI.CharacterScene
 
                 if (gamepad.buttonSouth.wasPressedThisFrame)
                 {
-                    selectedPlayers[playerIndex] = true;
+                    ConfirmSelection(playerIndex);
                 }
             }
             else if (gamepad.buttonEast.wasPressedThisFrame)
             {
-                selectedPlayers[playerIndex] = false;
+                CancelSelection(playerIndex);
             }
         }
 
         private void MoveCursor(int playerIndex, int horizontal, int vertical)
         {
-            int characterCount = runtimeCharacters.Count;
+            int characterCount = OptionCount;
             if (characterCount == 0) return;
 
             int currentIndex = cursorIndexes[playerIndex];
@@ -469,13 +462,20 @@ namespace YutArena.UI.CharacterScene
                 remainingTimeText.text = $"남은 시간 {Mathf.CeilToInt(remainingTime)}";
             }
 
+            int completedCount = 0;
+            for (int i = 0; i < playerCount; i++)
+                if (selectedPlayers[i]) completedCount++;
+            SetText(selectionCompletedText, $"{completedCount}/{playerCount} 선택완료");
+            if (startGameButton != null)
+                startGameButton.interactable = !isFinalized && AreAllPlayersSelected();
+
             RefreshPlayerMarkers();
             RefreshPlayerPanels();
         }
 
         private void RefreshPlayerMarkers()
         {
-            if (cardViews == null || playerMarkerViews == null) return;
+            if (playerMarkerViews == null) return;
 
             int markerCount = Mathf.Min(playerMarkerViews.Length, MaxPlayerCount);
 
@@ -484,21 +484,18 @@ namespace YutArena.UI.CharacterScene
                 PlayerSelectionMarkerView marker = playerMarkerViews[playerIndex];
                 if (marker == null) continue;
 
-                if (playerIndex >= playerCount || cursorIndexes[playerIndex] >= cardViews.Length)
+                if (playerIndex >= playerCount || cursorIndexes[playerIndex] >= OptionCount)
                 {
                     marker.gameObject.SetActive(false);
                     continue;
                 }
 
-                CharacterCardView card = cardViews[cursorIndexes[playerIndex]];
+                CharacterCardView card = GetCard(cursorIndexes[playerIndex]);
                 int sameCardOrder = GetSameCardOrder(playerIndex);
                 bool showFrame = sameCardOrder == 0;
-
                 marker.MoveTo(
                     card != null ? card.MarkerTarget : null,
-                    showFrame,
-                    sameCardOrder,
-                    sameCardPlayerObjectSpacing);
+                    showFrame);
             }
         }
 
@@ -535,8 +532,10 @@ namespace YutArena.UI.CharacterScene
 
                 if (!active || runtimeCharacters.Count == 0) continue;
 
-                CharacterData data = runtimeCharacters[cursorIndexes[playerIndex]];
-                panel.Refresh(playerIndex, data, selectedPlayers[playerIndex]);
+                if (IsRandomOption(cursorIndexes[playerIndex]))
+                    panel.RefreshRandom(playerIndex, selectedPlayers[playerIndex], randomPanelSprite);
+                else
+                    panel.Refresh(playerIndex, runtimeCharacters[GetCharacterIndex(cursorIndexes[playerIndex])], selectedPlayers[playerIndex]);
             }
         }
 
@@ -545,7 +544,6 @@ namespace YutArena.UI.CharacterScene
             if (isFinalized) return;
 
             isFinalized = true;
-            SetActive(gameStartImage, true);
             RefreshUI();
             StartCoroutine(FinalizeSelectionAfterDelay(randomizeUnselectedPlayers));
         }
@@ -563,11 +561,15 @@ namespace YutArena.UI.CharacterScene
             {
                 if (randomizeUnselectedPlayers && !selectedPlayers[playerIndex])
                 {
-                    cursorIndexes[playerIndex] = UnityEngine.Random.Range(0, runtimeCharacters.Count);
+                    randomSelections[playerIndex] = DrawRandomCharacter();
                     selectedPlayers[playerIndex] = true;
                 }
 
-                CharacterData selectedCharacter = runtimeCharacters[cursorIndexes[playerIndex]];
+                CharacterData selectedCharacter = randomSelections[playerIndex];
+                if (selectedCharacter == null && IsRandomOption(cursorIndexes[playerIndex]))
+                    selectedCharacter = randomSelections[playerIndex] = DrawRandomCharacter();
+                if (selectedCharacter == null)
+                    selectedCharacter = runtimeCharacters[GetCharacterIndex(cursorIndexes[playerIndex])];
                 // 기존 구현: selectedIds[playerIndex] = runtimeCharacters[cursorIndexes[playerIndex]].char_ID;
                 selectedIds[playerIndex] = selectedCharacter.char_ID;
                 selectedCharacters[playerIndex] = selectedCharacter;
@@ -583,7 +585,7 @@ namespace YutArena.UI.CharacterScene
             {
                 Debug.LogWarning("In-game scene name is empty.", this);
                 isFinalized = false;
-                SetActive(gameStartImage, false);
+                RefreshUI();
                 yield break;
             }
 
@@ -600,6 +602,36 @@ namespace YutArena.UI.CharacterScene
             }
 
             return true;
+        }
+
+        private bool RandomPickEnabled => randomCardView != null && randomCardView.gameObject.activeInHierarchy;
+
+        private int OptionCount => Mathf.Min(cardViews != null ? cardViews.Length : 0, runtimeCharacters.Count)
+            + (RandomPickEnabled ? 1 : 0);
+
+        private bool IsRandomOption(int optionIndex) => RandomPickEnabled && optionIndex == 0;
+
+        private int GetCharacterIndex(int optionIndex) => optionIndex - (RandomPickEnabled ? 1 : 0);
+
+        private CharacterCardView GetCard(int optionIndex)
+        {
+            if (IsRandomOption(optionIndex)) return randomCardView;
+            int index = GetCharacterIndex(optionIndex);
+            return cardViews != null && index >= 0 && index < cardViews.Length ? cardViews[index] : null;
+        }
+
+        private CharacterData DrawRandomCharacter() => runtimeCharacters[UnityEngine.Random.Range(0, runtimeCharacters.Count)];
+
+        private void ConfirmSelection(int playerIndex)
+        {
+            randomSelections[playerIndex] = IsRandomOption(cursorIndexes[playerIndex]) ? DrawRandomCharacter() : null;
+            selectedPlayers[playerIndex] = true;
+        }
+
+        private void CancelSelection(int playerIndex)
+        {
+            selectedPlayers[playerIndex] = false;
+            randomSelections[playerIndex] = null;
         }
 
         private static void SetActive(GameObject target, bool active)

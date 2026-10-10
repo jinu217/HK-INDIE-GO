@@ -69,6 +69,8 @@ namespace YutArena.InGame
         private readonly List<MoveMarker> destMarkers = new List<MoveMarker>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private int selectedPieceId = -1;
+        private int gamepadMarkerIndex;
+        private ActiveSkillButtonController activeSkillController;
         private bool subscribed;
         private MoveMarker lastHoverLogged;
 
@@ -83,6 +85,7 @@ namespace YutArena.InGame
             if (pieceMovementManager == null) pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
             if (mapManager == null) mapManager = FindFirstObjectByType<MapManager>();
             if (pieceDebugController == null) pieceDebugController = FindFirstObjectByType<InGamePieceDebugController>();
+            activeSkillController = FindFirstObjectByType<ActiveSkillButtonController>();
 
             if (turnManager == null || playerManager == null || pieceMovementManager == null)
             {
@@ -132,8 +135,18 @@ namespace YutArena.InGame
 
         private void Update()
         {
-            if (turnManager == null || Mouse.current == null) return;
+            if (turnManager == null || !LocalSelectionInput.SharedInputAvailable) return;
             if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
+            int playerIndex = (int)turnManager.CurrentTurn.currentPlayer - 1;
+            Gamepad pad = LocalSelectionInput.GetInputGamepad(playerIndex);
+            if (pad != null)
+            {
+                if (activeSkillController != null &&
+                    (activeSkillController.IsSelectingCaster || activeSkillController.IsSelectingTarget)) return;
+                if (!LocalSelectionInput.JoinedThisFrame(playerIndex)) ProcessGamepadSelection(pad);
+                return;
+            }
+            if (!LocalSelectionInput.UsesKeyboard(playerIndex) || Mouse.current == null) return;
 
             Camera cam = Camera.main;
             if (cam == null) return;
@@ -212,6 +225,46 @@ namespace YutArena.InGame
             if (verboseLog) Debug.Log("[MoveSelector] 선택 취소 → 말 선택 단계로", this);
             selectedPieceId = -1;
             RefreshForCurrentState();
+        }
+
+        private void ProcessGamepadSelection(Gamepad pad)
+        {
+            List<MoveMarker> options = selectedPieceId < 0 ? pieceArrows : destMarkers;
+            if (options.Count == 0) return;
+            if (pad.dpad.right.wasPressedThisFrame || pad.dpad.down.wasPressedThisFrame ||
+                pad.leftStick.right.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame)
+                gamepadMarkerIndex = (gamepadMarkerIndex + 1) % options.Count;
+            if (pad.dpad.left.wasPressedThisFrame || pad.dpad.up.wasPressedThisFrame ||
+                pad.leftStick.left.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame)
+                gamepadMarkerIndex = (gamepadMarkerIndex + options.Count - 1) % options.Count;
+            gamepadMarkerIndex = Mathf.Clamp(gamepadMarkerIndex, 0, options.Count - 1);
+            for (int i = 0; i < options.Count; i++)
+                if (options[i] != null) options[i].SetHovered(i == gamepadMarkerIndex);
+            if (pad.buttonEast.wasPressedThisFrame && selectedPieceId >= 0)
+            {
+                selectedPieceId = -1;
+                RefreshForCurrentState();
+                return;
+            }
+            if (!pad.buttonSouth.wasPressedThisFrame) return;
+            MoveMarker chosen = options[gamepadMarkerIndex];
+            if (chosen == null) return;
+            if (selectedPieceId < 0)
+            {
+                selectedPieceId = chosen.PieceId;
+                gamepadMarkerIndex = 0;
+                BuildDestinationMarkers();
+            }
+            else
+            {
+                turnManager.RequestMovePiece(selectedPieceId, chosen.Result);
+                if (selectedPieceId >= 0)
+                {
+                    selectedPieceId = -1;
+                    RefreshForCurrentState();
+                }
+                gamepadMarkerIndex = 0;
+            }
         }
 
         private void RefreshForCurrentState()

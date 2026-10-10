@@ -10,7 +10,7 @@ namespace YutArena.UI
 {
     public class LobbySceneUIController : MonoBehaviour
     {
-        private const int MaxTeamSlotCount = 4;
+        private const int MaxTeamSlotCount = 2;
 
         private readonly GameMode[] gameModeOptions =
         {
@@ -45,10 +45,8 @@ namespace YutArena.UI
         private readonly string[] teamLabels =
         {
             "No Team",
-            "Blue",
-            "Yellow",
             "Red",
-            "Green"
+            "Blue"
         };
 
         private readonly int[] gameTimeOptions = { 15, 20, 25 };
@@ -75,6 +73,12 @@ namespace YutArena.UI
         [SerializeField] private Button teamModeRightButton;
         [Tooltip("팀 모드 텍스트")]
         [SerializeField] private TMP_Text teamModeValueText;
+        [Tooltip("1P 입력 장치 이전 버튼")]
+        [SerializeField] private Button sharedInputLeftButton;
+        [Tooltip("1P 입력 장치 다음 버튼")]
+        [SerializeField] private Button sharedInputRightButton;
+        [Tooltip("1P 입력 장치 텍스트")]
+        [SerializeField] private TMP_Text sharedInputLabel;
         [Tooltip("플레이어 행")]
         [SerializeField] private GameObject[] playerRows;
         [Tooltip("플레이어 팀 이전 버튼")]
@@ -146,11 +150,11 @@ namespace YutArena.UI
 
         // The bottom option is TurnLength; the last row contains Start and Back.
         private TMP_Text[] NavigationTexts => new[] { gameModeValueText, playerCountValueText,
-            teamModeValueText, mapValueText, gameTimeValueText, turnTimeValueText, turnLengthValueText };
+            teamModeValueText, sharedInputLabel, mapValueText, gameTimeValueText, turnTimeValueText, turnLengthValueText };
         private Button[] NavigationLeftButtons => new[] { gameModeLeftButton, playerCountLeftButton,
-            teamModeLeftButton, mapLeftButton, gameTimeLeftButton, turnTimeLeftButton, turnLengthLeftButton };
+            teamModeLeftButton, sharedInputLeftButton, mapLeftButton, gameTimeLeftButton, turnTimeLeftButton, turnLengthLeftButton };
         private Button[] NavigationRightButtons => new[] { gameModeRightButton, playerCountRightButton,
-            teamModeRightButton, mapRightButton, gameTimeRightButton, turnTimeRightButton, turnLengthRightButton };
+            teamModeRightButton, sharedInputRightButton, mapRightButton, gameTimeRightButton, turnTimeRightButton, turnLengthRightButton };
 
         private GameMode SelectedGameMode
         {
@@ -176,8 +180,20 @@ namespace YutArena.UI
         private void Update()
         {
             LocalSelectionInput.Poll(selectedPlayerCount);
+            if (sharedInputLabel != null)
+                sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
             ProcessNavigation();
             RefreshStartAvailability();
+        }
+
+        private void ToggleSharedInput()
+        {
+            if (LocalSelectionInput.SharedGamepadSelected)
+            {
+                LocalSelectionInput.SelectSharedKeyboard();
+                return;
+            }
+            LocalSelectionInput.SelectSharedGamepadMode();
         }
 
         private void ProcessNavigation()
@@ -196,9 +212,10 @@ namespace YutArena.UI
             bool submit = keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame);
             // Assigned controllers can also operate the common lobby options.
             {
-                for (int i = 1; i < selectedPlayerCount; i++)
+                for (int i = 0; i < selectedPlayerCount; i++)
                 {
                     Gamepad pad = LocalSelectionInput.GetGamepad(i);
+                    if (i == 0 && pad == null) pad = LocalSelectionInput.GetInputGamepad(i);
                     if (pad == null || LocalSelectionInput.JoinedThisFrame(i)) continue;
                     up |= pad.dpad.up.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame;
                     down |= pad.dpad.down.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame;
@@ -209,22 +226,22 @@ namespace YutArena.UI
             }
             if (up || down)
             {
-                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : 7)) % 8;
+                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : 8)) % 9;
                 HighlightNavigationRow();
                 return;
             }
             if (navigationRow < 0) return;
             if (left || right)
             {
-                Button target = navigationRow == 7
+                Button target = navigationRow == 8
                     ? (navigationButton == startGameButton ? backButton : startGameButton)
                     : (left ? NavigationLeftButtons[navigationRow] : NavigationRightButtons[navigationRow]);
                 SelectNavigationButton(target);
-                if (navigationRow != 7 && target != null && target.isActiveAndEnabled && target.IsInteractable())
+                if (navigationRow != 8 && target != null && target.isActiveAndEnabled && target.IsInteractable())
                     target.onClick.Invoke();
                 return;
             }
-            if (submit && navigationRow == 7 && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
+            if (submit && navigationRow == 8 && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
                 navigationButton.onClick.Invoke();
         }
 
@@ -233,7 +250,7 @@ namespace YutArena.UI
             if (highlightedText != null) highlightedText.color = highlightedTextColor;
             highlightedText = null;
             SelectNavigationButton(null);
-            if (navigationRow == 7)
+            if (navigationRow == 8)
                 SelectNavigationButton(startGameButton);
             else
             {
@@ -269,6 +286,8 @@ namespace YutArena.UI
             AddClick(playerCountRightButton, NextPlayerCount);
             AddClick(teamModeLeftButton, ToggleTeamMode);
             AddClick(teamModeRightButton, ToggleTeamMode);
+            AddClick(sharedInputLeftButton, ToggleSharedInput);
+            AddClick(sharedInputRightButton, ToggleSharedInput);
             AddClick(mapLeftButton, PreviousMap);
             AddClick(mapRightButton, NextMap);
             AddClick(turnLengthLeftButton, DecreaseTurnLength);
@@ -459,6 +478,13 @@ namespace YutArena.UI
 
         private bool CanStartGame(out string reason)
         {
+            if (!LocalSelectionInput.SharedInputAvailable)
+            {
+                reason = LocalSelectionInput.SharedGamepadSelected
+                    ? "Connect the 1P pad."
+                    : "1P input device disconnected.";
+                return false;
+            }
             if (SelectedGameMode == GameMode.KillTheKing)
             {
                 reason = "Kill The King is coming soon.";
@@ -509,9 +535,9 @@ namespace YutArena.UI
             {
                 int teamIndex = playerTeamIndexes[i] - 1;
 
-                if (teamIndex < 0)
+                if (teamIndex < 0 || teamIndex >= MaxTeamSlotCount)
                 {
-                    reason = "Every player must choose a team.";
+                    reason = "Every player must choose Red or Blue.";
                     return false;
                 }
 

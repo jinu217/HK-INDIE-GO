@@ -7,52 +7,38 @@ namespace YutArena.UI.CharacterScene
     {
         [Tooltip("플레이어 테두리")]
         [SerializeField] private Image frameImage;
-        [Tooltip("플레이어 색상")]
-        [SerializeField] private Color playerColor = Color.white;
-        [Tooltip("플레이어 표시 오브젝트")]
-        [SerializeField] private GameObject playerObject;
-
+        [Tooltip("플레이어 번호 이미지 (1PImage, 2PImage 등)")]
+        [SerializeField] private Image playerImage;
         private RectTransform rectTransform;
-        private RectTransform playerObjectRectTransform;
-        private Vector2 playerObjectOrigin;
+        private Vector2 markerSize;
+        private Sprite originalPlayerSprite;
+        private bool originalPlayerSpriteCaptured;
 
         private void Awake()
         {
             rectTransform = transform as RectTransform;
+            if (rectTransform != null && markerSize == Vector2.zero)
+                markerSize = rectTransform.sizeDelta;
 
-            if (playerObject != null)
-            {
-                playerObjectRectTransform = playerObject.transform as RectTransform;
-
-                if (playerObjectRectTransform != null)
-                {
-                    playerObjectOrigin = playerObjectRectTransform.anchoredPosition;
-                }
-            }
         }
 
-        public void Initialize(int playerIndex)
+        public void SetTeamImage(bool isTeamMode, int teamIndex, Sprite redTeamSprite, Sprite blueTeamSprite)
         {
-            if (frameImage != null)
-            {
-                frameImage.color = playerColor;
-            }
-        }
+            if (playerImage == null) return;
 
-        public void SetColor(Color color)
-        {
-            playerColor = color;
-            if (frameImage != null)
+            if (!originalPlayerSpriteCaptured)
             {
-                frameImage.color = color;
+                originalPlayerSprite = playerImage.sprite;
+                originalPlayerSpriteCaptured = true;
             }
+
+            Sprite teamSprite = teamIndex == 1 ? redTeamSprite : teamIndex == 2 ? blueTeamSprite : null;
+            playerImage.sprite = isTeamMode && teamSprite != null ? teamSprite : originalPlayerSprite;
         }
 
         public void MoveTo(
             RectTransform target,
-            bool showFrame,
-            int sameCardOrder,
-            float playerObjectSpacing)
+            bool showFrame)
         {
             if (target == null)
             {
@@ -64,32 +50,23 @@ namespace YutArena.UI.CharacterScene
             {
                 rectTransform = transform as RectTransform;
             }
+            if (markerSize == Vector2.zero)
+                markerSize = rectTransform.sizeDelta;
 
             gameObject.SetActive(true);
             rectTransform.SetParent(target, false);
             rectTransform.SetAsLastSibling();
-            rectTransform.anchorMin = Vector2.zero;
-            rectTransform.anchorMax = Vector2.one;
-            rectTransform.offsetMin = Vector2.zero;
-            rectTransform.offsetMax = Vector2.zero;
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.sizeDelta = markerSize;
+            rectTransform.anchoredPosition = Vector2.zero;
             rectTransform.localScale = Vector3.one;
 
             if (frameImage != null)
             {
                 frameImage.enabled = showFrame;
-                frameImage.color = playerColor;
             }
 
-            if (playerObject != null)
-            {
-                playerObject.SetActive(true);
-            }
-
-            if (playerObjectRectTransform != null)
-            {
-                playerObjectRectTransform.anchoredPosition =
-                    playerObjectOrigin + Vector2.right * (sameCardOrder * playerObjectSpacing);
-            }
         }
 
     }

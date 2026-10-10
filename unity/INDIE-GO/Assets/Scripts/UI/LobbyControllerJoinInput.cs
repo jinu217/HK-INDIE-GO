@@ -54,7 +54,9 @@ namespace YutArena.UI
                 }
 
                 playerText.text = (i + 1) + "P " +
-                    (LocalSelectionInput.GetGamepad(i) != null ? "[Gamepad]" : "[Keyboard]");
+                    (LocalSelectionInput.GetGamepad(i) != null ? "[NP Pad]" :
+                        LocalSelectionInput.SharedGamepadSelected && LocalSelectionInput.SharedInputAvailable
+                            ? "[Pad]" : "[Keyboard]");
                 playerText.gameObject.SetActive(connectedPlayers[i]);
             }
         }

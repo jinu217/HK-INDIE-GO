@@ -33,6 +33,39 @@ namespace YutArena.Managers
 
         public System.Action<GamePhase> OnGamePhaseChanged;  // 게임 단계가 바뀔 때마다 방송
         public System.Action<GameResultData> OnGameEnded;    // 게임이 끝났을 때 방송 (승자 정보 포함)
+        private bool pausedForSharedDevice;
+        private float previousTimeScale;
+
+        private void Update()
+        {
+            if (Session == null || Session.phase != GamePhase.InGame)
+            {
+                if (pausedForSharedDevice)
+                {
+                    Time.timeScale = previousTimeScale;
+                    pausedForSharedDevice = false;
+                }
+                return;
+            }
+            LocalSelectionInput.Poll(Settings != null ? Settings.playerCount : 4);
+            if (!LocalSelectionInput.SharedInputAvailable && !pausedForSharedDevice)
+            {
+                previousTimeScale = Time.timeScale;
+                Time.timeScale = 0f;
+                pausedForSharedDevice = true;
+            }
+            else if (LocalSelectionInput.SharedInputAvailable && pausedForSharedDevice)
+            {
+                Time.timeScale = previousTimeScale;
+                pausedForSharedDevice = false;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (pausedForSharedDevice) Time.timeScale = previousTimeScale;
+            if (Instance == this) Instance = null;
+        }
 
         // 싱글턴: 씬에 GameManager가 중복 생성돼도 하나만 유지
         private void Awake()

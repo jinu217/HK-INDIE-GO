@@ -248,6 +248,7 @@ namespace YutArena.Managers
         }
         public void RequestThrow()
         {
+            if (!LocalSelectionInput.SharedInputAvailable) return;
             if (CurrentTurn.currentPhase != TurnPhase.WaitThrow)
             {
                 Debug.LogWarning("지금은 윷을 던질 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
@@ -309,6 +310,7 @@ namespace YutArena.Managers
         // 이 함수 안에서 검사 -> 이동요청 -> 결과 확인 -> 다음 단계 결정까지 한번에 처리함
         public void RequestMovePiece(int pieceId, YutResult chosenResult)
         {
+            if (!LocalSelectionInput.SharedInputAvailable) return;
             // 검사 1: 지금 말 이동 가능한 단계(WaitAction)가 맞는지
             if (CurrentTurn.currentPhase != TurnPhase.WaitAction)
             {
