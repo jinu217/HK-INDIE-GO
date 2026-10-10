@@ -1,5 +1,9 @@
 # Player 캐릭터 시스템 기능 명세
 
+> 현재 경로는 `Assets/Character`다. 아래 Player 경로와 예전 파일 목록은 역사적 설명이며,
+> 현재 효과 ID/SO 설정/슬롯/부여·해제 계약은 `Char_Scripts/CC_ARCHITECTURE.md`를 따른다.
+> 효과 값은 CharacterData의 passive_Effects / active_Effects에서 읽고 Status가 발동 순서를 결정한다.
+
 이 문서는 `Assets/Scripts/Player` 아래에 구현된 시스템이 무엇을 담당하고,
 인게임에서 어떤 순서로 동작하며, 다른 시스템과 어디에서 연결되는지 설명한다.
 

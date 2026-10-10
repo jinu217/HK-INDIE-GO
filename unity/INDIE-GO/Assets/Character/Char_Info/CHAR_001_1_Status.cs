@@ -43,7 +43,7 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
         if (!forcedMovePending) return false;
 
         forcedMovePending = false;
-        bool moved = ApplyEffect(CcDefine.Move, value: 1);
+        bool moved = ApplyPassiveEffect();
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Passive] {nameof(CHAR_001_1_Status)} forced a Do move " +
             $"after the piece's first move. Player={PlayerId}, Piece={PieceId}, Moved={moved}",
@@ -62,7 +62,8 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
-        ApplyEffect(CcDefine.DoOrMo);
+        if (!ApplyActiveEffect())
+            return CharacterActiveResult.Failure("MOorDO effect could not be applied.");
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_001_1_Status)} activated. " +
             $"Player={PlayerId}, Piece={PieceId}",

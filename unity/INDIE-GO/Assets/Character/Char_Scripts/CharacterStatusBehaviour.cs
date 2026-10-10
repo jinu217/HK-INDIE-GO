@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using YutArena.Common;
 using YutArena.InGame;
@@ -37,7 +38,11 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
     public virtual bool IsTargetable => TryGetPiece(out var piece) && CcEffectService.IsTargetable(piece);
-    public virtual bool IsImmuneToEffect(CcDefine type) => false;
+    public virtual bool IsImmuneToEffect(CcDefine type) =>
+        characterData != null && characterData.passive_Immunities != null &&
+        Array.IndexOf(characterData.passive_Immunities, type) >= 0;
+    internal virtual bool TryReplaceRetire(PlayerRuntimeData.PieceRuntimeData piece) => false;
+    internal virtual bool TryApplyWindMove(PlayerRuntimeData.PieceRuntimeData piece) => false;
     //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
     public virtual bool RequiresCasterPieceSelection => true;
     public virtual bool RequiresTargetPieceSelection => false;
@@ -46,6 +51,13 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (!CcEffectService.CanUseSkill(piece))
+            return false;
+
+        // 이동이 포함된 스킬은 속박 중 선택하지 않습니다. 확률/배율 예약과 순수 공격은 허용합니다.
+        if (characterData != null && characterData.active_Effects != null &&
+            Array.Exists(characterData.active_Effects, effect => effect != null &&
+                (effect.id == CcDefine.Move_plus || effect.id == CcDefine.Peace_move ||
+                 effect.id == CcDefine.Move_end)) && !CcEffectService.CanMove(piece))
             return false;
 
         return !RequiresCasterPieceSelection || piece.State == PieceState.InBoard;
@@ -131,7 +143,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public virtual bool ShouldGrantExtraThrow(YutResult result, bool defaultValue)
     {
-        return CcEffectService.ResolveExtraThrow(PlayerId, result, defaultValue);
+        return defaultValue;
     }
 
     public virtual CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
@@ -179,6 +191,12 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (!CanSelectAsActiveCaster(caster))
             return CharacterActiveResult.Failure("This piece cannot be selected as the active caster.");
 
+        // 효과 설정 오류는 실행 전에 차단합니다. 일부 대상에 효과를 준 뒤 실패하지 않도록 합니다.
+        if (characterData == null || characterData.active_Effects == null ||
+            characterData.active_Effects.Length == 0 ||
+            Array.Exists(characterData.active_Effects, effect => effect == null || !effect.IsValid))
+            return CharacterActiveResult.Failure("CharacterData active effect settings are missing or invalid.");
+
         return ExecuteActive(request, caster);
     }
 
@@ -201,7 +219,9 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (charges <= 0) throw new ArgumentOutOfRangeException(nameof(charges));
         if (remainingOwnerTurns <= 0) throw new ArgumentOutOfRangeException(nameof(remainingOwnerTurns));
 
-        ApplyEffect(CcDefine.Protection, remainingOwnerTurns, charges);
+        if (TryGetPiece(out var piece))
+            CcEffectService.Apply(piece, CcDefine.protect, remainingOwnerTurns,
+                sourcePlayerId: PlayerId, sourcePieceId: PieceId, charges: charges);
     }
 
     protected virtual CharacterActiveResult ExecuteActive(
@@ -279,16 +299,44 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         return Mathf.Max(1, count);
     }
 
-    protected void RequestSkillPoint(int amount = 1)
+    protected CharacterEffectDefinition PassiveEffect(int index = 0) =>
+        EffectAt(characterData != null ? characterData.passive_Effects : null, index);
+
+    protected CharacterEffectDefinition ActiveEffect(int index = 0) =>
+        EffectAt(characterData != null ? characterData.active_Effects : null, index);
+
+    protected int ActiveRange => characterData != null ? characterData.active_Range : 0;
+
+    private CharacterEffectDefinition EffectAt(CharacterEffectDefinition[] effects, int index)
     {
-        ApplyEffect(CcDefine.SkillPoint, value: amount);
+        if (effects != null && index >= 0 && index < effects.Length && effects[index] != null)
+            return effects[index];
+        Debug.LogError($"[CharacterSkill] {GetType().Name}: effect slot {index} is missing in CharacterData.", this);
+        return null;
     }
 
-    protected bool ApplyEffect(CcDefine type, int turns = 0, int value = 1)
-    {
-        return TryGetPiece(out var piece) &&
-            CcEffectService.Apply(piece, type, turns, value, PlayerId, PieceId);
-    }
+    // 대상 조건은 스킬별로 검사합니다. protect 자체에는 '자신 금지' 같은 캐릭터 규칙이 없습니다.
+    protected virtual bool CanReceivePassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index) => true;
+
+    internal bool TryApplyPassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index = 0,
+        IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
+        target != null && CanReceivePassiveEffect(target, index) &&
+        ApplyConfiguredEffect(PassiveEffect(index), target, path, amount);
+
+    protected bool ApplyPassiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
+        IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
+        TryApplyPassiveEffect(target ?? CcEffectService.GetPiece(PlayerId, PieceId), index, path, amount);
+
+    protected bool ApplyActiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
+        IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
+        ApplyConfiguredEffect(ActiveEffect(index),
+            target ?? CcEffectService.GetPiece(PlayerId, PieceId), path, amount);
+
+    private bool ApplyConfiguredEffect(CharacterEffectDefinition effect,
+        PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount) =>
+        effect != null && effect.IsValid &&
+        CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
+            PlayerId, PieceId, path, effect.isSimpleMove, effect.charges, effect.ignoresInstalledItems);
 
     // 발동 조건과 선택 순서는 스킬이 정의하고 UI는 입력/강조만 담당합니다.
     public virtual CharacterSkillInputStep GetNextInputStep(bool selectionStarted,
@@ -308,8 +356,6 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
             target.Piece.State == PieceState.InBoard &&
             CcEffectService.IsTargetable(target.Piece);
     }
-
-    internal bool TryTriggerPassiveCooldown() => TryStartPassiveCooldown();
 
     private void TryRegisterRuntime()
     {

@@ -46,9 +46,9 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
 
     private void GrantPassiveSkillPoint(string trigger)
     {
-        RequestSkillPoint();
+        if (!ApplyPassiveEffect()) return;
         UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_001_2_Status)} gained 1 SP " +
+            $"[CharacterSkill][Passive] {nameof(CHAR_001_2_Status)} requested {PassiveEffect().amount} SP " +
             $"from {trigger}. Player={PlayerId}, Piece={PieceId}",
             this);
     }
@@ -64,7 +64,7 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
         if (Turns.CurrentTurn.currentPhase != TurnPhase.WaitAction)
             return CharacterActiveResult.Failure("Use Once More after throwing yut and before moving a piece.");
 
-        if (!ApplyEffect(CcDefine.ExtraThrow))
+        if (!ApplyActiveEffect())
             return CharacterActiveResult.Failure("The extra throw effect could not be applied.");
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_001_2_Status)} activated. " +

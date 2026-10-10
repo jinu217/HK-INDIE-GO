@@ -23,6 +23,28 @@ MonoBehaviour:
   active_CooldownTurns: 0
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
+  passive_Effects:
+  - id: 15
+    ownerTurnTicks: 0
+    amount: 1
+    charges: -1
+    ignoresInstalledItems: 0
+    isSimpleMove: 1
+  active_Effects:
+  - id: 25
+    ownerTurnTicks: 0
+    amount: 1
+    charges: -1
+    ignoresInstalledItems: 1
+    isSimpleMove: 1
+  - id: 1
+    ownerTurnTicks: 2
+    amount: 1
+    charges: -1
+    ignoresInstalledItems: 0
+    isSimpleMove: 1
+  passive_Immunities: []
+  active_Range: 0
   passive_Status: 1
   active_Status: 10
   piecePrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}

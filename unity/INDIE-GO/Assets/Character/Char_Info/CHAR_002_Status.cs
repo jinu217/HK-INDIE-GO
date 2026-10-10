@@ -62,8 +62,7 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
         PlayerRuntimeData.PieceRuntimeData target = nearest.Value.Piece;
         //수정: 선택한 아군 한 말에만 부여하며 자신이나 업힌 말로 확산하지 않습니다.
         // 한 번 맞을 때가 아니라 대상의 다음 턴이 시작될 때까지 보호합니다.
-        if (!CcEffectService.Apply(target, CcDefine.TalismanProtection, turns: 1,
-                sourcePlayerId: PlayerId, sourcePieceId: PieceId))
+        if (!ApplyPassiveEffect(target: target))
             return;
 
         TryStartPassiveCooldown();
@@ -72,6 +71,17 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             $"[CharacterSkill][Passive] {nameof(CHAR_002_Status)} granted protection to " +
             $"Player={nearest.Value.Player.PlayerId}, Piece={nearest.Value.Piece.PieceId}. Owner={PlayerId}, Piece={PieceId}",
             this);
+    }
+
+    protected override bool CanReceivePassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index)
+    {
+        var targetOwner = CcEffectService.FindOwner(target);
+        return targetOwner != null && CharacterBoardUtility.AreAllies(PlayerId, targetOwner.PlayerId,
+            Turns != null ? Turns.Settings : null) &&
+            !(targetOwner.PlayerId == PlayerId && target.PieceId == PieceId) &&
+            target.State == PieceState.InBoard && target.CurrentTileId != BoardTileId.None &&
+            !target.Cc.Has(CcDefine.Robot_part) &&
+            (!target.IsStacked || target.StackLeaderPieceId == target.PieceId);
     }
 
     public override void OnPieceRetired()
@@ -94,7 +104,8 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             return moveCount;
 
         DoubleMoves.Remove(request.PlayerId);
-        return moveCount * 2;
+        if (moveCount == 0 || !ApplyActiveEffect()) return moveCount;
+        return base.ModifyMoveCount(request);
     }
 
     public override void OnOwnerTurnEnded()
@@ -113,6 +124,8 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
     {
         if (Turns == null)
             return CharacterActiveResult.Failure("Turn manager is not available.");
+        if (ActiveEffect() == null || !ActiveEffect().IsValid)
+            return CharacterActiveResult.Failure("Next-throw movement effect settings are missing.");
 
         ObserveTurnManager(Turns);
         DoubleMoves[PlayerId] = new DoubleMoveReservation(Turns.PendingResults);
@@ -120,7 +133,7 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             $"[CharacterSkill][Active] {nameof(CHAR_002_Status)} activated. " +
             $"Player={PlayerId}, Piece={PieceId}",
             this);
-        return CharacterActiveResult.Success("The next throw result will move twice as far.");
+        return CharacterActiveResult.Success($"The next throw result's move count will be multiplied by {ActiveEffect().amount}.");
     }
 
     private static void ObserveTurnManager(TestTurnManager turns)

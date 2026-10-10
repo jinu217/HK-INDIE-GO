@@ -41,7 +41,7 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
                 (target.IsStacked ? piece.StackGroupId != target.StackGroupId : piece != target))
                 continue;
             defenders.Add(piece);
-            int clones = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+            int clones = piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
             defendingCount += 1 + clones;
             hasClone |= clones > 0;
         }
@@ -67,7 +67,7 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
         for (int i = 0; i < defenders.Count && remaining > 0; i++)
         {
             if (IsProtected(defenders[i])) continue;
-            int clones = defenders[i].Cc.Get(CcDefine.Clone)?.Value ?? 0;
+            int clones = defenders[i].Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
             cloneLosses[i] = Math.Min(clones, remaining);
             remaining -= cloneLosses[i];
         }
@@ -107,28 +107,20 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
         hasCapturePlan = false;
         if (IsProtected(target)) return base.EvaluateIncomingCapture(request);
         if (plannedCloneLoss > 0)
-        {
-            var clone = target.Cc.Get(CcDefine.Clone);
-            if (clone != null)
-            {
-                clone.SetValue(clone.Value - plannedCloneLoss);
-                if (clone.Value <= 0) CcEffectService.Remove(target, CcDefine.Clone);
-                else CcBoardEffects.RefreshClones(Owner, target);
-            }
-        }
+            CcEffectService.ConsumeClones(target, plannedCloneLoss);
         return plannedDecision;
     }
 
     private static bool IsProtected(PlayerRuntimeData.PieceRuntimeData piece) =>
-        !CcEffectService.IsTargetable(piece) || piece.Cc.Has(CcDefine.TalismanProtection) ||
-        piece.Cc.Has(CcDefine.Protection);
+        !CcEffectService.IsTargetable(piece) ||
+        piece.Cc.Has(CcDefine.protect) || piece.Cc.Has(CcDefine.Charm);
 
     protected override CharacterActiveResult ExecuteActive(CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Clone Technique requires a piece on the board.");
-        return ApplyEffect(CcDefine.Clone)
+        return ApplyActiveEffect()
             ? CharacterActiveResult.Success("A non-scoring clone was stacked on the caster.")
             : CharacterActiveResult.Failure("Clone could not be applied.");
     }

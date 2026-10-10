@@ -7,9 +7,10 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
     {
         var existing = base.EvaluateIncomingCapture(request);
         if (existing != CharacterCaptureDecision.Proceed) return existing;
-        if (!charmShieldAvailable || !TryStartPassiveCooldown()) return existing;
+        if (!charmShieldAvailable || !IsPassiveReady) return existing;
+        if (!ApplyPassiveEffect()) return existing;
+        TryStartPassiveCooldown();
         charmShieldAvailable = false;
-        ApplyEffect(CcDefine.Protection);
         return base.EvaluateIncomingCapture(request);
     }
 
@@ -24,7 +25,8 @@ public sealed class CHAR_004_Status : CharacterStatusBehaviour
     {
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Illusion requires a piece on the board.");
-        ApplyEffect(CcDefine.Hidden, 3);
-        return CharacterActiveResult.Success("The caster cannot be targeted until its third owner turn starts.");
+        if (!ApplyActiveEffect())
+            return CharacterActiveResult.Failure("Stealth effect could not be applied.");
+        return CharacterActiveResult.Success($"Stealth applied for {ActiveEffect().ownerTurnTicks} owner-turn ticks.");
     }
 }

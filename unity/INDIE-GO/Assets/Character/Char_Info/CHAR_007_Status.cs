@@ -9,11 +9,10 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
 
     public override void OnCaptureCompleted(CharacterCaptureRequest request)
     {
-        if (!TryStartPassiveCooldown()) return;
-
-        RequestSkillPoint();
+        if (!IsPassiveReady || !ApplyPassiveEffect()) return;
+        TryStartPassiveCooldown();
         UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_007_Status)} requested 1 skill point. " +
+            $"[CharacterSkill][Passive] {nameof(CHAR_007_Status)} requested {PassiveEffect().amount} skill point(s). " +
             $"Player={PlayerId}, Piece={PieceId}",
             this);
     }
@@ -22,7 +21,7 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)
     {
-        if (caster.State != PieceState.InBoard)
+        if (caster.State != PieceState.InBoard || !CcEffectService.CanMove(caster))
             return CharacterActiveResult.Failure("Frenzy Charge requires a piece on the board.");
 
         List<BoardTileId> path = GetPathToStraightEnd(caster);
@@ -30,16 +29,11 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("No forward straight path is available.");
 
         var enemiesOnPath = FindEnemiesOnPath(path);
-        CharacterBoardUtility.MoveStackAlongPath(
-            Owner,
-            caster,
-            path,
-            ignoresInstalledItems: true);
+        if (ActiveEffect(1) == null || !ApplyActiveEffect(path: path))
+            return CharacterActiveResult.Failure("Charge effect settings/movement could not be resolved.");
 
         foreach (CharacterPieceReference enemy in enemiesOnPath)
-            // Two owner-turn ticks leave the target blocked for one full turn.
-            CcEffectService.Apply(enemy.Piece, CcDefine.Stun, 2,
-                sourcePlayerId: PlayerId, sourcePieceId: PieceId);
+            ApplyActiveEffect(1, enemy.Piece);
 
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +

@@ -8,11 +8,10 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
 
     // CcEffectService calls this only for an actual Retire effect. A Kill does
     // not become Parts, and expired Parts cannot immediately recreate itself.
-    internal bool TryEnterParts(PlayerRuntimeData.PieceRuntimeData piece)
+    internal override bool TryReplaceRetire(PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (partsAlreadyActive || piece.State != PieceState.InBoard ||
-            !IsPassiveReady || !CcEffectService.Apply(piece, CcDefine.Parts, 3,
-                sourcePlayerId: PlayerId, sourcePieceId: PieceId))
+            !IsPassiveReady || !ApplyPassiveEffect(target: piece))
             return false;
         partsAlreadyActive = true;
         TryStartPassiveCooldown();
@@ -52,7 +51,7 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             if (!affectedTiles.Contains(reference.Piece.CurrentTileId))
                 continue;
 
-            CharacterBoardUtility.Retire(reference, false);
+            ApplyActiveEffect(target: reference.Piece);
             if (reference.Piece.State == PieceState.Waiting) retiredCount++;
         }
 

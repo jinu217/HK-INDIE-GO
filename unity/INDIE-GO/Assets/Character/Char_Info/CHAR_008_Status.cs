@@ -41,9 +41,17 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
             return;
 
         if (TryGetPiece(out var piece))
-            CcEffectService.Apply(piece, CcDefine.WindPath, sourcePlayerId: PlayerId,
-                sourcePieceId: PieceId, path: path);
+            ApplyPassiveEffect(target: piece, path: path);
         PendingLastPaths.Remove(PlayerId);
+    }
+
+    internal override bool TryApplyWindMove(PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        var effect = PassiveEffect(1);
+        if (!IsPassiveReady || effect == null || effect.amount <= 0) return false;
+        var path = CharacterBoardUtility.GetForwardPath(piece, effect.amount);
+        if (!ApplyPassiveEffect(1, piece, path)) return false;
+        return TryStartPassiveCooldown();
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -53,7 +61,7 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
         if (!request.HasTarget)
         {
             if (!TryFindAutomaticTarget(caster, out CharacterPieceReference automaticTarget))
-                return CharacterActiveResult.Failure("There is no target within five tiles.");
+                return CharacterActiveResult.Failure($"There is no target within {ActiveRange} tiles.");
 
             return BindTarget(caster, automaticTarget);
         }
@@ -78,19 +86,17 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
         if (!CharacterBoardUtility.IsWithinDistance(
                 caster.CurrentTileId,
                 target.Piece.CurrentTileId,
-                5))
-            return CharacterActiveResult.Failure("The selected enemy is farther than five tiles.");
+                ActiveRange))
+            return CharacterActiveResult.Failure($"The selected enemy is farther than {ActiveRange} tiles.");
 
-        // CC is decremented at the start of its owner's turn. Two stored
-        // ticks therefore produce one complete turn in which movement is blocked.
-        CcEffectService.Apply(CcEffectService.StackLeader(target.Piece), CcDefine.Binding, 2,
-            sourcePlayerId: PlayerId, sourcePieceId: PieceId);
+        if (!ApplyActiveEffect(target: CcEffectService.StackLeader(target.Piece)))
+            return CharacterActiveResult.Failure("The selected enemy resisted Binding.");
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_008_Status)} activated against " +
             $"Player={target.Player.PlayerId}, Piece={target.Piece.PieceId}. " +
             $"Owner={PlayerId}, Piece={PieceId}",
             this);
-        return CharacterActiveResult.Success("The selected enemy was bound for one turn.");
+        return CharacterActiveResult.Success($"Binding applied for {ActiveEffect().ownerTurnTicks} owner-turn ticks.");
     }
 
     private bool TryFindAutomaticTarget(
@@ -112,7 +118,7 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
             int distance = CharacterBoardUtility.GetDistance(
                 caster.CurrentTileId,
                 enemy.Piece.CurrentTileId);
-            if (distance > 5 || distance >= nearestDistance) continue;
+            if (distance > ActiveRange || distance >= nearestDistance) continue;
 
             nearestDistance = distance;
             target = enemy;
@@ -125,6 +131,6 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
     {
         return base.CanSelectActiveTarget(targetPlayerId, targetPieceId) &&
             TryGetPiece(out var caster) && TryGetPiece(targetPlayerId, targetPieceId, out var target) &&
-            CharacterBoardUtility.IsWithinDistance(caster.CurrentTileId, target.Piece.CurrentTileId, 5);
+            CharacterBoardUtility.IsWithinDistance(caster.CurrentTileId, target.Piece.CurrentTileId, ActiveRange);
     }
 }

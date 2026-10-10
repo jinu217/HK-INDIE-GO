@@ -98,7 +98,7 @@ public static class CharacterBoardUtility
             {
                 if ((player.PlayerId == ownerPlayerId && piece.PieceId == sourcePieceId) ||
                     piece.State != PieceState.InBoard || piece.CurrentTileId == BoardTileId.None ||
-                    piece.Cc.Has(CcDefine.Parts) ||
+                    piece.Cc.Has(CcDefine.Robot_part) ||
                     (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId))
                     continue;
 
@@ -280,9 +280,9 @@ public static class CharacterBoardUtility
     public static void MoveStackAlongPath(PlayerController owner,
         PlayerRuntimeData.PieceRuntimeData caster, IReadOnlyList<BoardTileId> path,
         bool ignoresInstalledItems = false, bool isSimpleMove = true) =>
-        CcEffectService.Apply(caster, CcDefine.MovePath, value: ignoresInstalledItems ? 2 : 1,
+        CcEffectService.Apply(caster, CcDefine.Peace_move,
             sourcePlayerId: owner.PlayerId, sourcePieceId: caster.PieceId, path: path,
-            isSimpleMove: isSimpleMove);
+            isSimpleMove: isSimpleMove, ignoresInstalledItems: ignoresInstalledItems);
 
     private static Dictionary<BoardTileId, List<BoardTileId>> BuildGraph()
     {
@@ -447,7 +447,7 @@ public static class CcBoardEffects
         foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
         {
             if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
-                piece.Cc.Has(CcDefine.Parts))
+                piece.Cc.Has(CcDefine.Robot_part))
                 continue;
 
             piecesOnTile.Add(piece);
@@ -483,7 +483,7 @@ public static class CcBoardEffects
     public static void RefreshClones(PlayerController owner, PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (owner == null) return;
-        int count = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+        int count = piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
         if (count > 0 && !piece.IsStacked)
             piece.SetStackGroup(owner.RuntimeData.CreateStackGroupId(), piece.PieceId);
         else if (count == 0 && piece.IsStacked)
@@ -507,7 +507,7 @@ public static class CcBoardEffects
         foreach (var piece in owner.RuntimeData.Pieces)
             if (piece.State == PieceState.InBoard &&
                 (piece == leader || (leader.IsStacked && piece.StackGroupId == leader.StackGroupId)))
-                count += 1 + (piece.Cc.Get(CcDefine.Clone)?.Value ?? 0);
+                count += 1 + (piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0);
         return count;
     }
 
@@ -519,13 +519,11 @@ public static class CcBoardEffects
         foreach (var piece in owner.RuntimeData.Pieces)
         {
             if (piece != moved && (!moved.IsStacked || piece.StackGroupId != moved.StackGroupId)) continue;
-            var clone = piece.Cc.Get(CcDefine.Clone);
+            var clone = piece.Cc.Get(CcDefine.Stack_fake);
             if (clone == null) continue;
             int removed = Math.Min(clone.Value, excess);
-            clone.SetValue(clone.Value - removed);
+            CcEffectService.ConsumeClones(piece, removed);
             excess -= removed;
-            if (clone.Value == 0) CcEffectService.Remove(piece, CcDefine.Clone);
-            else RefreshClones(owner, piece);
             if (excess == 0) break;
         }
     }
@@ -543,7 +541,7 @@ public static class CcBoardEffects
             if (candidate.PieceId == candidate.StackLeaderPieceId) leader = candidate.PieceId;
         foreach (var candidate in remaining)
         {
-            if (remaining.Count == 1 && !candidate.Cc.Has(CcDefine.Clone)) candidate.ClearStack();
+            if (remaining.Count == 1 && !candidate.Cc.Has(CcDefine.Stack_fake)) candidate.ClearStack();
             else candidate.SetStackGroup(groupId, leader);
         }
     }
@@ -557,7 +555,7 @@ public sealed class CcCloneView : MonoBehaviour
     public void Refresh(PlayerRuntimeData.PieceRuntimeData piece, CharacterStatusBehaviour source)
     {
         Clear();
-        int count = piece.Cc.Get(CcDefine.Clone)?.Value ?? 0;
+        int count = piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
         for (int index = 0; index < count; index++)
         {
             var root = new GameObject($"SkillClone_{index + 1}");

@@ -159,7 +159,7 @@ public static class CharacterSkillRegistry
         CharacterStatusBehaviour behaviour = FindFirstForPlayer(playerId);
         return behaviour != null
             ? behaviour.ShouldGrantExtraThrow(result, defaultValue)
-            : CcEffectService.ResolveExtraThrow(playerId, result, defaultValue);
+            : defaultValue;
     }
 
     public static CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)

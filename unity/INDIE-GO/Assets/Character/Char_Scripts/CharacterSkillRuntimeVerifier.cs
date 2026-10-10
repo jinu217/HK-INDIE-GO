@@ -159,7 +159,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         var piece = players.ActivePlayers[0].RuntimeData.Pieces[0];
         string state = $"CasterSelection={button.IsSelectingCaster}, TargetSelection={button.IsSelectingTarget}, " +
             $"NormalInput={normalInput != null && normalInput.enabled}, " +
-            $"SP={CharacterSkillRegistry.GetSkillPoints(1)}, Clones={piece.Cc.Get(CcDefine.Clone)?.Value ?? 0}";
+            $"SP={CharacterSkillRegistry.GetSkillPoints(1)}, Clones={piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0}";
         if (state == lastUiState) return;
         lastUiState = state;
         Debug.Log("[CharacterVerification][UI State] " + state);
@@ -237,7 +237,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         protectedAlly.MoveTo(BoardTileId.Outer02);
         hero.MoveTo(BoardTileId.Outer01);
         CharacterSkillRegistry.NotifyPieceEnteredBoard(1, 0);
-        bool talismanApplied = protectedAlly.Cc.Has(CcDefine.TalismanProtection);
+        bool talismanApplied = protectedAlly.Cc.Has(CcDefine.protect);
         turns.CurrentTurn.currentPlayer = PlayerSlot.Player2;
         turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
         CharacterSkillRegistry.RequestSkillPoint(2, 5);
@@ -261,7 +261,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         CharacterActiveResult charge = CharacterSkillRegistry.TryUseActive(
             new CharacterActiveRequest(2, 0));
         Check("Hero ignores Orc path stun",
-            charge.Succeeded && !hero.Cc.Has(CcDefine.Stun) &&
+            charge.Succeeded && !hero.Cc.Has(CcDefine.Sturn) &&
             hero.State == PieceState.InBoard);
 
         yield return InstallMatchup("CHAR_009", "CHAR_005");
@@ -276,16 +276,16 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         CharacterActiveResult slash = CharacterSkillRegistry.TryUseActive(
             new CharacterActiveRequest(2, 0));
         Check("Samurai retirement converts Robot to Parts without capture bonus",
-            slash.Succeeded && robot.Cc.Has(CcDefine.Parts) &&
+            slash.Succeeded && robot.Cc.Has(CcDefine.Robot_part) &&
             robot.State == PieceState.InBoard);
         var rescuer = first.RuntimeData.Pieces[1];
         rescuer.MoveTo(BoardTileId.Outer01);
         bool revived = movement.TryMovePiece(1, 1, 1) &&
                        robot.State == PieceState.InBoard &&
-                       !robot.Cc.Has(CcDefine.Parts) &&
+                       !robot.Cc.Has(CcDefine.Robot_part) &&
                        robot.IsStacked && robot.StackLeaderPieceId == rescuer.PieceId;
         bool convertedAgain = CcEffectService.Apply(robot, CcDefine.Retire) &&
-                              robot.Cc.Has(CcDefine.Parts);
+                              robot.Cc.Has(CcDefine.Robot_part);
         Check("Robot revives only on its tile and can later become Parts again",
             revived && convertedAgain);
 
@@ -323,8 +323,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         var hong = first.RuntimeData.Pieces[0];
         hong.MoveTo(BoardTileId.Outer01);
         Check("Runtime clone capacity rejects a fourth clone",
-            CcEffectService.Apply(hong, CcDefine.Clone, value: 3) &&
-            !CcEffectService.Apply(hong, CcDefine.Clone));
+            CcEffectService.Apply(hong, CcDefine.Stack_fake, value: 3) &&
+            !CcEffectService.Apply(hong, CcDefine.Stack_fake));
 
         yield return InstallMatchup("CHAR_006", "CHAR_004");
         first = players.ActivePlayers[0]; second = players.ActivePlayers[1];
@@ -449,9 +449,9 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 secondAttacker.MoveTo(BoardTileId.Outer01);
                 bool formedBothStacks = movement.TryMovePiece(1, ally.PieceId, 2) &&
                                         movement.TryMovePiece(2, secondAttacker.PieceId, 1);
-                bool clonedLeader = CcEffectService.Apply(caster, CcDefine.Clone);
+                bool clonedLeader = CcEffectService.Apply(caster, CcDefine.Stack_fake);
                 bool cloneAndCargoCaptured = movement.TryMovePiece(2, enemy.PieceId, 1) &&
-                                             !caster.Cc.Has(CcDefine.Clone) &&
+                                             !caster.Cc.Has(CcDefine.Stack_fake) &&
                                              caster.State == PieceState.InBoard &&
                                              ally.State == PieceState.Waiting &&
                                              ally.CurrentCc == CcDefine.Retire;
@@ -487,10 +487,10 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 ok = Array.TrueForAll(table, entry => entry.Item1 != YutResult.BackDo);
                 break;
             case "CHAR_006":
-                ok = !CcEffectService.Apply(caster, CcDefine.Stun, 2) &&
+                ok = !CcEffectService.Apply(caster, CcDefine.Sturn, 2) &&
                      !CcEffectService.Apply(caster, CcDefine.Binding, 2) &&
                      !CcEffectService.Apply(caster, CcDefine.Silence, 2) &&
-                     !caster.Cc.Has(CcDefine.Stun) &&
+                     !caster.Cc.Has(CcDefine.Sturn) &&
                      !caster.Cc.Has(CcDefine.Binding) &&
                      !caster.Cc.Has(CcDefine.Silence) &&
                      CcEffectService.Apply(caster, CcDefine.Retire) &&
@@ -517,7 +517,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
             case "CHAR_009":
                 ok = skill.EvaluateIncomingCapture(capture) == CharacterCaptureDecision.Proceed &&
                      CcEffectService.Apply(caster, CcDefine.Retire) &&
-                     caster.Cc.Has(CcDefine.Parts) &&
+                     caster.Cc.Has(CcDefine.Robot_part) &&
                      caster.State == PieceState.InBoard &&
                      !skill.IsTargetable;
                 break;
@@ -765,23 +765,23 @@ internal static class CcArchitectureVerifier
             players.Add(p1); players.Add(p2);
             var piece = p1.RuntimeData.Pieces[0];
             piece.MoveTo(BoardTileId.Outer01);
-            Check("Legacy enum values preserved", (int)CcDefine.Stun == 1 && (int)CcDefine.Kill == 4);
-            manager.TryApplyPieceCc(1, 0, CcDefine.Stun, 2);
+            Check("Legacy enum values preserved", (int)CcDefine.Sturn == 1 && (int)CcDefine.Kill == 4);
+            manager.TryApplyPieceCc(1, 0, CcDefine.Sturn, 2);
             manager.TryApplyPieceCc(1, 0, CcDefine.Silence, 3);
-            manager.TryApplyPieceCc(1, 0, CcDefine.Protection, 4);
+            manager.TryApplyPieceCc(1, 0, CcDefine.protect, 4);
             Check("Manager stores all simultaneous effects", piece.Cc.Effects.Count == 3);
             Check("Stun blocks direct movement", !movement.TryMovePiece(1, 0, 1));
             CcEffectService.TickOwnerTurn(p1);
-            Check("CC decrements independently", piece.Cc.Get(CcDefine.Stun).RemainingOwnerTurns == 1 &&
+            Check("CC decrements independently", piece.Cc.Get(CcDefine.Sturn).RemainingOwnerTurns == 1 &&
                 piece.Cc.Get(CcDefine.Silence).RemainingOwnerTurns == 2);
             CcEffectService.TickOwnerTurn(p1);
-            Check("Stun expires without removing Silence or Protection", !piece.Cc.Has(CcDefine.Stun) &&
-                piece.Cc.Has(CcDefine.Silence) && piece.Cc.Has(CcDefine.Protection));
+            Check("Stun expires without removing Silence or Protection", !piece.Cc.Has(CcDefine.Sturn) &&
+                piece.Cc.Has(CcDefine.Silence) && piece.Cc.Has(CcDefine.protect));
             Check("Silence allows movement but blocks active", CcEffectService.CanMove(piece) &&
                 !CcEffectService.CanUseSkill(piece));
             Check("Protection prevents Kill before capture", !CcEffectService.Apply(piece, CcDefine.Kill) &&
                 piece.State == PieceState.InBoard);
-            CcEffectService.Remove(piece, CcDefine.Protection);
+            CcEffectService.Remove(piece, CcDefine.protect);
             CcEffectService.Apply(piece, CcDefine.Kill);
             Check("Capture resets position and replaces effects", piece.State == PieceState.Waiting &&
                 piece.CurrentTileId == BoardTileId.None && piece.Cc.Effects.Count == 1);
@@ -792,7 +792,7 @@ internal static class CcArchitectureVerifier
             piece.MoveTo(BoardTileId.Outer01);
             var carried = p1.RuntimeData.Pieces[1]; carried.MoveTo(BoardTileId.Outer01);
             piece.SetStackGroup(50, 0); carried.SetStackGroup(50, 0);
-            CcEffectService.Apply(piece, CcDefine.Parts, 3);
+            CcEffectService.Apply(piece, CcDefine.Robot_part, 3);
             Check("Parts leader detaches without stranding ally", !piece.IsStacked && !carried.IsStacked);
             piece.ClearCc(); piece.SetStackGroup(51, 0); carried.SetStackGroup(51, 0);
             CcEffectService.Apply(piece, CcDefine.Retire);
@@ -826,6 +826,13 @@ internal static class CcArchitectureVerifier
                 var skill = (CharacterStatusBehaviour)host.AddComponent(Type.GetType("CHAR_" + id + "_Status, Assembly-CSharp"));
                 var asset = AssetDatabase.LoadAssetAtPath<CharacterData>("Assets/Character/Char_Info/CHAR_" + id + "_SO.asset");
                 Check(id + " original SO loads", asset != null);
+                Check(id + " active IDs are configured", asset.active_Effects != null &&
+                    asset.active_Effects.Length > 0 &&
+                    Array.TrueForAll(asset.active_Effects, effect => effect != null &&
+                        effect.id != CcDefine.None && Enum.IsDefined(typeof(CcDefine), effect.id)));
+                Check(id + " passive IDs are configured", asset.passive_Effects != null &&
+                    Array.TrueForAll(asset.passive_Effects, effect => effect != null &&
+                        effect.id != CcDefine.None && Enum.IsDefined(typeof(CcDefine), effect.id)));
                 var data = UnityEngine.Object.Instantiate(asset);
                 data.visualModelPrefab = null;
                 data.active_CooldownTurns = 2; data.active_SkillPointCost = 1;
@@ -879,9 +886,9 @@ internal static class CcArchitectureVerifier
                 switch (id)
                 {
                     case "001_1":
-                        Check("DoOrMo stored on piece", piece.Cc.Has(CcDefine.DoOrMo));
+                        Check("DoOrMo stored on piece", piece.Cc.Has(CcDefine.MOorDO));
                         var table = skill.ModifyYutProbability(new[] { (YutResult.Gae, 100f) });
-                        Check("DoOrMo consumed on next throw", table.Length == 2 && !piece.Cc.Has(CcDefine.DoOrMo));
+                        Check("DoOrMo consumed on next throw", table.Length == 2 && !piece.Cc.Has(CcDefine.MOorDO));
                         skill.ShouldGrantExtraThrow(YutResult.Do, false);
                         Check("DoOrMo remains phase-eligible for a later bonus throw",
                             skill.IsActiveUsableInCurrentPhase());
@@ -908,30 +915,30 @@ internal static class CcArchitectureVerifier
                             skill.ModifyMoveCount(new CharacterMoveRequest(1, 0, 3, false)) == 3);
                         break;
                     case "003":
-                        Check("Clone stored and stacked", piece.Cc.Get(CcDefine.Clone)?.Value == 1 && piece.IsStacked);
+                        Check("Clone stored and stacked", piece.Cc.Get(CcDefine.Stack_fake)?.Value == 1 && piece.IsStacked);
                         Check("Clone absorbs capture without bonus", skill.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.ConsumeCloneWithoutBonus &&
-                            !piece.Cc.Has(CcDefine.Clone) && !piece.IsStacked);
-                        CcEffectService.Apply(piece, CcDefine.Clone, value: 3);
+                            !piece.Cc.Has(CcDefine.Stack_fake) && !piece.IsStacked);
+                        CcEffectService.Apply(piece, CcDefine.Stack_fake, value: 3);
                         Check("Clone cannot exceed three carried units",
-                            !CcEffectService.Apply(piece, CcDefine.Clone) &&
-                            piece.Cc.Get(CcDefine.Clone)?.Value == 3);
-                        CcEffectService.Remove(piece, CcDefine.Clone);
+                            !CcEffectService.Apply(piece, CcDefine.Stack_fake) &&
+                            piece.Cc.Get(CcDefine.Stack_fake)?.Value == 3);
+                        CcEffectService.Remove(piece, CcDefine.Stack_fake);
                         var cloneCargo = p1.RuntimeData.Pieces[1];
                         cloneCargo.MoveTo(piece.CurrentTileId);
                         int cloneGroup = p1.RuntimeData.CreateStackGroupId();
                         piece.SetStackGroup(cloneGroup, piece.PieceId);
                         cloneCargo.SetStackGroup(cloneGroup, piece.PieceId);
                         Check("Clone capacity includes real cargo",
-                            CcEffectService.Apply(piece, CcDefine.Clone, value: 2) &&
-                            !CcEffectService.Apply(piece, CcDefine.Clone));
+                            CcEffectService.Apply(piece, CcDefine.Stack_fake, value: 2) &&
+                            !CcEffectService.Apply(piece, CcDefine.Stack_fake));
                         var joiningCargo = p1.RuntimeData.Pieces[2];
                         joiningCargo.MoveTo(piece.CurrentTileId);
                         joiningCargo.SetStackGroup(cloneGroup, piece.PieceId);
                         CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 2,
                             BoardTileId.Outer02, piece.CurrentTileId, new[] { piece.CurrentTileId }));
                         Check("Real cargo joining replaces excess clones",
-                            piece.Cc.Get(CcDefine.Clone)?.Value == 1 && joiningCargo.IsStacked);
+                            piece.Cc.Get(CcDefine.Stack_fake)?.Value == 1 && joiningCargo.IsStacked);
                         break;
                     case "004":
                         Check("Hidden blocks targeting and capture", !skill.IsTargetable &&
@@ -951,8 +958,8 @@ internal static class CcArchitectureVerifier
                         break;
                     case "007":
                         Check("Charge stuns every enemy on its path",
-                            enemy.Cc.Has(CcDefine.Stun) &&
-                            p2.RuntimeData.Pieces[1].Cc.Has(CcDefine.Stun));
+                            enemy.Cc.Has(CcDefine.Sturn) &&
+                            p2.RuntimeData.Pieces[1].Cc.Has(CcDefine.Sturn));
                         CcEffectService.TickOwnerTurn(p2);
                         Check("Charge stun blocks for one full turn", !movement.TryMovePiece(2, 0, 1));
                         CcEffectService.TickOwnerTurn(p2);
@@ -977,29 +984,29 @@ internal static class CcArchitectureVerifier
                             .Invoke(skill, new object[] { new CharacterActiveRequest(1, 0, 2, 1), piece });
                         Check("Binding selected cargo blocks its stack leader",
                             enemy.Cc.Has(CcDefine.Binding) && !movement.TryMovePiece(2, 0, 1));
-                        CcEffectService.Apply(enemy, CcDefine.Hidden, 3);
+                        CcEffectService.Apply(enemy, CcDefine.Stealth, 3);
                         Check("Hidden leader makes carried target untargetable",
                             !skill.CanSelectActiveTarget(2, 1));
                         break;
                     case "009":
                         Check("Self destruct retires enemy and converts robot to Parts",
-                            piece.State == PieceState.InBoard && piece.Cc.Has(CcDefine.Parts) &&
+                            piece.State == PieceState.InBoard && piece.Cc.Has(CcDefine.Robot_part) &&
                             enemy.State == PieceState.Waiting);
                         Check("Parts conversion stored in CC", skill.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) ==
-                            CharacterCaptureDecision.Prevent && piece.Cc.Has(CcDefine.Parts));
+                            CharacterCaptureDecision.Prevent && piece.Cc.Has(CcDefine.Robot_part));
                         Check("Parts cannot move/use skills", !movement.TryMovePiece(1, 0, 1) && !CcEffectService.CanUseSkill(piece));
                         var ally = p1.RuntimeData.Pieces[1]; ally.MoveTo(BoardTileId.Outer02);
-                        CcEffectService.Apply(ally, CcDefine.Clone, value: 3);
+                        CcEffectService.Apply(ally, CcDefine.Stack_fake, value: 3);
                         ally.MoveTo(BoardTileId.Outer01);
                         CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer03,
                             BoardTileId.Outer01, new[] { BoardTileId.Outer01 }));
                         Check("Ally revives and carries Parts on the same tile",
-                            !piece.Cc.Has(CcDefine.Parts) &&
+                            !piece.Cc.Has(CcDefine.Robot_part) &&
                             piece.CurrentTileId == BoardTileId.Outer01 &&
                             piece.IsStacked && piece.StackLeaderPieceId == ally.PieceId);
                         Check("Parts revival respects the clone and cargo limit",
-                            ally.Cc.Get(CcDefine.Clone)?.Value == 2 &&
+                            ally.Cc.Get(CcDefine.Stack_fake)?.Value == 2 &&
                             CcBoardEffects.CountStackUnits(p1, ally) == 4);
                         break;
                     case "010": Check("Retreat moves one tile back", piece.CurrentTileId == BoardTileId.None); break;
@@ -1058,31 +1065,31 @@ internal static class CcArchitectureVerifier
                         break;
                     case "002":
                         skill.OnPieceEnteredBoard();
-                        Check("Talisman stored on nearest ally with correct source", passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            passiveAlly.Cc.Get(CcDefine.TalismanProtection).SourcePieceId == 0);
+                        Check("Talisman stored on nearest ally with correct source", passiveAlly.Cc.Has(CcDefine.protect) &&
+                            passiveAlly.Cc.Get(CcDefine.protect).SourcePieceId == 0);
                         //수정: 수신 대상은 자신과 업힌 말을 제외한 필드 위 아군 한 말입니다.
-                        Check("Talisman does not protect its own source", !piece.Cc.Has(CcDefine.TalismanProtection));
+                        Check("Talisman does not protect its own source", !piece.Cc.Has(CcDefine.protect));
                         var joiningAlly = p1.RuntimeData.Pieces[2];
                         joiningAlly.MoveTo(BoardTileId.Outer02);
                         Check("Talisman does not spread to an ally joining the stack",
                             movement.TryMovePiece(1, 2, 1) &&
-                            !joiningAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                            !joiningAlly.Cc.Has(CcDefine.protect) &&
+                            passiveAlly.Cc.Has(CcDefine.protect));
                         Check("Talisman rejects direct application to a carried piece",
-                            !CcEffectService.Apply(joiningAlly, CcDefine.TalismanProtection, 1,
-                                sourcePlayerId: 1, sourcePieceId: 0));
+                            !skill.TryApplyPassiveEffect(joiningAlly));
                         Check("Talisman protects for the whole turn", CharacterSkillRegistry.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 1, 1, true)) == CharacterCaptureDecision.Prevent &&
                             CharacterSkillRegistry.EvaluateIncomingCapture(
                                 new CharacterCaptureRequest(2, 0, 1, 1, 1, true)) == CharacterCaptureDecision.Prevent &&
-                            !CcEffectService.Apply(passiveAlly, CcDefine.Stun, 1) &&
+                            !CcEffectService.Apply(passiveAlly, CcDefine.Sturn, 1) &&
                             !CcEffectService.Apply(passiveAlly, CcDefine.Retire) &&
                             passiveAlly.State == PieceState.InBoard);
-                        CcEffectService.Apply(passiveAlly, CcDefine.Protection, turns: 3);
+                        CcEffectService.Apply(passiveAlly, CcDefine.protect, turns: 3, charges: 1);
                         CcEffectService.TickOwnerTurn(p1);
                         Check("Talisman expires without shortening another protection",
-                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            passiveAlly.Cc.Get(CcDefine.Protection)?.RemainingOwnerTurns == 2);
+                            passiveAlly.Cc.Get(CcDefine.protect)?.Charges == 1 &&
+                            passiveAlly.Cc.Get(CcDefine.protect)?.RemainingOwnerTurns == 2 &&
+                            passiveAlly.Cc.Effects.Count == 1);
 
                         p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
                         skill.OnPieceRetired();
@@ -1090,8 +1097,8 @@ internal static class CcArchitectureVerifier
                         Check("First entry onto an ally grants only that ally a talisman",
                             movement.TryMovePiece(1, 0, 1) && piece.IsStacked &&
                             piece.StackLeaderPieceId == passiveAlly.PieceId &&
-                            passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            !piece.Cc.Has(CcDefine.TalismanProtection));
+                            passiveAlly.Cc.Has(CcDefine.protect) &&
+                            !piece.Cc.Has(CcDefine.protect));
 
                         p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
                         skill.OnPieceRetired();
@@ -1103,17 +1110,17 @@ internal static class CcArchitectureVerifier
                         p1.RuntimeData.Pieces[3].MoveTo(BoardTileId.Outer04);
                         skill.OnPieceEnteredBoard();
                         Check("Nearest selection skips cargo and chooses the nearby leader",
-                            joiningAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            !p1.RuntimeData.Pieces[3].Cc.Has(CcDefine.TalismanProtection) &&
-                            !piece.Cc.Has(CcDefine.TalismanProtection));
+                            joiningAlly.Cc.Has(CcDefine.protect) &&
+                            !passiveAlly.Cc.Has(CcDefine.protect) &&
+                            !p1.RuntimeData.Pieces[3].Cc.Has(CcDefine.protect) &&
+                            !piece.Cc.Has(CcDefine.protect));
 
                         p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
                         skill.OnPieceRetired();
                         piece.MoveTo(BoardTileId.Outer01);
                         passiveAlly.SetGoal();
                         joiningAlly.MoveTo(BoardTileId.Outer01);
-                        CcEffectService.Apply(joiningAlly, CcDefine.Parts, 3);
+                        CcEffectService.Apply(joiningAlly, CcDefine.Robot_part, 3);
                         var missingTileAlly = p1.RuntimeData.Pieces[3];
                         missingTileAlly.State = PieceState.InBoard;
                         enemy.MoveTo(BoardTileId.Outer01);
@@ -1122,39 +1129,36 @@ internal static class CcArchitectureVerifier
                                 piece.CurrentTileId, turns.Settings).HasValue);
                         skill.OnPieceEnteredBoard();
                         Check("No eligible ally never falls back to self",
-                            !piece.Cc.Has(CcDefine.TalismanProtection) &&
-                            !enemy.Cc.Has(CcDefine.TalismanProtection));
+                            !piece.Cc.Has(CcDefine.protect) &&
+                            !enemy.Cc.Has(CcDefine.protect));
                         Check("Talisman rejects self, goal and off-board targets",
-                            !CcEffectService.Apply(piece, CcDefine.TalismanProtection, 1,
-                                sourcePlayerId: 1, sourcePieceId: 0) &&
-                            !CcEffectService.Apply(passiveAlly, CcDefine.TalismanProtection, 1,
-                                sourcePlayerId: 1, sourcePieceId: 0) &&
-                            !CcEffectService.Apply(missingTileAlly, CcDefine.TalismanProtection, 1,
-                                sourcePlayerId: 1, sourcePieceId: 0));
+                            !skill.TryApplyPassiveEffect(piece) &&
+                            !skill.TryApplyPassiveEffect(passiveAlly) &&
+                            !skill.TryApplyPassiveEffect(missingTileAlly));
                         passiveAlly.Reset();
                         skill.OnPieceEnteredBoard();
                         Check("Waiting ally is not a talisman target",
-                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                            !passiveAlly.Cc.Has(CcDefine.protect));
                         passiveAlly.MoveTo(BoardTileId.Outer03);
                         skill.OnPieceEnteredBoard();
                         Check("Missing target does not consume passive availability",
-                            passiveAlly.Cc.Has(CcDefine.TalismanProtection));
-                        CcEffectService.Remove(passiveAlly, CcDefine.TalismanProtection);
+                            passiveAlly.Cc.Has(CcDefine.protect));
+                        CcEffectService.Remove(passiveAlly, CcDefine.protect);
                         skill.OnPieceEnteredBoard();
                         Check("Passive does not repeat before retirement",
-                            !passiveAlly.Cc.Has(CcDefine.TalismanProtection));
+                            !passiveAlly.Cc.Has(CcDefine.protect));
                         CcEffectService.Apply(piece, CcDefine.Retire);
                         Check("Retirement lets the next board entry use the passive again",
                             movement.TryMovePiece(1, 0, 1) &&
-                            passiveAlly.Cc.Has(CcDefine.TalismanProtection) &&
-                            !piece.Cc.Has(CcDefine.TalismanProtection));
+                            passiveAlly.Cc.Has(CcDefine.protect) &&
+                            !piece.Cc.Has(CcDefine.protect));
                         break;
                     case "003":
                         Check("Solo Hong uses ordinary capture", skill.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Proceed);
                         break;
                     case "004":
-                        Check("Charm passive uses Protection CC", skill.EvaluateIncomingCapture(
+                        Check("Charm passive blocks capture without granting protect", skill.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Prevent &&
                             skill.EvaluateIncomingCapture(new CharacterCaptureRequest(2, 0, 1, 0, 1, true)) == CharacterCaptureDecision.Proceed);
                         break;
@@ -1170,7 +1174,7 @@ internal static class CcArchitectureVerifier
                         break;
                     case "006":
                         Check("Hero ignores stun, binding and silence but remains capturable",
-                            !CcEffectService.Apply(piece, CcDefine.Stun, 2) &&
+                            !CcEffectService.Apply(piece, CcDefine.Sturn, 2) &&
                             !CcEffectService.Apply(piece, CcDefine.Binding, 2) &&
                             !CcEffectService.Apply(piece, CcDefine.Silence, 2) &&
                             skill.EvaluateIncomingCapture(
@@ -1292,11 +1296,13 @@ internal sealed class PlayerCcInspector : Editor
             EditorGUILayout.LabelField($"Player {player.PlayerId}", EditorStyles.boldLabel);
             foreach (var piece in player.RuntimeData.Pieces)
             {
-                EditorGUILayout.LabelField($"Piece {piece.PieceId} / {piece.State}", $"CC: {piece.CurrentCc}");
+                EditorGUILayout.LabelField($"Piece {piece.PieceId} / {piece.State}",
+                    $"CC: {CcEffectService.GetSkillId(piece.CurrentCc)}");
                 using (new EditorGUI.IndentLevelScope())
                 foreach (var effect in piece.Cc.Effects)
-                    EditorGUILayout.LabelField(effect.Type.ToString(),
+                    EditorGUILayout.LabelField(effect.SkillId,
                         $"Turns: {effect.RemainingOwnerTurns}, Value: {effect.Value}, " +
+                        $"Charges: {effect.Charges}, " +
                         $"Source: {effect.SourcePlayerId}/{effect.SourcePieceId}");
             }
         }

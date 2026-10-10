@@ -5,9 +5,7 @@ using YutArena.InGame;
 
 public sealed class CHAR_006_Status : CharacterStatusBehaviour
 {
-    // Capture and retirement still work; the existing harmful status effects do not.
-    public override bool IsImmuneToEffect(CcDefine type) =>
-        type == CcDefine.Stun || type == CcDefine.Binding || type == CcDefine.Silence;
+    // 면역 ID는 CharacterData.passive_Immunities에서 읽습니다.
 
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
@@ -16,9 +14,10 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Sword Aura requires a piece on the board.");
 
-        BoardTileId forward = CharacterBoardUtility.GetNextForwardTile(
-            caster.CurrentTileId, caster.PreviousTileId, true);
-        var affectedTiles = new HashSet<BoardTileId> { caster.CurrentTileId, forward };
+        if (ActiveEffect(0) == null || ActiveEffect(1) == null)
+            return CharacterActiveResult.Failure("Sword Aura effect settings are missing.");
+        var affectedTiles = new HashSet<BoardTileId>(CharacterBoardUtility.GetForwardPath(caster, ActiveRange))
+            { caster.CurrentTileId };
         int retiredCount = 0;
         foreach (CharacterPieceReference enemy in
                  CharacterBoardUtility.GetEnemiesOnBoard(Players, PlayerId))
@@ -27,13 +26,13 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
 
             // Sword Aura is a retirement effect, so capture-only defenses and
             // capture bonus throws do not apply.
-            CcBoardEffects.Retire(enemy, false);
+            ApplyActiveEffect(target: enemy.Piece);
             if (enemy.Piece.State == PieceState.Waiting)
                 retiredCount++;
         }
 
-        for (int i = 0; i < retiredCount; i++)
-            Turns.GrantSkillExtraThrow();
+        if (retiredCount > 0)
+            ApplyActiveEffect(1, amount: retiredCount * ActiveEffect(1).amount);
 
         Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_006_Status)} retired {retiredCount} " +

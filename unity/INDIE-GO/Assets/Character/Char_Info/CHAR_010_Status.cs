@@ -17,9 +17,12 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
             return base.ModifyMoveCount(request);
 
         int carriedPieceCount = GetStackPieceCount(caster) - 1;
-        if (carriedPieceCount > 0 && TryStartPassiveCooldown())
+        if (carriedPieceCount > 0 && IsPassiveReady)
         {
-            pendingExtraSteps = request.MoveCount < 0 ? -carriedPieceCount : carriedPieceCount;
+            var effect = PassiveEffect();
+            if (effect == null || !effect.IsValid) return base.ModifyMoveCount(request);
+            TryStartPassiveCooldown();
+            pendingExtraSteps = (request.MoveCount < 0 ? -carriedPieceCount : carriedPieceCount) * effect.amount;
             pendingStartingTile = caster.CurrentTileId;
             pendingLastMovingPieceId = caster.PieceId;
             foreach (var piece in Owner.RuntimeData.Pieces)
@@ -42,7 +45,7 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
         int steps = pendingExtraSteps;
         pendingExtraSteps = 0;
         if (TryGetPiece(out var piece) && piece.State == PieceState.InBoard)
-            ApplyEffect(CcDefine.Move, value: steps);
+            ApplyPassiveEffect(amount: steps);
     }
 
     public override void OnPieceRetired()
@@ -57,7 +60,10 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
         if (caster.State != PieceState.InBoard)
             return CharacterActiveResult.Failure("Tactical Retreat requires a piece on the board.");
 
-        int steps = GetStackPieceCount(caster);
+        var effect = ActiveEffect();
+        if (effect == null || effect.amount <= 0)
+            return CharacterActiveResult.Failure("Retreat effect settings are missing.");
+        int steps = GetStackPieceCount(caster) * effect.amount;
         var path = new List<BoardTileId>();
         BoardTileId current = caster.CurrentTileId;
         BoardTileId previous = caster.PreviousTileId;
@@ -75,8 +81,7 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
             previous = current;
             current = next;
         }
-        if (path.Count == 0 || !CcEffectService.Apply(caster, CcDefine.MovePath,
-                sourcePlayerId: PlayerId, sourcePieceId: PieceId, path: path))
+        if (path.Count == 0 || !ApplyActiveEffect(path: path))
             return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
 
         UnityEngine.Debug.Log(

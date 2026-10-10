@@ -6,33 +6,32 @@ using YutArena.Managers;
 
 namespace YutArena.InGame
 {
-    // 기존 저장 값 0~4는 변경하지 않습니다. CC에는 버프와 즉시 효과도 포함합니다.
+    // 테이블 ID를 사용하고 기존 직렬화 숫자/외부 잡기 계약은 유지합니다.
+    // ()_Move_plus(n)은 Move_plus + amount로 표현합니다. 미사용 번호는 재사용하지 않습니다.
     public enum CcDefine
     {
         None = 0,
-        Stun = 1,
-        Silence = 2,
+        Sturn = 1, // 표의 ID 철자 그대로
+        Silence = 2, // 확장 ID: 기존 침묵/면역 계약
         Retire = 3,
-        Kill = 4,
-        Protection = 5,
-        Hidden = 6,
-        Clone = 7,
-        Parts = 8,
-        DoubleMove = 9,
-        MoveBonus = 10,
-        DoOrMo = 11,
-        RemoveBackDo = 12,
-        ExtraThrow = 13,
-        ReverseExtraThrow = 14,
-        SkillPoint = 15,
-        Move = 16,
-        MovePath = 17,
-        Mark = 18,
-        WindPath = 19,
-        LimitCapture = 20,
-        YutMoExtraThrow = 21,
-        TalismanProtection = 22,
-        Binding = 23
+        Capture = 4,
+        Kill = Capture, // 외부 SetCaptured/턴 매니저 호환 이름
+        protect = 5,
+        Stealth = 6,
+        Stack_fake = 7,
+        Robot_part = 8,
+        Parts = Robot_part, // 외부 부품 조회 호환 이름
+        Move_scale = 9, // 확장 ID: 특정 윷 결과의 이동 배율
+        MOorDO = 11,
+        No_back = 12,
+        Get_throw = 13,
+        Get_point = 15,
+        Move_plus = 16,
+        Peace_move = 17,
+        WindPath = 19, // 확장 ID: 표에 ID가 없는 바람길 설치 정보
+        Binding = 23,
+        Charm = 24,
+        Move_end = 25
     }
 }
 
@@ -44,24 +43,28 @@ namespace YutArena.InGame
         [SerializeField] private CcDefine type;
         [SerializeField] private int remainingOwnerTurns;
         [SerializeField] private int value;
+        [SerializeField] private int charges;
         [SerializeField] private int sourcePlayerId;
         [SerializeField] private int sourcePieceId;
         [SerializeField] private BoardTileId tile;
         [SerializeField] private List<BoardTileId> path;
         public CcDefine Type => type;
+        public string SkillId => CcEffectService.GetSkillId(type);
         // 0: 소비/명시적 해제까지 유지. 양수: 대상 소유자의 턴 시작마다 감소.
         public int RemainingOwnerTurns => remainingOwnerTurns;
         public int Value => value;
+        public int Charges => charges; // -1=기간 동안 무제한, 양수=남은 방어 횟수
         public int SourcePlayerId => sourcePlayerId;
         public int SourcePieceId => sourcePieceId;
         public BoardTileId Tile => tile;
         public IReadOnlyList<BoardTileId> Path => path;
         internal CcState(CcDefine type, int turns, int value, int sourcePlayerId,
-            int sourcePieceId, BoardTileId tile, IReadOnlyList<BoardTileId> path)
+            int sourcePieceId, BoardTileId tile, IReadOnlyList<BoardTileId> path, int charges)
         {
             this.type = type;
             remainingOwnerTurns = turns;
             this.value = value;
+            this.charges = charges;
             this.sourcePlayerId = sourcePlayerId;
             this.sourcePieceId = sourcePieceId;
             this.tile = tile;
@@ -69,6 +72,7 @@ namespace YutArena.InGame
         }
         internal void Tick() { if (remainingOwnerTurns > 0) remainingOwnerTurns--; }
         internal void SetValue(int amount) { value = amount; }
+        internal void ConsumeCharge() { if (charges > 0) charges--; }
     }
 
     // PlayerManager -> PlayerController.RuntimeData.Pieces[n].Cc에 실제 상태를 저장합니다.
@@ -87,8 +91,8 @@ namespace YutArena.InGame
         {
             get
             {
-                foreach (var type in new[] { CcDefine.Kill, CcDefine.Retire, CcDefine.Stun,
-                    CcDefine.Binding, CcDefine.Silence, CcDefine.Parts })
+                foreach (var type in new[] { CcDefine.Kill, CcDefine.Retire, CcDefine.Sturn,
+                    CcDefine.Binding, CcDefine.Silence, CcDefine.Robot_part })
                     if (Has(type)) return type;
                 return effects.Count == 0 ? CcDefine.None : effects[0].Type;
             }
@@ -106,6 +110,8 @@ namespace YutArena.InGame
     {
         // 즉시 효과도 Added -> 실행 -> Removed 순서로 알려 결과 UI/VFX가 구독할 수 있습니다.
         public static event Action<PlayerRuntimeData.PieceRuntimeData, CcState, bool> Changed;
+        public static string GetSkillId(CcDefine type) => type == CcDefine.Capture ? nameof(CcDefine.Capture) :
+            type == CcDefine.Robot_part ? nameof(CcDefine.Robot_part) : type.ToString();
         private static int windMoveDepth;
         internal static bool IsResolvingWindMove => windMoveDepth > 0;
 
@@ -115,13 +121,13 @@ namespace YutArena.InGame
         public static bool CanMove(PlayerRuntimeData.PieceRuntimeData piece) =>
             piece != null && piece.State != PieceState.Goal &&
             (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId) &&
-            !piece.Cc.Has(CcDefine.Stun) && !piece.Cc.Has(CcDefine.Binding) &&
-            !piece.Cc.Has(CcDefine.Parts);
+            !piece.Cc.Has(CcDefine.Sturn) && !piece.Cc.Has(CcDefine.Binding) &&
+            !piece.Cc.Has(CcDefine.Robot_part);
 
         public static bool CanUseSkill(PlayerRuntimeData.PieceRuntimeData piece) =>
             piece != null && piece.State != PieceState.Goal &&
-            !piece.Cc.Has(CcDefine.Stun) && !piece.Cc.Has(CcDefine.Silence) &&
-            !piece.Cc.Has(CcDefine.Parts) &&
+            !piece.Cc.Has(CcDefine.Sturn) && !piece.Cc.Has(CcDefine.Silence) &&
+            !piece.Cc.Has(CcDefine.Robot_part) &&
             (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId);
 
         internal static PlayerRuntimeData.PieceRuntimeData StackLeader(
@@ -139,29 +145,23 @@ namespace YutArena.InGame
         public static bool IsTargetable(PlayerRuntimeData.PieceRuntimeData piece)
         {
             piece = StackLeader(piece);
-            return piece != null && !piece.Cc.Has(CcDefine.Hidden) && !piece.Cc.Has(CcDefine.Parts);
+            return piece != null && !piece.Cc.Has(CcDefine.Stealth) && !piece.Cc.Has(CcDefine.Robot_part);
         }
 
         public static bool Apply(PlayerRuntimeData.PieceRuntimeData piece, CcDefine type,
             int turns = 0, int value = 1, int sourcePlayerId = -1, int sourcePieceId = -1,
-            IReadOnlyList<BoardTileId> path = null, bool isSimpleMove = true)
+            IReadOnlyList<BoardTileId> path = null, bool isSimpleMove = true,
+            int charges = -1, bool ignoresInstalledItems = false)
         {
             if (piece == null) return false;
             if (!Enum.IsDefined(typeof(CcDefine), type)) throw new ArgumentOutOfRangeException(nameof(type));
             if (turns < 0) throw new ArgumentOutOfRangeException(nameof(turns));
-            if (type != CcDefine.None && type != CcDefine.Move && value <= 0)
+            if (type != CcDefine.None && type != CcDefine.Move_plus && value <= 0)
                 throw new ArgumentOutOfRangeException(nameof(value));
+            if (charges < -1 || charges == 0) throw new ArgumentOutOfRangeException(nameof(charges));
             if (type == CcDefine.None) { Clear(piece); return true; }
 
             PlayerController owner = FindOwner(piece);
-            //수정: 부적 수신은 필드의 독립 말/리더만 가능하며 발동한 말은 제외합니다.
-            if (type == CcDefine.TalismanProtection &&
-                (piece.State != PieceState.InBoard || piece.CurrentTileId == BoardTileId.None ||
-                 piece.Cc.Has(CcDefine.Parts) ||
-                 (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId) ||
-                 (owner != null && owner.PlayerId == sourcePlayerId && piece.PieceId == sourcePieceId)))
-                return false;
-
             int effectivePieceId = piece.IsStacked ? piece.StackLeaderPieceId : piece.PieceId;
             if (owner != null &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, effectivePieceId, out var status) &&
@@ -169,39 +169,38 @@ namespace YutArena.InGame
                 return false;
 
             // 보호는 잡기뿐 아니라 직접 부여되는 해로운 상태이상도 막습니다.
-            if ((type == CcDefine.Stun || type == CcDefine.Binding ||
+            if ((type == CcDefine.Sturn || type == CcDefine.Binding ||
                  type == CcDefine.Silence ||
                  type == CcDefine.Retire || type == CcDefine.Kill ||
-                 type == CcDefine.Parts || type == CcDefine.Mark) &&
-                (piece.Cc.Has(CcDefine.TalismanProtection) || ConsumeProtection(piece)))
+                 type == CcDefine.Robot_part) && ConsumeGuard(piece, CcDefine.protect))
                 return false;
 
             if (type == CcDefine.Retire && owner != null &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var targetStatus) &&
-                targetStatus is CHAR_009_Status robot && robot.TryEnterParts(piece))
+                targetStatus.TryReplaceRetire(piece))
                 return true;
 
-            bool needsOwner = type == CcDefine.Clone || type == CcDefine.ExtraThrow ||
-                type == CcDefine.SkillPoint || type == CcDefine.Move || type == CcDefine.MovePath;
+            bool needsOwner = type == CcDefine.Stack_fake || type == CcDefine.Get_throw ||
+                type == CcDefine.Get_point || type == CcDefine.Move_plus || IsPathMove(type);
             if (needsOwner && owner == null) return false;
-            if (type == CcDefine.Clone &&
+            if (type == CcDefine.Stack_fake &&
                 (piece.State != PieceState.InBoard || CcBoardEffects.CountStackUnits(owner, piece) + value > 4))
                 return false;
             TestTurnManager turnsManager = null;
             PieceMovementManager movement = null;
-            if (type == CcDefine.ExtraThrow)
+            if (type == CcDefine.Get_throw)
             {
                 turnsManager = UnityEngine.Object.FindFirstObjectByType<TestTurnManager>();
                 if (turnsManager == null || turnsManager.CurrentTurn == null ||
                     (int)turnsManager.CurrentTurn.currentPlayer != owner.PlayerId ||
                     turnsManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return false;
             }
-            if (type == CcDefine.Move || type == CcDefine.MovePath)
+            if (type == CcDefine.Move_plus || IsPathMove(type))
             {
                 if (!CanMove(piece) || value == 0) return false;
-                if (type == CcDefine.MovePath && (path == null || path.Count == 0)) return false;
+                if (IsPathMove(type) && (path == null || path.Count == 0)) return false;
                 movement = UnityEngine.Object.FindFirstObjectByType<PieceMovementManager>();
-                if (type == CcDefine.Move && movement == null) return false;
+                if (type == CcDefine.Move_plus && movement == null) return false;
             }
             if (type == CcDefine.Kill || type == CcDefine.Retire)
             {
@@ -210,34 +209,35 @@ namespace YutArena.InGame
                 piece.ApplyCapturedPosition();
                 CcBoardEffects.NormalizeStack(owner, oldGroup);
             }
-            else if (type != CcDefine.Mark)
-            {
-                CcState previous = piece.Cc.Get(type);
-                if (type == CcDefine.Clone && previous != null) value += previous.Value;
-                if (previous != null && (type == CcDefine.Protection ||
-                    type == CcDefine.TalismanProtection || type == CcDefine.Stun ||
-                    type == CcDefine.Binding ||
-                    type == CcDefine.Silence || type == CcDefine.Hidden))
-                {
-                    turns = previous.RemainingOwnerTurns == 0 || turns == 0
-                        ? 0 : Math.Max(turns, previous.RemainingOwnerTurns);
-                    value = Math.Max(value, previous.Value);
-                }
-                Remove(piece, type);
-            }
             else
             {
-                foreach (CcState mark in Snapshot(piece))
-                    if (mark.Type == type && mark.SourcePlayerId == sourcePlayerId &&
-                        mark.SourcePieceId == sourcePieceId) Remove(piece, mark);
+                CcState previous = piece.Cc.Get(type);
+                // 보호는 출처/횟수 유형별로 따로 유지합니다. 기간 보호와 일회성 보호가 덮어쓰지 않습니다.
+                if (type == CcDefine.protect || type == CcDefine.Charm)
+                    previous = new List<CcState>(piece.Cc.Effects).Find(effect =>
+                        effect.Type == type && effect.SourcePlayerId == sourcePlayerId &&
+                        effect.SourcePieceId == sourcePieceId && (effect.Charges < 0) == (charges < 0));
+                if (previous != null)
+                {
+                    if (type == CcDefine.Stack_fake) value += previous.Value;
+                    else
+                    {
+                        turns = previous.RemainingOwnerTurns == 0 || turns == 0
+                            ? 0 : Math.Max(turns, previous.RemainingOwnerTurns);
+                        value = Math.Max(value, previous.Value);
+                        if (charges > 0) charges = Math.Max(charges, previous.Charges);
+                    }
+                    Remove(piece, previous);
+                }
             }
 
             var state = new CcState(type, turns, value, sourcePlayerId, sourcePieceId,
-                piece.CurrentTileId, path);
+                piece.CurrentTileId, path, charges);
             piece.Cc.Add(state);
             Changed?.Invoke(piece, state, true);
             Debug.Log($"[CC][Apply] Player={owner?.PlayerId}, Piece={piece.PieceId}, " +
-                $"Effect={type}, Turns={turns}, Value={value}, Source={sourcePlayerId}/{sourcePieceId}");
+                $"Effect={GetSkillId(type)}, Turns={turns}, Value={value}, Charges={charges}, " +
+                $"Source={sourcePlayerId}/{sourcePieceId}");
             bool succeeded = true;
             switch (type)
             {
@@ -245,19 +245,23 @@ namespace YutArena.InGame
                 case CcDefine.Retire:
                     if (owner != null) CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, piece.PieceId);
                     break;
-                case CcDefine.Parts:
+                case CcDefine.Robot_part:
                     int oldGroup = piece.StackGroupId;
                     piece.ClearStack();
                     CcBoardEffects.NormalizeStack(owner, oldGroup);
                     break;
-                case CcDefine.Clone: CcBoardEffects.RefreshClones(owner, piece); break;
-                case CcDefine.ExtraThrow: turnsManager.GrantSkillExtraThrow(); break;
-                case CcDefine.SkillPoint: CharacterSkillRegistry.RequestSkillPoint(owner.PlayerId, value); break;
-                case CcDefine.Move: succeeded = movement.TryMovePiece(owner.PlayerId, piece.PieceId, value, true); break;
-                case CcDefine.MovePath: CcBoardEffects.MoveStackAlongPath(owner, piece, path, value > 1, isSimpleMove); break;
+                case CcDefine.Stack_fake: CcBoardEffects.RefreshClones(owner, piece); break;
+                case CcDefine.Get_throw:
+                    for (int i = 0; i < value; i++) turnsManager.GrantSkillExtraThrow();
+                    break;
+                case CcDefine.Get_point: CharacterSkillRegistry.RequestSkillPoint(owner.PlayerId, value); break;
+                case CcDefine.Move_plus: succeeded = movement.TryMovePiece(owner.PlayerId, piece.PieceId, value, true); break;
+                case CcDefine.Peace_move:
+                case CcDefine.Move_end:
+                    CcBoardEffects.MoveStackAlongPath(owner, piece, path, ignoresInstalledItems, isSimpleMove); break;
             }
-            if (type == CcDefine.ExtraThrow || type == CcDefine.SkillPoint ||
-                type == CcDefine.Move || type == CcDefine.MovePath) Remove(piece, state);
+            if (type == CcDefine.Get_throw || type == CcDefine.Get_point ||
+                type == CcDefine.Move_plus || IsPathMove(type)) Remove(piece, state);
             return succeeded;
         }
 
@@ -271,7 +275,7 @@ namespace YutArena.InGame
         {
             if (piece == null || !Contains(piece, state)) return;
             piece.Cc.Remove(state);
-            if (state.Type == CcDefine.Clone) CcBoardEffects.RefreshClones(FindOwner(piece), piece);
+            if (state.Type == CcDefine.Stack_fake) CcBoardEffects.RefreshClones(FindOwner(piece), piece);
             Changed?.Invoke(piece, state, false);
         }
 
@@ -286,16 +290,11 @@ namespace YutArena.InGame
             if (!CanMove(piece)) return 0;
             int count = request.MoveCount;
             if (request.IsActiveSkillMove) return count;
-            CcState bonus = piece.Cc.Get(CcDefine.MoveBonus);
-            if (bonus != null)
+            CcState scale = piece.Cc.Get(CcDefine.Move_scale);
+            if (scale != null)
             {
-                count += count < 0 ? -bonus.Value : bonus.Value;
-                Remove(piece, bonus);
-            }
-            if (piece.Cc.Has(CcDefine.DoubleMove))
-            {
-                count *= 2;
-                Remove(piece, CcDefine.DoubleMove);
+                count *= scale.Value;
+                Remove(piece, scale);
             }
             return count;
         }
@@ -305,28 +304,25 @@ namespace YutArena.InGame
         {
             if (piece == null) return CharacterCaptureDecision.Proceed;
             if (!IsTargetable(piece)) return CharacterCaptureDecision.Prevent;
-            if (piece.Cc.Has(CcDefine.TalismanProtection))
+            var guardPiece = piece;
+            if (ConsumeGuard(guardPiece, CcDefine.protect) || ConsumeGuard(guardPiece, CcDefine.Charm))
                 return CharacterCaptureDecision.Prevent;
-            CcState shield = piece.Cc.Get(CcDefine.Protection);
-            if (shield != null)
-            {
-                ConsumeProtection(piece);
-                return CharacterCaptureDecision.Prevent;
-            }
-            CcState clone = piece.Cc.Get(CcDefine.Clone);
+            CcState clone = piece.Cc.Get(CcDefine.Stack_fake);
             if (clone != null)
             {
-                clone.SetValue(clone.Value - 1);
-                if (clone.Value <= 0) Remove(piece, clone);
-                else CcBoardEffects.RefreshClones(FindOwner(piece), piece);
+                ConsumeClones(piece, 1);
                 return CharacterCaptureDecision.ConsumeCloneWithoutBonus;
             }
-            if (piece.Cc.Has(CcDefine.LimitCapture))
-            {
-                Remove(piece, CcDefine.LimitCapture);
-                return CharacterCaptureDecision.LimitRetireToAttackingCount;
-            }
             return CharacterCaptureDecision.Proceed;
+        }
+
+        internal static void ConsumeClones(PlayerRuntimeData.PieceRuntimeData piece, int count)
+        {
+            CcState clone = piece?.Cc.Get(CcDefine.Stack_fake);
+            if (clone == null || count <= 0) return;
+            clone.SetValue(Math.Max(0, clone.Value - count));
+            if (clone.Value == 0) Remove(piece, clone);
+            else CcBoardEffects.RefreshClones(FindOwner(piece), piece);
         }
 
         public static (YutResult, float)[] ResolveProbability(int playerId, (YutResult, float)[] table)
@@ -334,13 +330,13 @@ namespace YutArena.InGame
             if (table == null || table.Length == 0) table = CharacterSkillRegistry.DefaultYutProbabilityTable;
             foreach (var piece in PlayerPieces(playerId))
             {
-                if (piece.Cc.Has(CcDefine.DoOrMo))
+                if (piece.Cc.Has(CcDefine.MOorDO))
                 {
-                    Remove(piece, CcDefine.DoOrMo);
+                    Remove(piece, CcDefine.MOorDO);
                     return new[] { (YutResult.Do, 50f), (YutResult.Mo, 50f) };
                 }
-                if (!piece.Cc.Has(CcDefine.RemoveBackDo)) continue;
-                Remove(piece, CcDefine.RemoveBackDo);
+                if (!piece.Cc.Has(CcDefine.No_back)) continue;
+                Remove(piece, CcDefine.No_back);
                 var result = new List<(YutResult, float)>();
                 float weight = 0;
                 foreach (var entry in table)
@@ -351,30 +347,6 @@ namespace YutArena.InGame
                 return result.ToArray();
             }
             return table;
-        }
-
-        public static bool ResolveExtraThrow(int playerId, YutResult result, bool defaultValue)
-        {
-            foreach (var piece in PlayerPieces(playerId))
-            {
-                if (!piece.Cc.Has(CcDefine.ReverseExtraThrow)) continue;
-                Remove(piece, CcDefine.ReverseExtraThrow);
-                return result == YutResult.Do || result == YutResult.Gae ||
-                    result == YutResult.Geol || result == YutResult.BackDo;
-            }
-            foreach (var piece in PlayerPieces(playerId))
-            {
-                if (!piece.Cc.Has(CcDefine.YutMoExtraThrow)) continue;
-                Remove(piece, CcDefine.YutMoExtraThrow);
-                return defaultValue || result == YutResult.Yut || result == YutResult.Mo;
-            }
-            return defaultValue;
-        }
-
-        public static bool HasPlayerEffect(int playerId, CcDefine type)
-        {
-            foreach (var piece in PlayerPieces(playerId)) if (piece.Cc.Has(type)) return true;
-            return false;
         }
 
         public static void TickOwnerTurn(PlayerController owner)
@@ -388,7 +360,7 @@ namespace YutArena.InGame
                     if (state.RemainingOwnerTurns == 0) continue;
                     state.Tick();
                     if (state.RemainingOwnerTurns > 0) continue;
-                    if (state.Type == CcDefine.Parts)
+                    if (state.Type == CcDefine.Robot_part)
                         retireExpiredParts = true;
                     Remove(piece, state);
                 }
@@ -403,9 +375,8 @@ namespace YutArena.InGame
         {
             foreach (var piece in PlayerPieces(playerId))
             {
-                Remove(piece, CcDefine.DoubleMove);
-                Remove(piece, CcDefine.DoOrMo);
-                Remove(piece, CcDefine.ReverseExtraThrow);
+                Remove(piece, CcDefine.Move_scale);
+                Remove(piece, CcDefine.MOorDO);
             }
         }
 
@@ -454,7 +425,7 @@ namespace YutArena.InGame
             //수정: 부적은 지정된 아군 한 말의 효과이며 업기 시 다른 말로 복사하지 않습니다.
             foreach (var piece in PlayerPieces(record.PlayerId))
             {
-                CcState parts = piece.Cc.Get(CcDefine.Parts);
+                CcState parts = piece.Cc.Get(CcDefine.Robot_part);
                 if (parts != null && piece.PieceId != record.PieceId &&
                     record.To == parts.Tile)
                 {
@@ -492,43 +463,21 @@ namespace YutArena.InGame
                 {
                     CcState wind = sourcePiece.Cc.Get(CcDefine.WindPath);
                     if (wind == null || !new List<BoardTileId>(wind.Path).Contains(record.To)) continue;
-                    if (!CharacterSkillRegistry.TryGet(windOwner.PlayerId, sourcePiece.PieceId, out var source) ||
-                        !source.TryTriggerPassiveCooldown()) continue;
+                    if (!CharacterSkillRegistry.TryGet(windOwner.PlayerId, sourcePiece.PieceId, out var source))
+                        continue;
                     windMoveDepth++;
-                    try
-                    {
-                        Apply(movedLeader, CcDefine.MovePath, sourcePlayerId: windOwner.PlayerId,
-                            sourcePieceId: sourcePiece.PieceId,
-                            path: CharacterBoardUtility.GetForwardPath(movedLeader, 1));
-                    }
+                    bool applied;
+                    try { applied = source.TryApplyWindMove(movedLeader); }
                     finally { windMoveDepth--; }
+                    if (!applied) continue;
                     return; // 하나의 착지는 한 개의 바람 이동만 일으킵니다.
                 }
             }
         }
 
-        public static void RewardMarks(PlayerRuntimeData.PieceRuntimeData target, CharacterCaptureRequest request)
-        {
-            foreach (CcState state in Snapshot(target))
-            {
-                if (state.Type != CcDefine.Mark || state.SourcePlayerId != request.AttackerPlayerId ||
-                    state.SourcePieceId != request.AttackerPieceId) continue;
-                foreach (var source in PlayerPieces(state.SourcePlayerId))
-                    if (source.PieceId == state.SourcePieceId) Apply(source, CcDefine.SkillPoint);
-                Remove(target, state);
-            }
-        }
-
-        public static void ClearMarksFrom(int playerId, int pieceId)
-        {
-            var players = UnityEngine.Object.FindFirstObjectByType<PlayerManager>();
-            if (players == null) return;
-            foreach (var owner in players.ActivePlayers)
-            foreach (var piece in owner.RuntimeData.Pieces)
-            foreach (CcState state in Snapshot(piece))
-                if (state.Type == CcDefine.Mark && state.SourcePlayerId == playerId &&
-                    state.SourcePieceId == pieceId) Remove(piece, state);
-        }
+        // 외부 기본 잡기 코드의 기존 호출 계약만 유지합니다. 사용되지 않는 Mark 효과는 제거했습니다.
+        public static void RewardMarks(PlayerRuntimeData.PieceRuntimeData target,
+            CharacterCaptureRequest request) { }
 
         internal static PlayerController FindOwner(PlayerRuntimeData.PieceRuntimeData piece)
         {
@@ -564,15 +513,20 @@ namespace YutArena.InGame
             table.Add((result, weight));
         }
 
-        private static bool ConsumeProtection(PlayerRuntimeData.PieceRuntimeData piece)
-        {
-            CcState shield = piece.Cc.Get(CcDefine.Protection);
-            if (shield == null) return false;
+        private static bool IsPathMove(CcDefine type) =>
+            type == CcDefine.Peace_move || type == CcDefine.Move_end;
 
-            shield.SetValue(shield.Value - 1);
-            if (shield.Value <= 0) Remove(piece, shield);
+        private static bool ConsumeGuard(PlayerRuntimeData.PieceRuntimeData piece, CcDefine type)
+        {
+            if (piece == null) return false;
+            // 기간 보호를 먼저 사용하여 다른 출처의 일회성 보호를 낭비하지 않습니다.
+            var guards = new List<CcState>(piece.Cc.Effects);
+            CcState guard = guards.Find(state => state.Type == type && state.Charges < 0) ??
+                guards.Find(state => state.Type == type && state.Charges > 0);
+            if (guard == null) return false;
+            guard.ConsumeCharge();
+            if (guard.Charges == 0) Remove(piece, guard);
             return true;
         }
-
     }
 }
