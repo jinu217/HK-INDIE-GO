@@ -38,6 +38,8 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private Button backButton;
         [Tooltip("모든 플레이어가 선택을 마치면 누를 수 있는 게임 시작 버튼")]
         [SerializeField] private Button startGameButton;
+        [Tooltip("게임 시작 시 표시할 이미지 게이지 로딩 패널")]
+        [SerializeField] private GameStartLoadingPanel gameStartLoadingPanel;
 
         [Header("Lobby Settings UI")]
         [Tooltip("게임 모드 텍스트")]
@@ -589,7 +591,13 @@ namespace YutArena.UI.CharacterScene
                 yield break;
             }
 
-            SceneManager.LoadScene(inGameSceneName);
+            if (gameStartLoadingPanel != null)
+            {
+                gameStartLoadingPanel.SetPlayers(selectedCharacters, playerCount);
+                gameStartLoadingPanel.LoadScene(inGameSceneName);
+            }
+            else
+                SceneManager.LoadScene(inGameSceneName);
         }
 
         private bool AreAllPlayersSelected()
