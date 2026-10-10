@@ -1,0 +1,11 @@
+newmtl tripo_material_26a66829_b58c_441d_ab05_553bf3ce3f78
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd decorative+emblem+3d+model_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr decorative+emblem+3d+model_roughness.png
+map_Pm decorative+emblem+3d+model_metallic.png
+norm decorative+emblem+3d+model_normal.png
+
