@@ -16,12 +16,17 @@ namespace YutArena.UI.CharacterScene
 
         public void SetCharacter(CharacterData characterData)
         {
+            SetPortrait(characterData != null ? characterData.char_Icon : null);
+        }
+
+        public void SetPortrait(Sprite sprite)
+        {
             if (portraitImage == null)
             {
                 return;
             }
 
-            portraitImage.sprite = characterData != null ? characterData.char_Icon : null;
+            portraitImage.sprite = sprite;
             portraitImage.enabled = portraitImage.sprite != null;
         }
 

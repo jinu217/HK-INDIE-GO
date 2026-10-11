@@ -12,6 +12,7 @@ namespace YutArena.Managers
         public const string MasterMutedKey = "MASTER_MUTED";
         public const string BgmMutedKey = "BGM_MUTED";
         public const string ClickMutedKey = "CLICK_MUTED";
+        public const string BackgroundSoundKey = "BACKGROUND_SOUND_ENABLED";
         private const float DefaultVolume = 1f;
 
         [Header("오디오 소스")]
@@ -39,6 +40,7 @@ namespace YutArena.Managers
         public bool IsMasterMuted { get; private set; }
         public bool IsBgmMuted { get; private set; }
         public bool IsClickMuted { get; private set; }
+        public bool BackgroundSoundEnabled { get; private set; }
 
         private void Awake()
         {
@@ -52,6 +54,7 @@ namespace YutArena.Managers
             DontDestroyOnLoad(gameObject);
             EnsureAudioSources();
             ApplySavedVolumes();
+            SetBackgroundSoundRuntimeState();
 
             if (initialBgmClip != null) PlayBgm(initialBgmClip);
         }
@@ -59,6 +62,11 @@ namespace YutArena.Managers
         private void OnDestroy()
         {
             if (instance == this) instance = null;
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (instance == this) AudioListener.pause = !hasFocus && !BackgroundSoundEnabled;
         }
 
         public void PlayBgm(AudioClip clip)
@@ -79,9 +87,15 @@ namespace YutArena.Managers
 
         public void PlayClickSound(AudioClip clip)
         {
+            PlayEffectSound(clip);
+        }
+
+        /// <summary>버튼과 게임 효과음을 공통 효과음 볼륨으로 재생합니다.</summary>
+        public void PlayEffectSound(AudioClip clip)
+        {
             if (clip == null)
             {
-                Debug.LogWarning("재생할 버튼 클릭 AudioClip이 지정되지 않았습니다.", this);
+                Debug.LogWarning("재생할 효과음 AudioClip이 지정되지 않았습니다.", this);
                 return;
             }
 
@@ -159,12 +173,21 @@ namespace YutArena.Managers
             SaveMuted(ClickMutedKey, muted);
         }
 
+        public void SetBackgroundSoundEnabled(bool enabled)
+        {
+            BackgroundSoundEnabled = enabled;
+            PlayerPrefs.SetInt(BackgroundSoundKey, enabled ? 1 : 0);
+            SetBackgroundSoundRuntimeState();
+            PlayerPrefs.Save();
+        }
+
         public static float LoadMasterVolume() => LoadVolume(MasterVolumeKey);
         public static float LoadBgmVolume() => Mathf.Clamp01(PlayerPrefs.GetFloat(BgmVolumeKey, DefaultVolume));
         public static float LoadClickVolume() => Mathf.Clamp01(PlayerPrefs.GetFloat(ClickVolumeKey, DefaultVolume));
         public static bool LoadMasterMuted() => LoadMuted(MasterMutedKey);
         public static bool LoadBgmMuted() => LoadMuted(BgmMutedKey);
         public static bool LoadClickMuted() => LoadMuted(ClickMutedKey);
+        public static bool LoadBackgroundSoundEnabled() => LoadMuted(BackgroundSoundKey);
 
         private void ApplySavedVolumes()
         {
@@ -174,7 +197,15 @@ namespace YutArena.Managers
             IsMasterMuted = LoadMasterMuted();
             IsBgmMuted = LoadBgmMuted();
             IsClickMuted = LoadClickMuted();
+            BackgroundSoundEnabled = LoadBackgroundSoundEnabled();
             ApplyEffectiveVolumes();
+        }
+
+        private void SetBackgroundSoundRuntimeState()
+        {
+            // 온라인 플레이가 백그라운드에서 멈추지 않도록 실행은 유지하고 소리만 제어합니다.
+            Application.runInBackground = true;
+            AudioListener.pause = !Application.isFocused && !BackgroundSoundEnabled;
         }
 
         private void ApplyEffectiveVolumes()

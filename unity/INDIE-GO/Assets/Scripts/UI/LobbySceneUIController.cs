@@ -1,5 +1,7 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
@@ -8,7 +10,7 @@ namespace YutArena.UI
 {
     public class LobbySceneUIController : MonoBehaviour
     {
-        private const int MaxTeamSlotCount = 4;
+        private const int MaxTeamSlotCount = 2;
 
         private readonly GameMode[] gameModeOptions =
         {
@@ -43,10 +45,8 @@ namespace YutArena.UI
         private readonly string[] teamLabels =
         {
             "No Team",
-            "Blue",
-            "Yellow",
             "Red",
-            "Green"
+            "Blue"
         };
 
         private readonly int[] gameTimeOptions = { 15, 20, 25 };
@@ -73,6 +73,12 @@ namespace YutArena.UI
         [SerializeField] private Button teamModeRightButton;
         [Tooltip("팀 모드 텍스트")]
         [SerializeField] private TMP_Text teamModeValueText;
+        [Tooltip("1P 입력 장치 이전 버튼")]
+        [SerializeField] private Button sharedInputLeftButton;
+        [Tooltip("1P 입력 장치 다음 버튼")]
+        [SerializeField] private Button sharedInputRightButton;
+        [Tooltip("1P 입력 장치 텍스트")]
+        [SerializeField] private TMP_Text sharedInputLabel;
         [Tooltip("플레이어 행")]
         [SerializeField] private GameObject[] playerRows;
         [Tooltip("플레이어 팀 이전 버튼")]
@@ -135,6 +141,20 @@ namespace YutArena.UI
         private bool isTeamMode;
         private int[] playerTeamIndexes = { 0, 0, 0, 0 };
         private ButtonSound startButtonSound;
+        private int navigationRow = -1;
+        private Button navigationButton;
+        private TMP_Text highlightedText;
+        private Color highlightedTextColor;
+        private EventSystem navigationEventSystem;
+        private bool previousNavigationEvents;
+
+        // The bottom option is TurnLength; the last row contains Start and Back.
+        private TMP_Text[] NavigationTexts => new[] { gameModeValueText, playerCountValueText,
+            teamModeValueText, sharedInputLabel, mapValueText, gameTimeValueText, turnTimeValueText, turnLengthValueText };
+        private Button[] NavigationLeftButtons => new[] { gameModeLeftButton, playerCountLeftButton,
+            teamModeLeftButton, sharedInputLeftButton, mapLeftButton, gameTimeLeftButton, turnTimeLeftButton, turnLengthLeftButton };
+        private Button[] NavigationRightButtons => new[] { gameModeRightButton, playerCountRightButton,
+            teamModeRightButton, sharedInputRightButton, mapRightButton, gameTimeRightButton, turnTimeRightButton, turnLengthRightButton };
 
         private GameMode SelectedGameMode
         {
@@ -159,8 +179,104 @@ namespace YutArena.UI
 
         private void Update()
         {
+            LocalSelectionInput.Poll(selectedPlayerCount);
+            if (sharedInputLabel != null)
+                sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
+            ProcessNavigation();
             RefreshStartAvailability();
         }
+
+        private void ToggleSharedInput()
+        {
+            if (LocalSelectionInput.SharedGamepadSelected)
+            {
+                LocalSelectionInput.SelectSharedKeyboard();
+                return;
+            }
+            LocalSelectionInput.SelectSharedGamepadMode();
+        }
+
+        private void ProcessNavigation()
+        {
+            if (navigationEventSystem == null && EventSystem.current != null)
+            {
+                navigationEventSystem = EventSystem.current;
+                previousNavigationEvents = navigationEventSystem.sendNavigationEvents;
+                navigationEventSystem.sendNavigationEvents = false;
+            }
+            Keyboard keyboard = Keyboard.current;
+            bool up = keyboard != null && keyboard.upArrowKey.wasPressedThisFrame;
+            bool down = keyboard != null && keyboard.downArrowKey.wasPressedThisFrame;
+            bool left = keyboard != null && keyboard.leftArrowKey.wasPressedThisFrame;
+            bool right = keyboard != null && keyboard.rightArrowKey.wasPressedThisFrame;
+            bool submit = keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame);
+            // Assigned controllers can also operate the common lobby options.
+            {
+                for (int i = 0; i < selectedPlayerCount; i++)
+                {
+                    Gamepad pad = LocalSelectionInput.GetGamepad(i);
+                    if (i == 0 && pad == null) pad = LocalSelectionInput.GetInputGamepad(i);
+                    if (pad == null || LocalSelectionInput.JoinedThisFrame(i)) continue;
+                    up |= pad.dpad.up.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame;
+                    down |= pad.dpad.down.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame;
+                    left |= pad.dpad.left.wasPressedThisFrame || pad.leftStick.left.wasPressedThisFrame;
+                    right |= pad.dpad.right.wasPressedThisFrame || pad.leftStick.right.wasPressedThisFrame;
+                    submit |= pad.buttonSouth.wasPressedThisFrame;
+                }
+            }
+            if (up || down)
+            {
+                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : 8)) % 9;
+                HighlightNavigationRow();
+                return;
+            }
+            if (navigationRow < 0) return;
+            if (left || right)
+            {
+                Button target = navigationRow == 8
+                    ? (navigationButton == startGameButton ? backButton : startGameButton)
+                    : (left ? NavigationLeftButtons[navigationRow] : NavigationRightButtons[navigationRow]);
+                SelectNavigationButton(target);
+                if (navigationRow != 8 && target != null && target.isActiveAndEnabled && target.IsInteractable())
+                    target.onClick.Invoke();
+                return;
+            }
+            if (submit && navigationRow == 8 && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
+                navigationButton.onClick.Invoke();
+        }
+
+        private void HighlightNavigationRow()
+        {
+            if (highlightedText != null) highlightedText.color = highlightedTextColor;
+            highlightedText = null;
+            SelectNavigationButton(null);
+            if (navigationRow == 8)
+                SelectNavigationButton(startGameButton);
+            else
+            {
+                highlightedText = NavigationTexts[navigationRow];
+                if (highlightedText != null)
+                {
+                    highlightedTextColor = highlightedText.color;
+                    highlightedText.color = Color.yellow;
+                }
+            }
+        }
+
+        private void SelectNavigationButton(Button button)
+        {
+            navigationButton = button;
+            if (navigationEventSystem != null)
+                navigationEventSystem.SetSelectedGameObject(button != null && button.isActiveAndEnabled
+                    ? button.gameObject : null);
+        }
+
+        private void OnDestroy()
+        {
+            if (highlightedText != null) highlightedText.color = highlightedTextColor;
+            if (navigationEventSystem != null) navigationEventSystem.sendNavigationEvents = previousNavigationEvents;
+        }
+
 
         private void BindButtons()
         {
@@ -170,6 +286,8 @@ namespace YutArena.UI
             AddClick(playerCountRightButton, NextPlayerCount);
             AddClick(teamModeLeftButton, ToggleTeamMode);
             AddClick(teamModeRightButton, ToggleTeamMode);
+            AddClick(sharedInputLeftButton, ToggleSharedInput);
+            AddClick(sharedInputRightButton, ToggleSharedInput);
             AddClick(mapLeftButton, PreviousMap);
             AddClick(mapRightButton, NextMap);
             AddClick(turnLengthLeftButton, DecreaseTurnLength);
@@ -360,18 +478,13 @@ namespace YutArena.UI
 
         private bool CanStartGame(out string reason)
         {
-            // TEMP_SKIP_GAMEPAD_CHECK_START: 패드 없이 LobbyScene -> ChampionPickScene 흐름을 확인하기 위한 임시 우회입니다. 커밋 전 삭제하세요.
-            /*
-            int connectedPlayerCount = GetConnectedRequiredPlayerCount();
-
-            if (connectedPlayerCount < selectedPlayerCount)
+            if (!LocalSelectionInput.SharedInputAvailable)
             {
-                reason = $"컨트롤러 연결 대기 중 ({connectedPlayerCount}/{selectedPlayerCount})";
+                reason = LocalSelectionInput.SharedGamepadSelected
+                    ? "Connect the 1P pad."
+                    : "1P input device disconnected.";
                 return false;
             }
-            */
-            // TEMP_SKIP_GAMEPAD_CHECK_END
-
             if (SelectedGameMode == GameMode.KillTheKing)
             {
                 reason = "Kill The King is coming soon.";
@@ -422,9 +535,9 @@ namespace YutArena.UI
             {
                 int teamIndex = playerTeamIndexes[i] - 1;
 
-                if (teamIndex < 0)
+                if (teamIndex < 0 || teamIndex >= MaxTeamSlotCount)
                 {
-                    reason = "Every player must choose a team.";
+                    reason = "Every player must choose Red or Blue.";
                     return false;
                 }
 

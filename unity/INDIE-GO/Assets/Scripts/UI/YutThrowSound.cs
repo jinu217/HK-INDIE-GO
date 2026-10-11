@@ -109,7 +109,7 @@ namespace YutArena.Test
                 return;
             }
 
-            AudioManager.Instance.PlayClickSound(clip);
+            AudioManager.Instance.PlayEffectSound(clip);
         }
 
 #if UNITY_EDITOR

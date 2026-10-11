@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -42,6 +43,18 @@ namespace YutArena.UI
         [Tooltip("액티브 스킬 버튼에 붙인 Hover 트리거")]
         [SerializeField] private SkillTooltipTrigger activeSkillTooltip;
 
+        [Header("Current Player SP")]
+        [Tooltip("SP 이미지를 나열할 빈 UI 컨테이너 (Layout Group 없이 사용)")]
+        [SerializeField] private RectTransform spContainer;
+        [Tooltip("프로젝트에 있는 SP 이미지 에셋 (Sprite)")]
+        [SerializeField] private Sprite spSprite;
+        [Tooltip("SP 이미지 한 개의 표시 크기")]
+        [SerializeField] private Vector2 spImageSize = new Vector2(32f, 32f);
+        [Tooltip("SP 이미지 사이 간격")]
+        [SerializeField, Min(0f)] private float spSpacing = 3f;
+
+        private readonly List<Image> spImages = new List<Image>();
+
         private void Awake()
         {
             if (gameManager == null) gameManager = TestGameManager.Instance;
@@ -52,6 +65,7 @@ namespace YutArena.UI
 
         private void OnEnable()
         {
+            CharacterSkillRegistry.SkillPointChanged += HandleSkillPointChanged;
             if (turnManager != null)
             {
                 turnManager.OnTurnStarted += HandleTurnStarted;
@@ -63,6 +77,9 @@ namespace YutArena.UI
 
         private void OnDisable()
         {
+            CharacterSkillRegistry.SkillPointChanged -= HandleSkillPointChanged;
+            foreach (Image image in spImages)
+                if (image != null) image.gameObject.SetActive(false);
             if (turnManager != null)
             {
                 turnManager.OnTurnStarted -= HandleTurnStarted;
@@ -82,6 +99,7 @@ namespace YutArena.UI
             RefreshTurnInfo();
             RefreshTimers();
             RefreshCurrentPlayerSkills();
+            RefreshCurrentPlayerSP();
         }
 
         private void HandleTurnStarted(PlayerSlot player)
@@ -92,11 +110,62 @@ namespace YutArena.UI
             RefreshTurnHighlights(player);
             RefreshTurnInfo();
             RefreshCurrentPlayerSkills(player);
+            RefreshCurrentPlayerSP();
         }
 
         private void HandleTurnPhaseChanged(TurnContext turn)
         {
             RefreshTurnInfo();
+        }
+
+        private void HandleSkillPointChanged(SkillPointChange change)
+        {
+            if (turnManager != null && turnManager.CurrentTurn != null &&
+                change.PlayerId == (int)turnManager.CurrentTurn.currentPlayer)
+                RefreshCurrentPlayerSP();
+        }
+
+        private void RefreshCurrentPlayerSP()
+        {
+            if (spContainer == null || spSprite == null)
+            {
+                foreach (Image image in spImages)
+                    if (image != null) image.gameObject.SetActive(false);
+                return;
+            }
+            int playerId = turnManager != null && turnManager.CurrentTurn != null
+                ? (int)turnManager.CurrentTurn.currentPlayer : 0;
+            int count = CharacterSkillRegistry.GetSkillPoints(playerId);
+            Vector2 size = new Vector2(Mathf.Max(1f, spImageSize.x), Mathf.Max(1f, spImageSize.y));
+            while (spImages.Count < count)
+            {
+                GameObject icon = new GameObject($"SP_{spImages.Count + 1}", typeof(RectTransform), typeof(Image));
+                icon.transform.SetParent(spContainer, false);
+                Image image = icon.GetComponent<Image>();
+                image.raycastTarget = false;
+                image.preserveAspect = true;
+                spImages.Add(image);
+            }
+            for (int i = 0; i < spImages.Count; i++)
+            {
+                Image image = spImages[i];
+                if (image == null) continue;
+                image.sprite = spSprite;
+                image.gameObject.SetActive(i < count);
+                RectTransform rect = image.rectTransform;
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
+                rect.pivot = new Vector2(0f, 0.5f);
+                rect.localScale = Vector3.one;
+                rect.localRotation = Quaternion.identity;
+                rect.sizeDelta = size;
+                rect.anchoredPosition = new Vector2(i * (size.x + spSpacing), 0f);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            foreach (Image image in spImages)
+                if (image != null) Destroy(image.gameObject);
         }
 
         private void RefreshPlayerPanels()
