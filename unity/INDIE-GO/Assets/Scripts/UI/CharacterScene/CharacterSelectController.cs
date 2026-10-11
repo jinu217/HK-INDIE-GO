@@ -40,6 +40,14 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private Button startGameButton;
         [Tooltip("게임 시작 시 표시할 이미지 게이지 로딩 패널")]
         [SerializeField] private GameStartLoadingPanel gameStartLoadingPanel;
+        [Tooltip("설정 버튼")]
+        [SerializeField] private Button settingButton;
+        [Tooltip("설정 버튼을 누르면 열 패널")]
+        [SerializeField] private GameObject settingPanel;
+        [Tooltip("도움말 버튼")]
+        [SerializeField] private Button helpButton;
+        [Tooltip("도움말 버튼을 누르면 열 패널")]
+        [SerializeField] private GameObject helpPanel;
 
         [Header("Lobby Settings UI")]
         [Tooltip("게임 모드 텍스트")]
@@ -96,6 +104,12 @@ namespace YutArena.UI.CharacterScene
             }
             if (startGameButton != null)
                 startGameButton.onClick.AddListener(StartGame);
+            if (settingButton != null)
+                settingButton.onClick.AddListener(ToggleSettingPanel);
+            if (helpButton != null)
+                helpButton.onClick.AddListener(ToggleHelpPanel);
+            SetActive(settingPanel, false);
+            SetActive(helpPanel, false);
 
             InitializeCards();
             InitializePlayerMarkers();
@@ -180,12 +194,48 @@ namespace YutArena.UI.CharacterScene
             }
             if (startGameButton != null)
                 startGameButton.onClick.RemoveListener(StartGame);
+            if (settingButton != null)
+                settingButton.onClick.RemoveListener(ToggleSettingPanel);
+            if (helpButton != null)
+                helpButton.onClick.RemoveListener(ToggleHelpPanel);
+        }
+
+        public void ToggleSettingPanel()
+        {
+            if (settingPanel == null) return;
+            bool shouldOpen = !settingPanel.activeSelf;
+            SetActive(helpPanel, false);
+            SetActive(settingPanel, shouldOpen);
+        }
+
+        public void ToggleHelpPanel()
+        {
+            if (helpPanel == null) return;
+            bool shouldOpen = !helpPanel.activeSelf;
+            SetActive(settingPanel, false);
+            SetActive(helpPanel, shouldOpen);
+        }
+
+        public void CloseSettingPanel() => SetActive(settingPanel, false);
+
+        public void CloseHelpPanel() => SetActive(helpPanel, false);
+
+        public void CloseInfoPanels()
+        {
+            CloseSettingPanel();
+            CloseHelpPanel();
         }
 
         private void Update()
         {
             if (isFinalized || runtimeCharacters.Count == 0)
             {
+                return;
+            }
+
+            if (IsInfoPanelOpen)
+            {
+                RefreshUI();
                 return;
             }
 
@@ -201,6 +251,10 @@ namespace YutArena.UI.CharacterScene
 
             RefreshUI();
         }
+
+        private bool IsInfoPanelOpen =>
+            (settingPanel != null && settingPanel.activeInHierarchy) ||
+            (helpPanel != null && helpPanel.activeInHierarchy);
 
         public void BackToLocalLobby()
         {
