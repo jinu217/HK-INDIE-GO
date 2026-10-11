@@ -8,12 +8,11 @@ using YutArena.Managers;
 namespace YutArena.UI
 {
     /// <summary>
-    /// 인게임 HUD에 플레이어 정보, 게임/턴 제한시간, 현재 턴 수를 표시합니다.
+    /// 인게임 HUD에 플레이어 정보, 턴 제한시간, 현재 턴 수를 표시합니다.
     /// Player Panels는 Player 1부터 순서대로 등록해야 합니다.
     /// </summary>
     public sealed class InGameUIManager : MonoBehaviour
     {
-        private const string GameTimePrefix = "GAME TIME \n";
         private const string TurnTimePrefix = "TURN TIME \n";
         private const string TurnCountPrefix = "TURN ";
         private const string UnlimitedText = "UNLIMITED";
@@ -27,7 +26,6 @@ namespace YutArena.UI
         [SerializeField] private InGamePlayerPanelView[] playerPanels;
 
         [Header("Game Info")]
-        [SerializeField] private TMP_Text gameTimeText;
         [SerializeField] private TMP_Text turnTimeText;
         [SerializeField] private TMP_Text turnCountText;
 
@@ -314,14 +312,6 @@ namespace YutArena.UI
 
         private void RefreshTimers()
         {
-            if (gameTimeText != null)
-            {
-                gameTimeText.text = GameTimePrefix +
-                                    (gameManager != null && gameManager.IsGameTimerLimited
-                                        ? FormatTime(gameManager.RemainingGameSeconds)
-                                        : UnlimitedText);
-            }
-
             if (turnTimeText != null)
             {
                 turnTimeText.text = TurnTimePrefix +

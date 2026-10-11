@@ -7,6 +7,8 @@ namespace YutArena.UI.CharacterScene
 {
     public class GameStartLoadingPanel : MonoBehaviour
     {
+        public static bool IsBlockingGameplay { get; private set; }
+
         [SerializeField] private GameObject panelRoot;
         [SerializeField] private Image progressFill;
         [SerializeField] private RectTransform playerListRoot;
@@ -15,6 +17,12 @@ namespace YutArena.UI.CharacterScene
         [SerializeField, Min(0f)] private float completedHoldDuration = 0.15f;
 
         private bool isLoading;
+
+        private void OnDestroy()
+        {
+            if (isLoading)
+                IsBlockingGameplay = false;
+        }
 
         public void SetPlayers(CharacterData[] characters, int playerCount)
         {
@@ -52,6 +60,7 @@ namespace YutArena.UI.CharacterScene
         private IEnumerator LoadSceneRoutine(string sceneName)
         {
             isLoading = true;
+            IsBlockingGameplay = true;
             transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
             SetProgress(0f);
@@ -90,6 +99,8 @@ namespace YutArena.UI.CharacterScene
             SetProgress(1f);
             if (completedHoldDuration > 0f)
                 yield return new WaitForSecondsRealtime(completedHoldDuration);
+            if (panelRoot != null) panelRoot.SetActive(false);
+            IsBlockingGameplay = false;
             Destroy(gameObject);
         }
 

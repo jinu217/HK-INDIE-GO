@@ -31,7 +31,9 @@ namespace YutArena.UI.CharacterScene
             SetText(activeSkillNameText, data != null ? data.active_Name : string.Empty);
             SetText(passiveSkillNameText, data != null ? data.passive_Name : string.Empty);
 
-            SetImage(characterIconImage, data != null ? data.char_Icon : null);
+            SetImage(characterIconImage, data != null
+                ? (data.panelViewImage != null ? data.panelViewImage : data.char_Icon)
+                : null);
             SetImage(activeSkillImage, data != null ? data.active_Icon : null);
             SetImage(passiveSkillImage, data != null ? data.passive_Icon : null);
 

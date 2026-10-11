@@ -327,7 +327,7 @@ namespace YutArena.Test
             float elapsed = 0f;
             while (elapsed < throwDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.deltaTime * GeneralSettingsManager.PresentationSpeedMultiplier;
                 float t = Mathf.Clamp01(elapsed / throwDuration);
                 float smoothT = t * t * (3f - 2f * t);
                 float parabola = 4f * t * (1f - t);

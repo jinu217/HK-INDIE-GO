@@ -25,7 +25,7 @@ public class TestRunner : MonoBehaviour
                 playerCount = 4,
                 pieceCountPerPlayer = 4,
                 targetEscapeCount = 4,
-                timeLimitMinutes = GameRuleDefine.DefaultTimeLimitMinutes,
+                timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
                 maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
                 turnTimeMode = TurnTimeMode.Limited,
                 throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,

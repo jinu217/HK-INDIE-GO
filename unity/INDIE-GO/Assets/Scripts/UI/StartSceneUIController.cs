@@ -102,6 +102,10 @@ namespace YutArena.UI
         [Tooltip("화면 전체 밝기를 조절하는 슬라이더입니다. 0.5가 기본값입니다.")]
         [SerializeField] private Slider brightnessSlider;
 
+        [Header("General Settings")]
+        [SerializeField] private TMP_Dropdown presentationSpeedDropdown;
+        [SerializeField] private TMP_Dropdown textSizeDropdown;
+
         [Header("Scene")]
         [Tooltip("로컬 대기실 씬 이름")]
         [SerializeField] private string localLobbySceneName = "LocalLobbyScene";
@@ -173,6 +177,8 @@ namespace YutArena.UI
             WarnIfMissing(frameRateDropdown, nameof(frameRateDropdown));
             WarnIfMissing(qualityDropdown, nameof(qualityDropdown));
             WarnIfMissing(brightnessSlider, nameof(brightnessSlider));
+            WarnIfMissing(presentationSpeedDropdown, nameof(presentationSpeedDropdown));
+            WarnIfMissing(textSizeDropdown, nameof(textSizeDropdown));
         }
 
         private void SetupSettingsControls()
@@ -180,6 +186,7 @@ namespace YutArena.UI
             SetupResolutionDropdown();
             SetupScreenModeControls();
             SetupGraphicsControls();
+            SetupGeneralControls();
 
             SetupVolumeSlider(masterVolumeSlider, AudioManager.LoadMasterVolume(), SetMasterVolume);
             SetupVolumeSlider(bgmVolumeSlider, AudioManager.LoadBgmVolume(), SetBgmVolume);
@@ -250,6 +257,27 @@ namespace YutArena.UI
 
             SetupBrightnessSlider(brightnessSlider, GraphicsSettingsManager.Brightness, SetBrightness);
         }
+
+        private void SetupGeneralControls()
+        {
+            SetupGeneralDropdown(presentationSpeedDropdown, new[] { "보통", "빠름" }, GeneralSettingsManager.PresentationSpeedIndex, SetPresentationSpeed);
+            SetupGeneralDropdown(textSizeDropdown, new[] { "보통", "크게", "아주 크게" }, GeneralSettingsManager.TextSizeIndex, SetTextSize);
+        }
+
+        private static void SetupGeneralDropdown(TMP_Dropdown dropdown, string[] options, int value, UnityEngine.Events.UnityAction<int> handler)
+        {
+            if (dropdown == null) return;
+            dropdown.ClearOptions();
+            var labels = new List<string>();
+            foreach (string option in options) labels.Add(option);
+            dropdown.AddOptions(labels);
+            dropdown.SetValueWithoutNotify(value);
+            dropdown.RefreshShownValue();
+            dropdown.onValueChanged.AddListener(handler);
+        }
+
+        private void SetPresentationSpeed(int index) => GeneralSettingsManager.Instance?.SetPresentationSpeed(index);
+        private void SetTextSize(int index) => GeneralSettingsManager.Instance?.SetTextSize(index);
 
         private void SetupHelpImage()
         {

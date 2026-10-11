@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -34,6 +35,15 @@ namespace YutArena.InGame
             new Vector3(-5.7f, 3.6f), new Vector3(-5.7f, -3.6f)
         };
         private static readonly Vector3 BoardPiecePositionAdjustment = new Vector3(0f, 0.098f, -0.15f);
+        private const float NormalMoveSecondsPerTile = 0.3f;
+
+        private sealed class VisualMove
+        {
+            public readonly List<Vector3> Waypoints = new List<Vector3>();
+            public Vector3 SegmentStart;
+            public int NextWaypoint;
+            public float Elapsed;
+        }
 
         [Header("Piece Home Position Anchors")]
         [Tooltip("Player 1~4 말의 초기 대기 위치입니다. 빈 오브젝트를 씬에서 원하는 위치로 옮긴 뒤 순서대로 연결하세요.")]
@@ -105,10 +115,12 @@ namespace YutArena.InGame
         private readonly Dictionary<BoardTileId, List<DebugPieceView>> visiblePieceViewsByTile = new Dictionary<BoardTileId, List<DebugPieceView>>();
         private readonly Dictionary<DebugPieceView, Vector3> tileFormationOffsets = new Dictionary<DebugPieceView, Vector3>();
         private readonly List<DebugPieceView> pieceViews = new List<DebugPieceView>();
+        private readonly Dictionary<DebugPieceView, VisualMove> visualMoves = new Dictionary<DebugPieceView, VisualMove>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private PlayerManager playerManager;
         private TestTurnManager turnManager;
         private MapManager mapManager;
+        private PieceMovementManager pieceMovementManager;
         private FixedFootholdCatalog footholdCatalog;
 
         private void Start() => StartCoroutine(InitializeAfterGameStarts());
@@ -119,6 +131,7 @@ namespace YutArena.InGame
             playerManager = FindFirstObjectByType<PlayerManager>();
             turnManager = FindFirstObjectByType<TestTurnManager>();
             mapManager = FindFirstObjectByType<MapManager>();
+            pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
             footholdCatalog = Resources.Load<FixedFootholdCatalog>(FixedFootholdCatalog.ResourcePath);
             if (playerManager == null || turnManager == null)
             {
@@ -151,6 +164,8 @@ namespace YutArena.InGame
             }
 
             turnManager.OnPendingResultsChanged += HandlePendingResultsChanged;
+            if (pieceMovementManager != null)
+                pieceMovementManager.OnVisualMoveResolved += HandleVisualMoveResolved;
         }
 
         private void AttachFixedFoothold(DebugPieceView view, Transform pieceTransform, int playerId)
@@ -174,7 +189,11 @@ namespace YutArena.InGame
         {
             if (playerManager == null || turnManager == null) return;
             LocalSelectionInput.Poll(playerManager.ActivePlayers.Count);
-            if (!LocalSelectionInput.SharedInputAvailable) return;
+            if (!LocalSelectionInput.SharedInputAvailable)
+            {
+                RefreshPiecePositions();
+                return;
+            }
             int playerIndex = (int)turnManager.CurrentTurn.currentPlayer - 1;
             bool keyboardTurn = LocalSelectionInput.UsesKeyboard(playerIndex);
             Gamepad turnPad = LocalSelectionInput.GetInputGamepad(playerIndex);
@@ -195,6 +214,8 @@ namespace YutArena.InGame
         private void OnDestroy()
         {
             if (turnManager != null) turnManager.OnPendingResultsChanged -= HandlePendingResultsChanged;
+            if (pieceMovementManager != null)
+                pieceMovementManager.OnVisualMoveResolved -= HandleVisualMoveResolved;
         }
 
         // [수정] WaitAction 단계의 말 클릭 → 목적지 선택은 MoveDestinationSelector 가 담당한다.
@@ -221,6 +242,33 @@ namespace YutArena.InGame
         {
             pendingResults.Clear();
             pendingResults.AddRange(results);
+        }
+
+        private void HandleVisualMoveResolved(
+            int playerId,
+            IReadOnlyList<int> pieceIds,
+            IReadOnlyList<BoardTileId> path)
+        {
+            foreach (DebugPieceView view in pieceViews)
+            {
+                if (view == null || view.PlayerId != playerId || !pieceIds.Contains(view.PieceId)) continue;
+                if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
+                    !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+                    IsCarriedPiece(piece)) continue;
+
+                if (!visualMoves.TryGetValue(view, out VisualMove move))
+                {
+                    move = new VisualMove { SegmentStart = view.transform.position };
+                    visualMoves.Add(view, move);
+                }
+
+                foreach (BoardTileId tile in path)
+                {
+                    BoardTileId visualTile = tile == BoardTileId.None ? BoardTileId.Start : tile;
+                    if (TryGetTileWorldPosition(visualTile, out Vector3 waypoint))
+                        move.Waypoints.Add(waypoint);
+                }
+            }
         }
 
         private void BuildBoard()
@@ -275,13 +323,42 @@ namespace YutArena.InGame
                 Vector3 formationOffset = tileFormationOffsets.TryGetValue(view, out Vector3 offset)
                     ? offset
                     : Vector3.zero;
-                view.transform.position = GetDisplayPosition(piece, view.PlayerId, view.PieceId) + formationOffset;
+                Vector3 target = GetDisplayPosition(piece, view.PlayerId, view.PieceId) + formationOffset;
+                if (visualMoves.TryGetValue(view, out VisualMove move) && !IsCarriedPiece(piece))
+                    AdvanceVisualMove(view, move, target);
+                else
+                {
+                    visualMoves.Remove(view);
+                    view.transform.position = target;
+                }
                 if (TryGetHomeAnchor(view.PlayerId, out Transform homeAnchor))
                     view.transform.rotation = homeAnchor.rotation;
                 bool canSelect = turnManager.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
                                  view.PlayerId == (int)turnManager.CurrentTurn.currentPlayer;
                 view.SetSelected(canSelect);
             }
+        }
+
+        private void AdvanceVisualMove(DebugPieceView view, VisualMove move, Vector3 finalTarget)
+        {
+            float remaining = Time.deltaTime * GeneralSettingsManager.PresentationSpeedMultiplier;
+            while (remaining > 0f && move.NextWaypoint < move.Waypoints.Count)
+            {
+                float slice = Mathf.Min(remaining, NormalMoveSecondsPerTile - move.Elapsed);
+                remaining -= slice;
+                move.Elapsed += slice;
+                Vector3 waypoint = move.Waypoints[move.NextWaypoint];
+                view.transform.position = Vector3.Lerp(
+                    move.SegmentStart, waypoint, Mathf.Clamp01(move.Elapsed / NormalMoveSecondsPerTile));
+                if (move.Elapsed < NormalMoveSecondsPerTile) break;
+                move.SegmentStart = waypoint;
+                move.NextWaypoint++;
+                move.Elapsed = 0f;
+            }
+
+            if (move.NextWaypoint < move.Waypoints.Count) return;
+            visualMoves.Remove(view);
+            view.transform.position = finalTarget;
         }
 
         private void BuildTileFormationOffsets()

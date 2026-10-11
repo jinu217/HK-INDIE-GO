@@ -11,6 +11,8 @@ public sealed class PieceMovementManager : MonoBehaviour
 {
     [SerializeField] private PlayerManager playerManager;
 
+    public event System.Action<int, IReadOnlyList<int>, IReadOnlyList<BoardTileId>> OnVisualMoveResolved;
+
     /// <summary>
     /// 현재 보드 위에 있는 지정 말의 골인까지 남은 칸 수를 반환합니다.
     /// Escape 제한시간 동점 판정에서 사용합니다.
@@ -226,6 +228,7 @@ public sealed class PieceMovementManager : MonoBehaviour
         // Goal pieces have been removed from the board and cannot interact.
         if (selectedPiece.State == PieceState.Goal)
         {
+            NotifyVisualMoveResolved(playerId, movingPieces, path);
             //수정: 완주한 이동도 이동 완료 이벤트에서 누락되지 않도록 전달합니다.
             NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
             Debug.Log($"Player {playerId}, Piece {pieceId + 1} reached Goal.", this);
@@ -240,6 +243,7 @@ public sealed class PieceMovementManager : MonoBehaviour
             selectedPiece.CurrentTileId,
             moveCount);
         ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
+        NotifyVisualMoveResolved(playerId, movingPieces, path);
         //수정: 잡기와 업기 처리가 끝난 뒤 최종 이동 결과를 Player 시스템에 알립니다.
         NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
 
@@ -248,6 +252,17 @@ public sealed class PieceMovementManager : MonoBehaviour
             $"{selectedPiece.CurrentTileId} ({moveCount} spaces)",
             this);
         return true;
+    }
+
+    private void NotifyVisualMoveResolved(
+        int playerId,
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
+        IReadOnlyList<BoardTileId> path)
+    {
+        if (OnVisualMoveResolved == null || path.Count == 0) return;
+        var pieceIds = new int[movingPieces.Count];
+        for (int i = 0; i < movingPieces.Count; i++) pieceIds[i] = movingPieces[i].PieceId;
+        OnVisualMoveResolved.Invoke(playerId, pieceIds, path);
     }
 
     //수정: 이동한 모든 말에 출발지, 도착지, 전체 경로를 전달하는 공통 알림입니다.

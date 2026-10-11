@@ -4,6 +4,7 @@ using YutArena.Common;
 using YutArena.Managers.GameProgress;
 using YutArena.Managers;
 using YutArena.InGame;
+using YutArena.UI.CharacterScene;
 
 namespace YutArena.Managers
 {
@@ -24,12 +25,6 @@ namespace YutArena.Managers
         // 지금 게임 세션(단계 + 설정값) 정보, 처음엔 게임 시작 전이니 MainMenu로 초기화
         public GameSessionData Session { get; private set; } = new GameSessionData { phase = GamePhase.MainMenu };
         public GameStartSettings Settings => Session != null ? Session.settings : null;
-        public bool IsGameTimerLimited => Settings != null &&
-                                          Settings.timeLimitMinutes != GameRuleDefine.UnlimitedTimeMinutes;
-        public float RemainingGameSeconds =>
-            IsGameTimerLimited && gameTimerEndsAt >= 0f
-                ? Mathf.Max(0f, gameTimerEndsAt - Time.time)
-                : 0f;
 
         public System.Action<GamePhase> OnGamePhaseChanged;  // 게임 단계가 바뀔 때마다 방송
         public System.Action<GameResultData> OnGameEnded;    // 게임이 끝났을 때 방송 (승자 정보 포함)
@@ -180,7 +175,7 @@ namespace YutArena.Managers
             turnManager.Initialize(settings);
 
             if (firstTurnCoroutine != null) StopCoroutine(firstTurnCoroutine);
-            firstTurnCoroutine = StartCoroutine(StartFirstTurnWhenPiecesReady(settings));
+            firstTurnCoroutine = StartCoroutine(StartFirstTurnWhenPiecesReady());
         }
 
         // 버그 수정: 캐릭터 말(스킬 포함)은 InGamePieceDebugController가 1프레임 뒤에 생성하는데,
@@ -189,7 +184,7 @@ namespace YutArena.Managers
         private const float PieceSpawnWaitTimeoutSeconds = 1f;
         private Coroutine firstTurnCoroutine;
 
-        private IEnumerator StartFirstTurnWhenPiecesReady(GameStartSettings settings)
+        private IEnumerator StartFirstTurnWhenPiecesReady()
         {
             float giveUpAt = Time.time + PieceSpawnWaitTimeoutSeconds;
             while (!AreAllPiecesReady() && Time.time < giveUpAt)
@@ -198,17 +193,14 @@ namespace YutArena.Managers
             if (!AreAllPiecesReady())
                 Debug.LogWarning("TestGameManager: 말 생성을 기다리다 시간 초과 - 그대로 첫 턴을 시작합니다.");
 
+            // 씬은 로딩 게이지 70%에서 초기화하지만 첫 턴과 턴 타이머는
+            // 게이지가 100%가 되고 패널이 닫힌 뒤에 시작한다.
+            while (GameStartLoadingPanel.IsBlockingGameplay)
+                yield return null;
+
             firstTurnCoroutine = null;
             turnManager.StartFirstTurn();
 
-            // ===================================================================
-            // Escape 승리조건 2번용 실시간 제한시간 타이머 (첫 턴과 같이 시작)
-            // ===================================================================
-            if (settings.timeLimitMinutes != GameRuleDefine.UnlimitedTimeMinutes)
-            {
-                if (timeLimitCoroutine != null) StopCoroutine(timeLimitCoroutine); // 이전 판 타이머 남아있으면 정리
-                timeLimitCoroutine = StartCoroutine(TimeLimitRoutine(settings.timeLimitMinutes * 60f));
-            }
         }
 
         // 모든 말이 스킬 시스템에 등록됐거나, 캐릭터 없는 말까지 포함해 화면에 다 생성됐으면 준비 완료
@@ -230,29 +222,9 @@ namespace YutArena.Managers
             return FindObjectsByType<DebugPieceView>(FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length >= totalPieces;
         }
 
-        //  위 타이머용 필드+코루틴
-        private Coroutine timeLimitCoroutine;
-        private float gameTimerEndsAt = -1f;
-
-        private IEnumerator TimeLimitRoutine(float totalSeconds)
-        {
-            Debug.Log("[제한시간] " + (totalSeconds / 60f) + "분 타이머 시작");
-            gameTimerEndsAt = Time.time + totalSeconds;
-            yield return new WaitForSeconds(totalSeconds);
-            timeLimitCoroutine = null;
-            gameTimerEndsAt = -1f;
-            winConditionManager.HandleTimeLimitReached(); // 시간 다 됐으니 지금까지 점수로 승부 결정
-        }
-
         // WinConditionManager가 승패를 확정지었을 때호출됨
         public void EndGame(GameResultData result)
         {
-            if (timeLimitCoroutine != null) //  게임이 다른 이유로 먼저 끝났으면 남은 제한시간 타이머 정리
-            {
-                StopCoroutine(timeLimitCoroutine);
-                timeLimitCoroutine = null;
-            }
-            gameTimerEndsAt = -1f;
             SetPhase(GamePhase.Result); // 결과화면으로 전환
             OnGameEnded?.Invoke(result); // 결과화면 UI에 승자 정보 전달
         }

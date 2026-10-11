@@ -49,7 +49,6 @@ namespace YutArena.UI
             "Blue"
         };
 
-        private readonly int[] gameTimeOptions = { 15, 20, 25 };
         private readonly int[] turnTimeOptions = { 30, 40, 50, 60 };
 
         [Header("Mode")]
@@ -105,12 +104,6 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text turnLengthValueText;
 
         [Header("Time")]
-        [Tooltip("게임 시간 감소 버튼")]
-        [SerializeField] private Button gameTimeLeftButton;
-        [Tooltip("게임 시간 증가 버튼")]
-        [SerializeField] private Button gameTimeRightButton;
-        [Tooltip("게임 시간 텍스트")]
-        [SerializeField] private TMP_Text gameTimeValueText;
         [Tooltip("턴 시간 감소 버튼")]
         [SerializeField] private Button turnTimeLeftButton;
         [Tooltip("턴 시간 증가 버튼")]
@@ -136,7 +129,6 @@ namespace YutArena.UI
         private int selectedPlayerCount = GameRuleDefine.DefaultPlayerCount;
         private int mapIndex;
         private int turnLength = GameRuleDefine.DefaultMaxTurnCount;
-        private int gameTimeIndex;
         private int turnTimeIndex;
         private bool isTeamMode;
         private int[] playerTeamIndexes = { 0, 0, 0, 0 };
@@ -150,11 +142,11 @@ namespace YutArena.UI
 
         // The bottom option is TurnLength; the last row contains Start and Back.
         private TMP_Text[] NavigationTexts => new[] { gameModeValueText, playerCountValueText,
-            teamModeValueText, sharedInputLabel, mapValueText, gameTimeValueText, turnTimeValueText, turnLengthValueText };
+            teamModeValueText, sharedInputLabel, mapValueText, turnTimeValueText, turnLengthValueText };
         private Button[] NavigationLeftButtons => new[] { gameModeLeftButton, playerCountLeftButton,
-            teamModeLeftButton, sharedInputLeftButton, mapLeftButton, gameTimeLeftButton, turnTimeLeftButton, turnLengthLeftButton };
+            teamModeLeftButton, sharedInputLeftButton, mapLeftButton, turnTimeLeftButton, turnLengthLeftButton };
         private Button[] NavigationRightButtons => new[] { gameModeRightButton, playerCountRightButton,
-            teamModeRightButton, sharedInputRightButton, mapRightButton, gameTimeRightButton, turnTimeRightButton, turnLengthRightButton };
+            teamModeRightButton, sharedInputRightButton, mapRightButton, turnTimeRightButton, turnLengthRightButton };
 
         private GameMode SelectedGameMode
         {
@@ -226,22 +218,24 @@ namespace YutArena.UI
             }
             if (up || down)
             {
-                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : 8)) % 9;
+                int buttonRow = NavigationTexts.Length;
+                int rowCount = buttonRow + 1;
+                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : rowCount - 1)) % rowCount;
                 HighlightNavigationRow();
                 return;
             }
             if (navigationRow < 0) return;
             if (left || right)
             {
-                Button target = navigationRow == 8
+                Button target = navigationRow == NavigationTexts.Length
                     ? (navigationButton == startGameButton ? backButton : startGameButton)
                     : (left ? NavigationLeftButtons[navigationRow] : NavigationRightButtons[navigationRow]);
                 SelectNavigationButton(target);
-                if (navigationRow != 8 && target != null && target.isActiveAndEnabled && target.IsInteractable())
+                if (navigationRow != NavigationTexts.Length && target != null && target.isActiveAndEnabled && target.IsInteractable())
                     target.onClick.Invoke();
                 return;
             }
-            if (submit && navigationRow == 8 && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
+            if (submit && navigationRow == NavigationTexts.Length && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
                 navigationButton.onClick.Invoke();
         }
 
@@ -250,7 +244,7 @@ namespace YutArena.UI
             if (highlightedText != null) highlightedText.color = highlightedTextColor;
             highlightedText = null;
             SelectNavigationButton(null);
-            if (navigationRow == 8)
+            if (navigationRow == NavigationTexts.Length)
                 SelectNavigationButton(startGameButton);
             else
             {
@@ -292,8 +286,6 @@ namespace YutArena.UI
             AddClick(mapRightButton, NextMap);
             AddClick(turnLengthLeftButton, DecreaseTurnLength);
             AddClick(turnLengthRightButton, IncreaseTurnLength);
-            AddClick(gameTimeLeftButton, PreviousGameTime);
-            AddClick(gameTimeRightButton, NextGameTime);
             AddClick(turnTimeLeftButton, PreviousTurnTime);
             AddClick(turnTimeRightButton, NextTurnTime);
             AddClick(startGameButton, StartGame);
@@ -378,18 +370,6 @@ namespace YutArena.UI
             RefreshUI();
         }
 
-        private void PreviousGameTime()
-        {
-            gameTimeIndex = Mathf.Max(0, gameTimeIndex - 1);
-            RefreshUI();
-        }
-
-        private void NextGameTime()
-        {
-            gameTimeIndex = Mathf.Min(gameTimeOptions.Length - 1, gameTimeIndex + 1);
-            RefreshUI();
-        }
-
         private void PreviousTurnTime()
         {
             turnTimeIndex = Mathf.Max(0, turnTimeIndex - 1);
@@ -425,7 +405,6 @@ namespace YutArena.UI
             SetText(teamModeValueText, isTeamMode ? "Team" : "Solo");
             SetText(mapValueText, mapLabels[mapIndex]);
             SetText(turnLengthValueText, turnLength + " Turns");
-            SetText(gameTimeValueText, gameTimeOptions[gameTimeIndex] + " Minutes");
             SetText(turnTimeValueText, turnTimeOptions[turnTimeIndex] + " Seconds");
 
             SetInteractable(playerCountLeftButton, selectedPlayerCount > GameRuleDefine.MinDemoPlayerCount);
@@ -434,8 +413,6 @@ namespace YutArena.UI
             SetInteractable(teamModeRightButton, CanUseTeamMode());
             SetInteractable(turnLengthLeftButton, turnLength > GameRuleDefine.MinMaxTurnCount);
             SetInteractable(turnLengthRightButton, turnLength < GameRuleDefine.MaxMaxTurnCount);
-            SetInteractable(gameTimeLeftButton, gameTimeIndex > 0);
-            SetInteractable(gameTimeRightButton, gameTimeIndex < gameTimeOptions.Length - 1);
             SetInteractable(turnTimeLeftButton, turnTimeIndex > 0);
             SetInteractable(turnTimeRightButton, turnTimeIndex < turnTimeOptions.Length - 1);
 
@@ -634,7 +611,6 @@ namespace YutArena.UI
                 matchComposition = (int)GetMatchComposition(),
                 playerCount = selectedPlayerCount,
                 maxTurnCount = turnLength,
-                gameTimeMinutes = gameTimeOptions[gameTimeIndex],
                 turnTimeSeconds = turnTimeOptions[turnTimeIndex],
                 isTeamMode = isTeamMode,
                 playerTeams = CreatePlayerTeamData()

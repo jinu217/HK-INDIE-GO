@@ -91,7 +91,7 @@ namespace YutArena.Test
 
         private IEnumerator PlayExtraSoundAfterDelay()
         {
-            yield return new WaitForSeconds(extraThrowSoundDelay);
+            yield return new WaitForSeconds(extraThrowSoundDelay / YutArena.Managers.GeneralSettingsManager.PresentationSpeedMultiplier);
             PlayOneShot(extraThrowConfirmedClip);
             extraSoundCoroutine = null;
         }
