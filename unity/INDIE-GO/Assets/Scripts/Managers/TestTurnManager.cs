@@ -671,20 +671,22 @@ namespace YutArena.Managers
         {
             PlayerSlot previousPlayer = CurrentTurn.currentPlayer; // 방금 턴이 끝난 사람 (이미 순서에서 빠졌을 수도 있음)
             TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
-            if (IsNewRound(previousPlayer, TurnOrder.Current)) CurrentTurn.roundNumber++;
+            bool isNewRound = IsNewRound(previousPlayer, TurnOrder.Current);
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
 
             // 기획(10/17): 턴 수는 "4명이 다 돌면 1턴" = 라운드 기준.
-            // "15턴의 마지막 플레이어가 턴이 끝났을 때" 판정 -> 16라운드로 넘어가는 순간(>)에 판정해서
-            // 마지막 라운드(15라운드)까지는 전원이 실제로 플레이함.
-            if (!maxTurnLimitHandled && settings != null && settings.maxTurnCount > 0 &&
-                CurrentTurn.roundNumber > settings.maxTurnCount)
+            // "15턴의 마지막 플레이어가 턴이 끝났을 때" 판정 -> 마지막 라운드(15라운드)까지는 전원이 실제로 플레이함.
+            // 버그 수정: 예전엔 라운드를 16으로 먼저 올린 뒤 판정해서 게임이 멈출 때 화면에 "16/15"가 떴음.
+            // 그래서 라운드를 올리기 전에 "방금 끝난 게 마지막 라운드였는지" 먼저 확인하고, 마지막이면 15에서 멈춤
+            if (isNewRound && !maxTurnLimitHandled && settings != null && settings.maxTurnCount > 0 &&
+                CurrentTurn.roundNumber >= settings.maxTurnCount)
             {
                 maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
                 Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
                 winConditionManager.HandleTimeLimitReached();
                 if (CurrentTurn.isGameEnded) return; // 턴제한 함수
             }
+            if (isNewRound) CurrentTurn.roundNumber++;
 
             BeginTurnFor(TurnOrder.Current);
         }
