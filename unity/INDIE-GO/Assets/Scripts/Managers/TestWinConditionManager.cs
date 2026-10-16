@@ -119,7 +119,25 @@ namespace YutArena.Managers
                 activeTeams.Remove(team);
                 // 턴 순서에서 이 팀 플레이어들을 빼달라고 TurnManager한테 부탁
                 turnManager.RemovePlayersOfTeam(team, settings);
+                ClearBoardPiecesOfTeam(team);
                 Debug.Log(team + " 목표 달성! " + finishedRanking.Count + "등으로 기록, 남은 " + activeTeams.Count + "팀으로 게임 계속");
+            }
+        }
+        // ===================================================================
+        // 버그 수정: 게임에서 빠진 팀(순위 확정/탈주)의 말이 판 위에 그대로 남아서,
+        // 남은 사람들이 그 말을 잡고 보너스 던지기를 받거나 길을 막는 문제가 있었음.
+        // 빠지는 순간 그 팀 말을 전부 대기 상태로 되돌려 판에서 내림 (업기/상태이상도 같이 정리됨)
+        // 게임이 완전히 끝날 때(Declare)는 결과 화면에서 판이 그대로 보이게 안 치움
+        // ===================================================================
+        private void ClearBoardPiecesOfTeam(TeamSlot team)
+        {
+            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            {
+                if (MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i) != team) continue;
+                if (!playerManager.TryGetPlayer(i, out var player)) continue;
+
+                foreach (var piece in player.RuntimeData.Pieces)
+                    piece.Reset();
             }
         }
         // 승리를 확정짓고 TurnManager, GameManager에 알리는 함수 (진짜로 게임이 끝날 때만 호출됨)
@@ -262,6 +280,7 @@ namespace YutArena.Managers
                 eliminatedTeams.Add(team);
                 activeTeams.Remove(team);
                 turnManager.RemovePlayersOfTeam(team, settings); // 남은 팀원(있다면)도 마저 순서에서 제거
+                ClearBoardPiecesOfTeam(team);
                 Debug.Log(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
             }
         }

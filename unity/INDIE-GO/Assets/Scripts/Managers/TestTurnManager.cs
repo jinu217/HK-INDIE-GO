@@ -93,6 +93,7 @@ namespace YutArena.Managers
                 currentIndex = 0
             };
             Debug.Log("[실제 게임] 확정된 순서: " + string.Join(" -> ", determinedOrder)); // 테스트용, 진짜 게임이 쓰는 순서를 딱 한 번 찍음
+            seatOrder = new List<PlayerSlot>(determinedOrder); // 라운드 계산용 (IsNewRound 참고)
             CurrentTurn.roundNumber = 1;
             CurrentTurn.turnNumber = 1;
             maxTurnLimitHandled = false;
@@ -394,16 +395,33 @@ namespace YutArena.Managers
             {
                 ResetFinishedPiecesToWaiting(playerId);
             }
+            // ===================================================================
+            // 다인전(개인전 3~4명): 이번 이동으로 목표를 채워 순위가 확정되면 이 플레이어는
+            // 턴 순서에서 빠짐(RemovePlayersOfTeam). 빠진 사람이 남은 윷 결과/보너스 던지기로
+            // 아직 경쟁 중인 사람 말을 잡으면 안 되므로, 전부 버리고 바로 턴을 끝냄.
+            // (팀전 2vs2는 목표 채우면 바로 게임이 끝나서 여기 안 옴)
+            // ===================================================================
+            if (IsCurrentPlayerOutOfTurnOrder())
+            {
+                ConsumeCaptureResults(playerId); // 이번 이동으로 잡은 표시만 정리 (보너스 없음)
+                pendingResults.Clear();
+                pendingCaptureThrows = 0;
+                pendingSkillThrows = 0;
+                OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+                Debug.Log("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
+                EndTurn();
+                return;
+            }
             SetPhase(TurnPhase.CheckBonusThrow); // 잡기로 보너스 던지기 생겼는지 확인하는 단계로 표시
                                                  //  상대 말들의 CC(Kill/Retire)를
                                                  // 직접 훑어서 확인함. 윷/모(4~5칸)로 잡으면 Retire(추가턴 없음),
                                                  // 도~걸/뒷도(1~3칸,-1칸)로 잡으면 Kill(추가턴 있음)
-            bool gotKillCapture = ConsumeCaptureResults(playerId);
-            if (gotKillCapture) // 이번 이동으로 상대 말을 Kill로 잡았으면
+            int captureBonusCount = ConsumeCaptureResults(playerId);
+            if (captureBonusCount > 0) // 이번 이동으로 상대 말을 Kill로 잡았으면
             {
-                pendingCaptureThrows++;             // 나중에 쓸 보너스 던지기 개수 +1 (지금 바로 던지는 거 아님)
-                CurrentTurn.extraThrowByCaptureCount++;
-                AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  잡기 보너스도 시간 더해줌
+                pendingCaptureThrows += captureBonusCount; // 잡은 팀 수만큼 보너스 던지기 (지금 바로 던지는 거 아님)
+                CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
+                AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  잡기 보너스도 시간 더해줌
             }
             // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저,
             // 플레이어가 두 번째 화살표를 누를 때까지 기다림 (MoveDestinationSelector가 화살표 표시)
@@ -590,13 +608,15 @@ namespace YutArena.Managers
         }
         // 방금 이동으로 상대 말이 잡혔는지(Kill/Retire) 전체 상대 플레이어를 훑어서 확인.
         // 발견하면 그 즉시 CC를 지워서(ClearCc) "소비 완료" 처리함 (다음에 또 잡힌 걸로 착각 안 하게).
-        // 반환값: Kill(추가턴 있는 잡기)이 하나라도 있었으면 true
+        // 반환값: Kill(추가턴 있는 잡기)로 잡힌 "팀 수" = 이번에 받을 잡기 보너스 던지기 횟수
+        // 기획: "업은 말은 1회 / 다른 팀의 말 - 2팀의 말을 동시에 잡으면 2회"
+        // (업힌 말은 리더만 Kill이라 1회, 팀전에서 같은 팀 두 명의 말을 같이 잡아도 1팀이라 1회)
         // 자폭 같은 스킬은 현재 플레이어 말의 Kill/Retire도 정리할 수 있습니다.
-        private bool ConsumeCaptureResults(
+        private int ConsumeCaptureResults(
             int movingPlayerId,
             bool includeMovingPlayer = false)
         {
-            bool gotKill = false;
+            var killedTeams = new HashSet<TeamSlot>();
             foreach (var otherPlayer in playerManager.ActivePlayers)
             {
                 // 일반 이동은 기존처럼 상대 말만, 스킬은 필요할 때 모든 말을 검사합니다.
@@ -606,17 +626,20 @@ namespace YutArena.Managers
                 foreach (var piece in otherPlayer.RuntimeData.Pieces)
                 {
                     //수정: 잡기 마커만 소비하여 함께 존재하는 다른 효과를 지우지 않습니다.
-                    gotKill |= CcEffectService.ConsumeCapture(piece);
+                    if (CcEffectService.ConsumeCapture(piece))
+                        killedTeams.Add(MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)otherPlayer.PlayerId));
                 }
             }
-            return gotKill;
+            return killedTeams.Count;
         }
         private void EndTurn()
         {
             StopTurnTimer(); // 턴이 진짜로 끝나는 지점이니, 흐르고 있던 통합 타이머 정리
             // 윤누리 추가 1칸 이동을 안 누른 채 턴이 끝나면(시간 초과 등) 자동으로 이동시킴.
             // 턴이 끝나는 중이라 여기서 잡아도 보너스 던지기는 없고, 잡기 표시만 정리함.
-            if (!CurrentTurn.isGameEnded && TryGetPendingForcedMove(out _, out CHAR_001_1_Status forcedMoveOwner))
+            // 순위 확정으로 게임에서 빠진 사람은 추가 이동도 안 함.
+            if (!CurrentTurn.isGameEnded && !IsCurrentPlayerOutOfTurnOrder() &&
+                TryGetPendingForcedMove(out _, out CHAR_001_1_Status forcedMoveOwner))
             {
                 forcedMoveOwner.ExecutePendingForcedMove();
                 ConsumeCaptureResults((int)CurrentTurn.currentPlayer);
@@ -634,20 +657,22 @@ namespace YutArena.Managers
         // HandleTimeLimitReached가 게임을 끝내지 않는 모드에서, 매 턴마다 같은 경고 로그가
         // 무한 반복되는 걸 막는다. 새 게임 시작 시(StartFirstTurn) false로 초기화됨.
         private bool maxTurnLimitHandled;
+        // 라운드 계산용: 게임 시작 때 확정된 순서를 그대로 기억해둠 (중간에 사람이 빠져도 안 바뀜)
+        private List<PlayerSlot> seatOrder = new List<PlayerSlot>();
 
         // 다음 사람 차례로 넘김
         private void AdvanceToNextPlayer()
         {
+            PlayerSlot previousPlayer = CurrentTurn.currentPlayer; // 방금 턴이 끝난 사람 (이미 순서에서 빠졌을 수도 있음)
             TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
-            if (TurnOrder.currentIndex == 0) CurrentTurn.roundNumber++;
+            if (IsNewRound(previousPlayer, TurnOrder.Current)) CurrentTurn.roundNumber++;
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
 
-            // 버그 수정: >= 였을 때는 turnNumber가 maxTurnCount와 같아지는 순간(=마지막 턴이
-            // 시작되기 직전)에 걸려서, 그 마지막 턴(예: 20턴 설정이면 20번째 턴)이 실제로는
-            // 시작도 못 해보고 게임이 끝났음. maxTurnCount번째 턴까지는 실제로 플레이되게
-            // "그걸 넘어섰을 때"(>)만 종료되도록 바꿈.
+            // 기획(10/17): 턴 수는 "4명이 다 돌면 1턴" = 라운드 기준.
+            // "15턴의 마지막 플레이어가 턴이 끝났을 때" 판정 -> 16라운드로 넘어가는 순간(>)에 판정해서
+            // 마지막 라운드(15라운드)까지는 전원이 실제로 플레이함.
             if (!maxTurnLimitHandled && settings != null && settings.maxTurnCount > 0 &&
-                CurrentTurn.turnNumber > settings.maxTurnCount)
+                CurrentTurn.roundNumber > settings.maxTurnCount)
             {
                 maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
                 Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
@@ -656,6 +681,28 @@ namespace YutArena.Managers
             }
 
             BeginTurnFor(TurnOrder.Current);
+        }
+
+        // ===================================================================
+        // 버그 수정: 예전엔 "순서 목록 0번 자리로 돌아오면" 라운드 +1 이었는데, 0번 자리 사람이
+        // 자기 차례에 목표를 채워 빠지면 다음 사람이 새 0번이 돼서, 한 바퀴가 안 끝났는데도
+        // 라운드가 +1 됐음 (라운드 하나가 그냥 날아감).
+        // 그래서 게임 시작 때 순서(seatOrder) 기준으로 "다음 사람이 방금 사람보다 앞자리(또는 같은 사람)면"
+        // 한 바퀴 돈 걸로 셈. 누가 빠져도 처음 자리 번호는 안 바뀌어서 정확함.
+        // ===================================================================
+        private bool IsNewRound(PlayerSlot previousPlayer, PlayerSlot nextPlayer)
+        {
+            int previousSeat = seatOrder.IndexOf(previousPlayer);
+            int nextSeat = seatOrder.IndexOf(nextPlayer);
+            if (previousSeat < 0 || nextSeat < 0)
+                return TurnOrder.currentIndex == 0; // 방어 처리: 자리 정보가 없으면 예전 방식
+            return nextSeat <= previousSeat;
+        }
+
+        // 지금 차례인 사람이 턴 순서에서 빠졌는지 (다인전 순위 확정 / 탈주)
+        private bool IsCurrentPlayerOutOfTurnOrder()
+        {
+            return !TurnOrder.order.Contains(CurrentTurn.currentPlayer);
         }
         // WinConditionManager가 승리 조건을 확인했을 때 호출해서 부탁하는 함수
         // (CurrentTurn은 이 클래스만 바꿀 수 있어서, 다른 클래스는 직접 못 바꾸고 이 함수로 부탁함)
@@ -691,15 +738,15 @@ namespace YutArena.Managers
             if (CurrentTurn == null || CurrentTurn.currentPlayer == PlayerSlot.None)
                 return;
 
-            bool gotKillCapture = ConsumeCaptureResults(
+            int captureBonusCount = ConsumeCaptureResults(
                 (int)CurrentTurn.currentPlayer,
                 includeMovingPlayer: true);
-            if (!gotKillCapture || suppressExtraThrow)
+            if (captureBonusCount == 0 || suppressExtraThrow)
                 return;
 
-            pendingCaptureThrows++;
-            CurrentTurn.extraThrowByCaptureCount++;
-            AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds); //  스킬로 인한 잡기 보너스도 시간 더해줌
+            pendingCaptureThrows += captureBonusCount; // 잡은 팀 수만큼
+            CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
+            AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  스킬로 인한 잡기 보너스도 시간 더해줌
         }
 
         // 스킬의 SP/쿨다운과 결과 반영을 마친 뒤 현재 플레이어의 턴을 종료합니다.
