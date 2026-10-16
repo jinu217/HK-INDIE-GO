@@ -261,7 +261,7 @@ namespace YutArena.UI
 
             GameStartSettings settings = GetSettings();
             int current = turnManager != null && turnManager.CurrentTurn != null
-                ? turnManager.CurrentTurn.turnNumber
+                ? turnManager.CurrentTurn.roundNumber // 턴 수 = 전원 1바퀴(라운드) 기준
                 : 0;
             int maximum = settings != null ? settings.maxTurnCount : 0;
 
