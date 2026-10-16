@@ -251,6 +251,16 @@ namespace YutArena.Managers
         public void RequestThrow()
         {
             if (!LocalSelectionInput.SharedInputAvailable) return;
+            // 턴 수 도달 후 타이브레이커 중이면, 일반 던지기 대신 타이브레이커 던지기로 보냄
+            // (던지기 버튼을 그대로 같이 씀. 한 화면에서 하니까 아직 안 던진 사람이 순서대로 한 명씩 던짐)
+            // 확률은 RequestTieBreakerThrow 안에서 타이브레이커 전용표(낙 없음)를 씀
+            if (winConditionManager != null && winConditionManager.IsTieBreakerActive)
+            {
+                if (winConditionManager.TieBreakerPendingPlayers.Count > 0)
+                    winConditionManager.RequestTieBreakerThrow(winConditionManager.TieBreakerPendingPlayers[0]);
+                return;
+            }
+            if (EndTurnIfCurrentPlayerOutOfTurnOrder()) return; // 스킬로 순위 확정돼 빠진 사람이면 턴 종료
             if (CurrentTurn.currentPhase != TurnPhase.WaitThrow)
             {
                 Debug.LogWarning("지금은 윷을 던질 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
@@ -313,6 +323,7 @@ namespace YutArena.Managers
         public void RequestMovePiece(int pieceId, YutResult chosenResult)
         {
             if (!LocalSelectionInput.SharedInputAvailable) return;
+            if (EndTurnIfCurrentPlayerOutOfTurnOrder()) return; // 스킬로 순위 확정돼 빠진 사람이면 턴 종료
             // 검사 1: 지금 말 이동 가능한 단계(WaitAction)가 맞는지
             if (CurrentTurn.currentPhase != TurnPhase.WaitAction)
             {
@@ -403,13 +414,7 @@ namespace YutArena.Managers
             // ===================================================================
             if (IsCurrentPlayerOutOfTurnOrder())
             {
-                ConsumeCaptureResults(playerId); // 이번 이동으로 잡은 표시만 정리 (보너스 없음)
-                pendingResults.Clear();
-                pendingCaptureThrows = 0;
-                pendingSkillThrows = 0;
-                OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
-                Debug.Log("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
-                EndTurn();
+                DiscardRemainingAndEndTurn();
                 return;
             }
             SetPhase(TurnPhase.CheckBonusThrow); // 잡기로 보너스 던지기 생겼는지 확인하는 단계로 표시
@@ -450,6 +455,7 @@ namespace YutArena.Managers
         // 윤누리 첫 이동 +1: 플레이어가 두 번째 화살표(추가 1칸)를 눌렀을 때 UI가 호출
         public void RequestForcedMove()
         {
+            if (EndTurnIfCurrentPlayerOutOfTurnOrder()) return; // 스킬로 순위 확정돼 빠진 사람이면 턴 종료
             if (CurrentTurn.currentPhase != TurnPhase.WaitAction)
             {
                 Debug.LogWarning("지금은 말을 이동할 수 있는 단계가 아님: " + CurrentTurn.currentPhase);
@@ -703,6 +709,34 @@ namespace YutArena.Managers
         private bool IsCurrentPlayerOutOfTurnOrder()
         {
             return !TurnOrder.order.Contains(CurrentTurn.currentPlayer);
+        }
+
+        // 게임에서 빠진 사람의 남은 윷 결과/보너스 던지기를 전부 버리고 바로 턴을 끝냄
+        private void DiscardRemainingAndEndTurn()
+        {
+            ConsumeCaptureResults((int)CurrentTurn.currentPlayer); // 이번 이동으로 잡은 표시만 정리 (보너스 없음)
+            pendingResults.Clear();
+            pendingCaptureThrows = 0;
+            pendingSkillThrows = 0;
+            OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+            Debug.Log("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
+            EndTurn();
+        }
+
+        // ===================================================================
+        // 버그 수정: 스킬 이동으로 목표 점수를 채우면 순서에서는 빠지는데(스킬 결과 처리는 건희 코드),
+        // 턴이 안 끝나서 빠진 사람이 남은 윷/던지기로 계속 플레이할 수 있었음.
+        // 그래서 던지기/이동 요청이 들어올 때 "이미 빠진 사람이면" 남은 결과를 버리고 턴을 끝냄.
+        // 반환값: 턴을 끝냈으면 true (요청한 쪽은 바로 return 해야 함)
+        // ===================================================================
+        private bool EndTurnIfCurrentPlayerOutOfTurnOrder()
+        {
+            if (CurrentTurn.isGameEnded || !IsCurrentPlayerOutOfTurnOrder()) return false;
+            if (CurrentTurn.currentPhase != TurnPhase.WaitThrow &&
+                CurrentTurn.currentPhase != TurnPhase.WaitAction) return false;
+
+            DiscardRemainingAndEndTurn();
+            return true;
         }
         // WinConditionManager가 승리 조건을 확인했을 때 호출해서 부탁하는 함수
         // (CurrentTurn은 이 클래스만 바꿀 수 있어서, 다른 클래스는 직접 못 바꾸고 이 함수로 부탁함)

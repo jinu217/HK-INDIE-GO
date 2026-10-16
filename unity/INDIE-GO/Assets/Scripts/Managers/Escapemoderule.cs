@@ -4,7 +4,8 @@ using YutArena.Common;
 
 namespace YutArena.Managers
 {
-    // 이스케이프 모드 승리 규칙: 목표 탈출 수(targetEscapeCount)를 먼저 채우면 승리
+    // 이스케이프 모드 승리 규칙: 필요 점수(targetEscapeCount)를 먼저 채우면 승리
+    // (기획 10/17 점수제: escapeCountByTeam에는 탈출한 말 개수 + 보너스 점수가 들어있음)
     // [수정] 인터페이스가 playerManager도 받게 바뀌었지만, Escape 모드는 여전히
     // escapeCountByTeam(숫자 카운트)만으로 충분해서 playerManager는 그냥 안 씀
     public class EscapeModeRule : MonoBehaviour, IGameModeRule

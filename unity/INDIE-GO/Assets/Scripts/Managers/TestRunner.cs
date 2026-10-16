@@ -23,8 +23,8 @@ public class TestRunner : MonoBehaviour
                 matchComposition = MatchComposition.OneVsOneVsOneVsOne,
                 isTeamMode = false,
                 playerCount = 4,
-                pieceCountPerPlayer = 4,
-                targetEscapeCount = 4,
+                pieceCountPerPlayer = GameRuleDefine.DefaultPieceCountPerPlayer,
+                targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount, // 필요 점수 (기본 5점)
                 timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
                 maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
                 turnTimeMode = TurnTimeMode.Limited,
