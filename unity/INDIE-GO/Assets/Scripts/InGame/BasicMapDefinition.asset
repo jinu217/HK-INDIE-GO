@@ -13,26 +13,24 @@ MonoBehaviour:
   m_Name: BasicMapDefinition
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
   mapType: 0
-  backgroundPrefab: {fileID: 7257135953520947148, guid: 8dbe797096687784e843a59994bfda32, type: 3}
-  boardPrefab: {fileID: 4842533177795376041, guid: cadec29d01c0aba40a0ffce27fb0558f, type: 3}
-  startTilePrefab: {fileID: 0}
-  outerTilePrefab: {fileID: 0}
-  innerTilePrefab: {fileID: 0}
-  corner01TilePrefab: {fileID: 0}
-  corner02TilePrefab: {fileID: 0}
-  corner03TilePrefab: {fileID: 0}
-  corner04TilePrefab: {fileID: 0}
-  centerTilePrefab: {fileID: 0}
+  backgroundPrefab: {fileID: 7174949109896036635, guid: a1a0f2b53a6b3da45a97cd5676d1a0c7, type: 3}
+  startTilePrefab: {fileID: 6737640671747586201, guid: 33a4bd61c51d6244eb69410cb2f85a3a, type: 3}
+  outerTilePrefab: {fileID: 7989472725348063604, guid: c69005a8dd95ee34380f907e3f03f4c9, type: 3}
+  innerTilePrefab: {fileID: 7989472725348063604, guid: c69005a8dd95ee34380f907e3f03f4c9, type: 3}
+  corner01TilePrefab: {fileID: 1638994605248726569, guid: 43a188f4df9d69e45bbe1a322d864a71, type: 3}
+  corner02TilePrefab: {fileID: 9020107021151581112, guid: f78ced332eb6ce04d9ac9e8f82c5dd62, type: 3}
+  corner03TilePrefab: {fileID: 3972990063589902561, guid: c01237a8db770304c8b45e66ed074c52, type: 3}
+  centerTilePrefab: {fileID: 7484498047524864238, guid: 89eb839e1e48d0f49851bd44e35e3a96, type: 3}
   specialTiles:
   - tileId: 6
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 11
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 16
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 22
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0

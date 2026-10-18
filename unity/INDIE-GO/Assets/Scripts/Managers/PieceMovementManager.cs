@@ -10,6 +10,7 @@ using YutArena.InGame;
 public sealed class PieceMovementManager : MonoBehaviour
 {
     [SerializeField] private PlayerManager playerManager;
+    private MapManager mapManager;
 
     public event System.Action<int, IReadOnlyList<int>, IReadOnlyList<BoardTileId>> OnVisualMoveResolved;
 
@@ -243,9 +244,16 @@ public sealed class PieceMovementManager : MonoBehaviour
             selectedPiece.CurrentTileId,
             moveCount);
         ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
+        BoardTileId landingTile = selectedPiece.CurrentTileId;
         NotifyVisualMoveResolved(playerId, movingPieces, path);
         //수정: 잡기와 업기 처리가 끝난 뒤 최종 이동 결과를 Player 시스템에 알립니다.
         NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
+
+        if (mapManager == null)
+            mapManager = FindFirstObjectByType<MapManager>();
+        // 이동 완료 패시브가 말을 다른 칸으로 옮겼다면 그 이동에서 도착 효과를 처리합니다.
+        if (mapManager != null && selectedPiece.CurrentTileId == landingTile)
+            mapManager.ResolveSpecialTile(player, selectedPiece, movingPieces.Count, this);
 
         Debug.Log(
             $"Player {playerId}, Piece {pieceId + 1}: {startingTile} -> " +

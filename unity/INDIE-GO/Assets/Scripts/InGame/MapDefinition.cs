@@ -4,18 +4,14 @@ using YutArena.Common;
 
 namespace YutArena.InGame
 {
-    public enum MapSpecialTileEffect
-    {
-        None,
-        Custom
-    }
-
     [Serializable]
     public class MapSpecialTileSetting
     {
-        [Tooltip("Only Center and Corner01 through Corner04 are supported as map special tiles.")]
+        [Tooltip("Center, Corner01~Corner03에 도착했을 때 발동합니다. Start와 겹치는 Corner04는 사용하지 않습니다.")]
         public BoardTileId tileId;
-        public MapSpecialTileEffect effect;
+        [Tooltip("MapSpecialTileEvent를 상속한 스크립트로 만든 이벤트 에셋을 연결하세요. 비어 있으면 발동하지 않습니다.")]
+        public MapSpecialTileEvent tileEvent;
+        [Tooltip("이벤트 스크립트에 전달할 맵별 설정값입니다.")]
         public int value;
     }
 
@@ -29,11 +25,8 @@ namespace YutArena.InGame
         public MapType mapType;
         [Tooltip("움직이지 않는 맵 배경 프리팹입니다.")]
         public GameObject backgroundPrefab;
-        // [Tooltip("기존 전체 보드 외형 프리팹입니다. 타일별 프리팹을 지정하지 않은 기존 맵과의 호환을 위해 유지합니다.")]
-        // public GameObject boardPrefab;
-
         [Header("Tile Visual Prefabs")]
-        [Tooltip("Start/Goal 타일의 화면용 프리팹입니다. 비어 있으면 논리 Anchor만 생성됩니다.")]
+        [Tooltip("타일 프리팹이 하나라도 지정되면 씬의 기본 말판은 숨깁니다. Start/Goal 타일의 화면용 프리팹입니다.")]
         public GameObject startTilePrefab;
         [Tooltip("Outer01~Outer16에 공통으로 생성할 화면용 프리팹입니다.")]
         public GameObject outerTilePrefab;
@@ -42,7 +35,6 @@ namespace YutArena.InGame
         public GameObject corner01TilePrefab;
         public GameObject corner02TilePrefab;
         public GameObject corner03TilePrefab;
-        public GameObject corner04TilePrefab;
         public GameObject centerTilePrefab;
 
         public MapSpecialTileSetting[] specialTiles;
@@ -54,9 +46,6 @@ namespace YutArena.InGame
             corner01TilePrefab != null ||
             corner02TilePrefab != null ||
             corner03TilePrefab != null ||
-            corner04TilePrefab != null ||
             centerTilePrefab != null;
-
-        //public bool HasBoardVisual => boardPrefab != null || HasTileVisualPrefab;
     }
 }

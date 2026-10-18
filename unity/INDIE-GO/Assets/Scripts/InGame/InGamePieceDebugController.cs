@@ -39,7 +39,7 @@ namespace YutArena.InGame
 
         private sealed class VisualMove
         {
-            public readonly List<Vector3> Waypoints = new List<Vector3>();
+            public readonly List<BoardTileId> Waypoints = new List<BoardTileId>();
             public Vector3 SegmentStart;
             public int NextWaypoint;
             public float Elapsed;
@@ -107,7 +107,7 @@ namespace YutArena.InGame
         [SerializeField] private Vector3[] player4HomePieceOffsets = CreateDefaultHomePieceOffsets();
 
         [Header("Debug Board Tile Positions")]
-        [Tooltip("MapDefinition에 Board Prefab이 없을 때 생성되는 임시 원형 보드의 타일 좌표입니다. 각 Element의 Position X/Y/Z를 조절할 수 있습니다.")]
+        [Tooltip("배경/타일 프리팹과 씬의 기본 말판이 모두 없을 때 생성되는 임시 원형 보드 좌표입니다.")]
         [SerializeField] private DebugBoardTilePosition[] debugBoardTilePositions = CreateDefaultDebugBoardTilePositions();
 
         private readonly Dictionary<BoardTileId, Vector3> boardPositions = new Dictionary<BoardTileId, Vector3>();
@@ -142,7 +142,7 @@ namespace YutArena.InGame
                 Debug.LogError("FixedFootholdCatalog resource is missing. The existing 2D foothold will be used.", this);
 
             // 실제 보드 프리팹이 없을 때만 공통 Anchor 위에 원형 디버그 마커를 표시한다.
-            if (mapManager == null || !mapManager.IsMapLoaded)
+            if (mapManager == null || !mapManager.HasMapVisual)
                 BuildBoard();
             foreach (PlayerController player in playerManager.ActivePlayers)
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
@@ -265,8 +265,8 @@ namespace YutArena.InGame
                 foreach (BoardTileId tile in path)
                 {
                     BoardTileId visualTile = tile == BoardTileId.None ? BoardTileId.Start : tile;
-                    if (TryGetTileWorldPosition(visualTile, out Vector3 waypoint))
-                        move.Waypoints.Add(waypoint);
+                    if (TryGetTileWorldPosition(visualTile, out _))
+                        move.Waypoints.Add(visualTile);
                 }
             }
         }
@@ -281,7 +281,8 @@ namespace YutArena.InGame
 
             foreach (DebugBoardTilePosition entry in debugBoardTilePositions)
             {
-                if (entry == null || entry.TileId == BoardTileId.None || entry.TileId == BoardTileId.Goal)
+                if (entry == null || entry.TileId == BoardTileId.None || entry.TileId == BoardTileId.Goal ||
+                    entry.TileId == BoardTileId.Corner04)
                     continue;
 
                 if (debugBoardTileAnchors.ContainsKey(entry.TileId))
@@ -347,7 +348,11 @@ namespace YutArena.InGame
                 float slice = Mathf.Min(remaining, NormalMoveSecondsPerTile - move.Elapsed);
                 remaining -= slice;
                 move.Elapsed += slice;
-                Vector3 waypoint = move.Waypoints[move.NextWaypoint];
+                // 고정 좌표 대신 현재 Anchor를 조회하여 이동 중 칸 위치 변경도 반영합니다.
+                bool isFinalWaypoint = move.NextWaypoint == move.Waypoints.Count - 1;
+                Vector3 waypoint = finalTarget;
+                if (!isFinalWaypoint && !TryGetTileWorldPosition(move.Waypoints[move.NextWaypoint], out waypoint))
+                    waypoint = finalTarget;
                 view.transform.position = Vector3.Lerp(
                     move.SegmentStart, waypoint, Mathf.Clamp01(move.Elapsed / NormalMoveSecondsPerTile));
                 if (move.Elapsed < NormalMoveSecondsPerTile) break;
@@ -449,15 +454,15 @@ namespace YutArena.InGame
         /// <summary>
         /// 하이라이트 마커 배치용: BoardTileId 의 월드 좌표를 반환합니다.
         /// MapManager(실제 맵) → 디버그 원형 보드 앵커 → 좌표 캐시 순으로 조회하며,
-        /// 보드 위 말과 같은 높이/깊이 보정(BoardPiecePositionAdjustment)을 적용합니다.
+        /// 실제 맵은 PieceAnchor, 기존 디버그 보드는 공통 높이/깊이 보정을 사용합니다.
         /// </summary>
         public bool TryGetTileWorldPosition(BoardTileId tile, out Vector3 position)
         {
             if (tile != BoardTileId.None && tile != BoardTileId.Goal)
             {
-                if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
+                if (mapManager != null && mapManager.TryGetPiecePosition(tile, out Vector3 mapTilePosition))
                 {
-                    position = mapTilePosition + BoardPiecePositionAdjustment;
+                    position = mapTilePosition;
                     return true;
                 }
 
@@ -516,14 +521,8 @@ namespace YutArena.InGame
             if (piece.State == PieceState.Waiting) return GetHomePosition(playerId, pieceId);
             if (piece.State == PieceState.Goal) return new Vector3((playerId - 2.5f) * 1.2f, -4.7f) + GetOffset(pieceId);
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
-            // Permanent: apply one shared 3D height/depth adjustment to every board piece.
-            if (mapManager != null && mapManager.TryGetTilePosition(tile, out Vector3 mapTilePosition))
-                return mapTilePosition + BoardPiecePositionAdjustment;
-
-            if (debugBoardTileAnchors.TryGetValue(tile, out Transform debugTileAnchor))
-                return debugTileAnchor.position + BoardPiecePositionAdjustment;
-
-            return boardPositions[tile] + BoardPiecePositionAdjustment;
+            // 경유점/하이라이트와 동일한 중심점을 사용하고, 말별 분산 오프셋은 호출부에서 더합니다.
+            return TryGetTileWorldPosition(tile, out Vector3 position) ? position : Vector3.zero;
         }
 
         private Vector3 GetCarriedPieceStoragePosition(int playerId, int pieceId)

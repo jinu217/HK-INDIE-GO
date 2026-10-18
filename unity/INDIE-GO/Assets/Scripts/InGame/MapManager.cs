@@ -6,29 +6,38 @@ namespace YutArena.InGame
 {
     /// <summary>
     /// Loads the visual board selected by GameStartSettings.mapType and exposes its tile anchors.
-    /// It does not own movement or special-tile gameplay rules.
+    /// Special-tile gameplay effects are delegated to the configured event assets.
     /// </summary>
     public sealed class MapManager : MonoBehaviour
     {
         [SerializeField] private MapDefinition[] mapDefinitions;
         [SerializeField] private Transform backgroundRoot;
-        [SerializeField] private Transform boardRoot;
+        [Tooltip("타일 프리팹이 하나도 지정되지 않은 맵에서만 표시할 씬의 기본 말판입니다. 직접 맞춘 위치/회전/크기를 그대로 사용합니다.")]
+        [SerializeField] private Transform fallbackBoardVisual;
 
         [Header("Common Board Layout")]
         [Tooltip("InGameScene Hierarchy에 배치한 공통 Start, Outer01 등의 타일 Anchor 루트입니다. 이 자식들의 위치를 수정하면 말 이동 위치에 반영됩니다.")]
         [SerializeField] private Transform commonBoardLayoutRoot;
 
+        [Tooltip("PieceAnchor가 없는 타일에 자동 기준점을 만들 때 모델 앞쪽으로 확보할 월드 거리입니다. 여러 말의 분산 배치가 모델에 묻히지 않도록 여유를 둡니다. 프리팹에 직접 둔 PieceAnchor에는 적용하지 않습니다.")]
+        [SerializeField, Min(0f)] private float automaticPieceAnchorClearance = 0.3f;
+
         private readonly Dictionary<BoardTileId, Vector3> tilePositions = new Dictionary<BoardTileId, Vector3>();
         private readonly Dictionary<BoardTileId, Transform> commonTileAnchors = new Dictionary<BoardTileId, Transform>();
+        private readonly Dictionary<BoardTileId, Transform> pieceAnchors = new Dictionary<BoardTileId, Transform>();
         private readonly Dictionary<BoardTileId, MapSpecialTileSetting> specialTileSettings = new Dictionary<BoardTileId, MapSpecialTileSetting>();
         private readonly List<GameObject> loadedTileVisualInstances = new List<GameObject>();
         private GameObject loadedBackgroundInstance;
-        private GameObject loadedBoardInstance;
         private bool isCommonBoardLayoutCached;
+        private bool useSpecialTiles;
+        private bool isResolvingSpecialTile;
         private BoardTileRuntimeStateManager boardRuntimeState;
 
         public MapDefinition CurrentMap { get; private set; }
-        public bool IsMapLoaded => loadedBoardInstance != null || loadedTileVisualInstances.Count > 0;
+        public bool IsMapLoaded => CurrentMap != null && isCommonBoardLayoutCached;
+        public bool HasMapVisual => loadedBackgroundInstance != null ||
+                                    loadedTileVisualInstances.Count > 0 ||
+                                    (fallbackBoardVisual != null && fallbackBoardVisual.gameObject.activeInHierarchy);
         public BoardTileRuntimeStateManager BoardRuntimeState => EnsureBoardRuntimeState();
 
         private void Awake()
@@ -66,21 +75,16 @@ namespace YutArena.InGame
             }
 
             CurrentMap = definition;
+            useSpecialTiles = settings.useSpecialTile;
             CacheSpecialTileSettings(definition);
 
-            /*if (definition.boardPrefab != null)
-            {
-                loadedBoardInstance = boardRoot != null
-                    ? Instantiate(definition.boardPrefab, boardRoot)
-                    : Instantiate(definition.boardPrefab);
-                loadedBoardInstance.name = definition.boardPrefab.name;
-                loadedBoardInstance.transform.localPosition = Vector3.zero;
-            }*/ 
-            //(제거요망)
+            // 씬에 놓은 기본 말판과 맵별 타일 프리팹을 동시에 표시하지 않습니다.
+            if (fallbackBoardVisual != null)
+                fallbackBoardVisual.gameObject.SetActive(!definition.HasTileVisualPrefab);
 
             CreateTileVisuals(definition);
 
-            if (!IsMapLoaded)
+            if (!HasMapVisual)
                 Debug.LogWarning($"MapManager: {settings.mapType}에 보드 외형 프리팹이 없어 논리 Anchor와 원형 디버그 보드를 사용합니다.", this);
 
             return IsMapLoaded;
@@ -103,9 +107,58 @@ namespace YutArena.InGame
             return commonTileAnchors.TryGetValue(tileId, out anchor) && anchor != null;
         }
 
+        /// <summary>말 배치 중심점입니다. 자식 Transform이므로 칸을 옮기면 즉시 따라갑니다.</summary>
+        public bool TryGetPiecePosition(BoardTileId tileId, out Vector3 position)
+        {
+            if (pieceAnchors.TryGetValue(tileId, out Transform anchor) && anchor != null)
+            {
+                position = anchor.position;
+                return true;
+            }
+
+            // 타일 외형/앵커가 없는 기존 맵은 이전 보정을 유지합니다.
+            if (TryGetTilePosition(tileId, out position))
+            {
+                position += new Vector3(0f, 0.098f, -0.15f);
+                return true;
+            }
+
+            return false;
+        }
+
         public bool TryGetSpecialTileSetting(BoardTileId tileId, out MapSpecialTileSetting setting)
         {
             return specialTileSettings.TryGetValue(tileId, out setting);
+        }
+
+        /// <summary>이동한 말 묶음이 특수 칸에 도착하면 연결된 이벤트를 한 번 실행합니다.</summary>
+        public void ResolveSpecialTile(
+            PlayerController player,
+            PlayerRuntimeData.PieceRuntimeData piece,
+            int movingPieceCount,
+            PieceMovementManager movement)
+        {
+            if (!useSpecialTiles || isResolvingSpecialTile || player == null || piece == null ||
+                piece.State != PieceState.InBoard ||
+                !specialTileSettings.TryGetValue(piece.CurrentTileId, out MapSpecialTileSetting setting) ||
+                setting.tileEvent == null)
+                return;
+
+            // 이벤트가 다시 말을 이동시키더라도 특수 타일 이벤트가 무한 연쇄되지 않게 합니다.
+            isResolvingSpecialTile = true;
+            try
+            {
+                setting.tileEvent.Execute(new MapSpecialTileContext(
+                    this, player, piece, movingPieceCount, setting.value, movement));
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogException(exception, setting.tileEvent);
+            }
+            finally
+            {
+                isResolvingSpecialTile = false;
+            }
         }
 
         private MapDefinition FindDefinition(MapType requestedMap)
@@ -119,7 +172,7 @@ namespace YutArena.InGame
                 foreach (MapDefinition definition in mapDefinitions)
                 {
                     if (definition != null && definition.mapType != MapType.Random &&
-                        (definition.backgroundPrefab != null /*|| definition.HasBoardVisual*/))
+                        (definition.backgroundPrefab != null || definition.HasTileVisualPrefab))
                         candidates.Add(definition);
                 }
 
@@ -198,7 +251,50 @@ namespace YutArena.InGame
                 visualInstance.transform.localPosition = Vector3.zero;
                 visualInstance.transform.localRotation = Quaternion.identity;
                 loadedTileVisualInstances.Add(visualInstance);
+                pieceAnchors[pair.Key] = FindOrCreatePieceAnchor(visualInstance.transform);
             }
+        }
+
+        private Transform FindOrCreatePieceAnchor(Transform tileVisual)
+        {
+            // 프리팹에서 직접 지정한 점을 최우선으로 사용합니다. 모델의 피벗은 변경하지 않습니다.
+            foreach (Transform child in tileVisual.GetComponentsInChildren<Transform>(true))
+            {
+                if (child != tileVisual && child.name == "PieceAnchor")
+                    return child;
+            }
+
+            var anchor = new GameObject("PieceAnchor").transform;
+            anchor.SetParent(tileVisual, false);
+
+            // 기존 프리팹도 바로 사용할 수 있게 화면상 모델 중심의 카메라 쪽에 초기 배치합니다.
+            // Bounds 기반의 근사값이며 정확한 표면 위치는 프리팹에 PieceAnchor를 추가해 조절합니다.
+            Bounds bounds = default;
+            bool hasBounds = false;
+            foreach (Renderer renderer in tileVisual.GetComponentsInChildren<Renderer>())
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                    continue;
+                if (!hasBounds)
+                {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                    bounds.Encapsulate(renderer.bounds);
+            }
+
+            if (hasBounds)
+            {
+                Vector3 forward = Camera.main != null ? Camera.main.transform.forward : Vector3.forward;
+                Vector3 absoluteForward = new Vector3(Mathf.Abs(forward.x), Mathf.Abs(forward.y), Mathf.Abs(forward.z));
+                float depth = Vector3.Dot(absoluteForward, bounds.extents);
+                anchor.position = bounds.center - forward * (depth + Mathf.Max(0f, automaticPieceAnchorClearance));
+            }
+            else
+                anchor.position = tileVisual.position + new Vector3(0f, 0.098f, -0.15f);
+
+            return anchor;
         }
 
         private static GameObject GetTileVisualPrefab(MapDefinition definition, BoardTileId tileId)
@@ -238,7 +334,6 @@ namespace YutArena.InGame
                 case BoardTileId.Corner01: return definition.corner01TilePrefab;
                 case BoardTileId.Corner02: return definition.corner02TilePrefab;
                 case BoardTileId.Corner03: return definition.corner03TilePrefab;
-                case BoardTileId.Corner04: return definition.corner04TilePrefab;
                 case BoardTileId.Center: return definition.centerTilePrefab;
                 default: return null;
             }
@@ -251,12 +346,14 @@ namespace YutArena.InGame
 
             tilePositions.Clear();
             specialTileSettings.Clear();
+            pieceAnchors.Clear();
             CurrentMap = null;
+            useSpecialTiles = false;
 
             if (loadedBackgroundInstance != null)
                 Destroy(loadedBackgroundInstance);
-            if (loadedBoardInstance != null)
-                Destroy(loadedBoardInstance);
+            if (fallbackBoardVisual != null)
+                fallbackBoardVisual.gameObject.SetActive(false);
             foreach (GameObject tileVisualInstance in loadedTileVisualInstances)
             {
                 if (tileVisualInstance != null)
@@ -264,7 +361,6 @@ namespace YutArena.InGame
             }
 
             loadedBackgroundInstance = null;
-            loadedBoardInstance = null;
             loadedTileVisualInstances.Clear();
         }
 
@@ -273,8 +369,7 @@ namespace YutArena.InGame
             return tileId == BoardTileId.Center ||
                    tileId == BoardTileId.Corner01 ||
                    tileId == BoardTileId.Corner02 ||
-                   tileId == BoardTileId.Corner03 ||
-                   tileId == BoardTileId.Corner04;
+                   tileId == BoardTileId.Corner03;
         }
 
         private BoardTileRuntimeStateManager EnsureBoardRuntimeState()

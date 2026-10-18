@@ -1,0 +1,11 @@
+newmtl tripo_material_06915bf1_a575_40ad_8429_97be5a584999
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd ornate+emblem+3d+model_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr ornate+emblem+3d+model_roughness.png
+map_Pm ornate+emblem+3d+model_metallic.png
+norm ornate+emblem+3d+model_normal.png
+
