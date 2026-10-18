@@ -50,7 +50,14 @@ namespace YutArena.UI
         [Tooltip("SP 이미지 사이 간격")]
         [SerializeField, Min(0f)] private float spSpacing = 3f;
 
+        [Header("Current Player Waiting Pieces")]
+        [Tooltip("현재 턴 플레이어의 대기 말 이미지를 배치할 GridLayoutGroup 컨테이너")]
+        [SerializeField] private RectTransform commonAvailablePiecesContainer;
+        [Tooltip("대기 말 수만큼 복제할 버튼. 씬에서는 비활성화해 둡니다.")]
+        [SerializeField] private Button commonAvailablePieceButtonTemplate;
+
         private readonly List<Image> spImages = new List<Image>();
+        private readonly List<Button> commonPieceButtons = new List<Button>();
 
         private void Awake()
         {
@@ -89,6 +96,7 @@ namespace YutArena.UI
         {
             RefreshTimers();
             RefreshVictoryConditions();
+            RefreshCommonAvailablePieces();
         }
 
         public void RefreshAll()
@@ -98,6 +106,7 @@ namespace YutArena.UI
             RefreshTimers();
             RefreshCurrentPlayerSkills();
             RefreshCurrentPlayerSP();
+            RefreshCommonAvailablePieces();
         }
 
         private void HandleTurnStarted(PlayerSlot player)
@@ -109,6 +118,56 @@ namespace YutArena.UI
             RefreshTurnInfo();
             RefreshCurrentPlayerSkills(player);
             RefreshCurrentPlayerSP();
+            RefreshCommonAvailablePieces();
+        }
+
+        private void RefreshCommonAvailablePieces()
+        {
+            if (commonAvailablePiecesContainer == null || commonAvailablePieceButtonTemplate == null) return;
+            commonAvailablePieceButtonTemplate.gameObject.SetActive(false);
+
+            int waitingCount = 0;
+            Sprite pieceSprite = null;
+            int playerId = turnManager != null && turnManager.CurrentTurn != null
+                ? (int)turnManager.CurrentTurn.currentPlayer : 0;
+            if (playerId > 0 && playerManager != null &&
+                playerManager.TryGetPlayer(playerId, out PlayerController player) &&
+                player.RuntimeData != null)
+            {
+                foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                    if (piece.State == PieceState.Waiting) waitingCount++;
+                pieceSprite = player.SelectedCharacter != null
+                    ? player.SelectedCharacter.pieceImage : null;
+            }
+
+            while (commonPieceButtons.Count < waitingCount)
+            {
+                int index = commonPieceButtons.Count;
+                Button button = Instantiate(commonAvailablePieceButtonTemplate,
+                    commonAvailablePiecesContainer, false);
+                button.name = $"Piece{index + 1}Button";
+                commonPieceButtons.Add(button);
+            }
+
+            while (commonPieceButtons.Count > waitingCount)
+            {
+                int last = commonPieceButtons.Count - 1;
+                Button button = commonPieceButtons[last];
+                commonPieceButtons.RemoveAt(last);
+                if (button == null) continue;
+                button.gameObject.SetActive(false);
+                Destroy(button.gameObject);
+            }
+
+            foreach (Button button in commonPieceButtons)
+            {
+                if (button == null) continue;
+                Image image = button.targetGraphic as Image;
+                if (image == null) continue;
+                image.sprite = pieceSprite;
+                image.enabled = pieceSprite != null;
+                button.gameObject.SetActive(true);
+            }
         }
 
         private void HandleTurnPhaseChanged(TurnContext turn)

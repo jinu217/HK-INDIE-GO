@@ -36,8 +36,8 @@ namespace YutArena.UI
         [Tooltip("클래식에서 탈출한 말의 이미지 (1~4번)")]
         [SerializeField] private Sprite[] classicFinishedSprites;
         [Header("Available Pieces")]
-        [Tooltip("게임 시작 시 플레이어의 말 개수만큼 복제할 버튼. 씬에서는 비활성화해 둡니다.")]
-        [SerializeField] private Button availablePieceButtonTemplate;
+        [Tooltip("게임 시작 시 플레이어의 말 개수만큼 복제할 이미지. 씬에서는 비활성화해 둡니다.")]
+        [SerializeField] private Image availablePieceImageTemplate;
         [Tooltip("현재 차례일 때만 활성화할 테두리 또는 표식")]
         [SerializeField] private GameObject currentTurnHighlight;
         [Tooltip("다음 차례일 때만 활성화할 테두리 또는 표식")]
@@ -50,10 +50,8 @@ namespace YutArena.UI
 
         private CharacterData currentCharacter;
         private Coroutine hoverCoroutine;
-        private PlayerController availablePiecePlayer;
-        private readonly List<Button> availablePieceButtons = new List<Button>();
-        private int[] pieceIdByButton;
-        private bool[] hiddenPieceIds;
+        private readonly List<Image> availablePieceImages = new List<Image>();
+        private PlayerRuntimeData availablePieceRuntimeData;
 
         public void Refresh(PlayerController player, GameStartSettings settings, int escapeScore)
         {
@@ -117,7 +115,7 @@ namespace YutArena.UI
         {
             if (player == null || player.RuntimeData == null) return;
 
-            RefreshAvailablePieces(player);
+            RefreshAvailablePieceImages(player);
 
             bool isEscape = settings != null && settings.gameMode == GameMode.Escape;
             bool isClassic = settings != null && settings.gameMode == GameMode.Classic;
@@ -147,82 +145,62 @@ namespace YutArena.UI
             }
         }
 
-        private void RefreshAvailablePieces(PlayerController player)
+        private void RefreshAvailablePieceImages(PlayerController player)
         {
-            if (availablePieceButtonTemplate == null) return;
+            if (availablePieceImageTemplate == null) return;
 
-            int pieceCount = player.RuntimeData.Pieces.Count;
-            EnsurePieceButtonCount(pieceCount);
-
-            if (availablePiecePlayer != player || hiddenPieceIds == null ||
-                hiddenPieceIds.Length != pieceCount)
+            int visibleCount;
+            if (availablePieceRuntimeData != player.RuntimeData)
             {
-                availablePiecePlayer = player;
-                hiddenPieceIds = new bool[pieceCount];
+                // 새 게임의 첫 표시에는 로비에서 정한 시작 말 수를 사용합니다.
+                availablePieceRuntimeData = player.RuntimeData;
+                visibleCount = player.RuntimeData.Pieces.Count;
             }
-            if (pieceIdByButton == null || pieceIdByButton.Length != pieceCount)
-                pieceIdByButton = new int[pieceCount];
-
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
-                if (piece.State != PieceState.Waiting)
-                    hiddenPieceIds[piece.PieceId] = false;
-
-            int index = 0;
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+            else
             {
-                if (piece.State != PieceState.Waiting || hiddenPieceIds[piece.PieceId]) continue;
-                if (index >= availablePieceButtons.Count) break;
+                // 이후에는 아직 판에 올라가지 않은 대기 말만 표시합니다.
+                visibleCount = 0;
+                foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                    if (piece.State == PieceState.Waiting) visibleCount++;
+            }
+            EnsurePieceImageCount(visibleCount);
+            Sprite pieceSprite = player.SelectedCharacter != null
+                ? player.SelectedCharacter.pieceImage : null;
+            foreach (Image image in availablePieceImages)
+            {
+                if (image == null) continue;
+                image.sprite = pieceSprite;
+                image.enabled = pieceSprite != null;
+                image.preserveAspect = true;
+                image.raycastTarget = false;
+                image.color = Color.white;
+                image.gameObject.SetActive(true);
+            }
+        }
 
-                int slot = index++;
-                Button button = availablePieceButtons[slot];
-                if (button == null) continue;
-                pieceIdByButton[slot] = piece.PieceId;
-                button.gameObject.SetActive(true);
-                button.interactable = true;
-                Image buttonImage = button.targetGraphic as Image;
-                if (buttonImage != null)
+        private void EnsurePieceImageCount(int pieceCount)
+        {
+            availablePieceImageTemplate.gameObject.SetActive(false);
+            while (availablePieceImages.Count < pieceCount)
+            {
+                int index = availablePieceImages.Count;
+                Image image = Instantiate(availablePieceImageTemplate,
+                    availablePieceImageTemplate.transform.parent, false);
+                image.name = $"Piece{index + 1}Image";
+                availablePieceImages.Add(image);
+            }
+
+            while (availablePieceImages.Count > pieceCount)
+            {
+                int last = availablePieceImages.Count - 1;
+                Image image = availablePieceImages[last];
+                availablePieceImages.RemoveAt(last);
+                if (image != null)
                 {
-                    buttonImage.sprite = player.SelectedCharacter != null
-                        ? player.SelectedCharacter.pieceImage : null;
-                    buttonImage.preserveAspect = true;
-                    buttonImage.color = Color.white;
+                    image.gameObject.SetActive(false);
+                    Destroy(image.gameObject);
                 }
             }
-
-            for (; index < availablePieceButtons.Count; index++)
-                if (availablePieceButtons[index] != null)
-                    availablePieceButtons[index].gameObject.SetActive(false);
-        }
-
-        private void EnsurePieceButtonCount(int pieceCount)
-        {
-            availablePieceButtonTemplate.gameObject.SetActive(false);
-            while (availablePieceButtons.Count < pieceCount)
-            {
-                int slot = availablePieceButtons.Count;
-                Button button = Instantiate(availablePieceButtonTemplate,
-                    availablePieceButtonTemplate.transform.parent, false);
-                button.name = $"Piece{slot + 1}Button";
-                button.onClick.AddListener(() => HidePieceButton(slot));
-                availablePieceButtons.Add(button);
-            }
-
-            while (availablePieceButtons.Count > pieceCount)
-            {
-                int last = availablePieceButtons.Count - 1;
-                Button button = availablePieceButtons[last];
-                availablePieceButtons.RemoveAt(last);
-                if (button != null) Destroy(button.gameObject);
-            }
-        }
-
-        private void HidePieceButton(int slot)
-        {
-            if (availablePiecePlayer == null || slot < 0 || slot >= pieceIdByButton.Length) return;
-            int pieceId = pieceIdByButton[slot];
-            if (pieceId < 0 || pieceId >= hiddenPieceIds.Length) return;
-            hiddenPieceIds[pieceId] = true;
-            RefreshAvailablePieces(availablePiecePlayer);
         }
 
         public void SetTurnState(bool isCurrentTurn, bool isNextTurn)
