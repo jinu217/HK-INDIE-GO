@@ -647,7 +647,7 @@ namespace YutArena.UI.CharacterScene
 
             if (gameStartLoadingPanel != null)
             {
-                gameStartLoadingPanel.SetPlayers(selectedCharacters, playerCount);
+                gameStartLoadingPanel.SetPlayers(selectedCharacters, playerCount, playerMarkerViews);
                 gameStartLoadingPanel.LoadScene(inGameSceneName);
             }
             else

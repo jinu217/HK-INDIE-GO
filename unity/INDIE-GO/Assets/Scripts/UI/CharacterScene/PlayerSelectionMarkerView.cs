@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 namespace YutArena.UI.CharacterScene
 {
@@ -9,6 +10,10 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private Image frameImage;
         [Tooltip("플레이어 번호 이미지 (1PImage, 2PImage 등)")]
         [SerializeField] private Image playerImage;
+        [Tooltip("플레이어 번호 텍스트 (1PText, 2PText 등)")]
+        [SerializeField] private TMP_Text playerText;
+        public Image PlayerImage => playerImage;
+        public TMP_Text PlayerText => playerText;
         private RectTransform rectTransform;
         private Vector2 markerSize;
         private Sprite originalPlayerSprite;

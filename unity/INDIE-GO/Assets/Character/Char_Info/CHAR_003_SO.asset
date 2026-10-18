@@ -17,6 +17,8 @@ MonoBehaviour:
   char_Desc: "\uD64D\uAE38\uB3D9"
   char_Icon: {fileID: 21300000, guid: 6eb60d562f0d23544bc9bf29780b01fa, type: 3}
   panelViewImage: {fileID: 21300000, guid: 8e24b0267d96460458f5dcc6673204ec, type: 3}
+  illustrationImage: {fileID: -6232630944479105407, guid: d6b67e1320185804e9e81a76615bed94, type: 3}
+  pieceImage: {fileID: -3371663049945760498, guid: bc762ed970b3e67478d9e400c91e88c6, type: 3}
   passive_Icon: {fileID: -6568617476166714493, guid: 970b7dd8690d41840964069e1d533eeb, type: 3}
   passive_Name: "\uC758\uC801\uC758 \uAE30\uAC1C"
   passive_Desc: "\uC7A1\uD790 \uC2DC, \uC801\uC758 \uB9D0\uC758 \uC22B\uC790\uB9CC\uD07C\uB9CC

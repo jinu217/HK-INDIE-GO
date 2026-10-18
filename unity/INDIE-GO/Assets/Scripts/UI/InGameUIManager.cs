@@ -14,38 +14,39 @@ namespace YutArena.UI
     public sealed class InGameUIManager : MonoBehaviour
     {
         private const string TurnTimePrefix = "TURN TIME \n";
-        private const string TurnCountPrefix = "TURN ";
         private const string UnlimitedText = "UNLIMITED";
 
         [Header("Managers")]
         [SerializeField] private TestGameManager gameManager;
         [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private PlayerManager playerManager;
+        [SerializeField] private TestWinConditionManager winConditionManager;
 
         [Header("Player Panels (Player 1부터 순서대로)")]
         [SerializeField] private InGamePlayerPanelView[] playerPanels;
 
         [Header("Game Info")]
         [SerializeField] private TMP_Text turnTimeText;
+        [Tooltip("현재 턴(라운드) 숫자")]
         [SerializeField] private TMP_Text turnCountText;
+        [Tooltip("최대 턴 숫자. 제한이 없으면 UNLIMITED 표시")]
+        [SerializeField] private TMP_Text maxTurnCountText;
 
         [Header("Current Player Skills")]
-        [Tooltip("현재 턴 플레이어 캐릭터의 패시브 스킬 이미지")]
-        [SerializeField] private Image passiveSkillImage;
         [Tooltip("현재 턴 플레이어 캐릭터의 액티브 스킬 이미지")]
         [SerializeField] private Image activeSkillImage;
         [Tooltip("씬에 직접 만든 공용 액티브 스킬 버튼")]
         [SerializeField] private ActiveSkillButtonController activeSkillButtonController;
-        [Tooltip("패시브 스킬 이미지에 붙인 Hover 트리거")]
-        [SerializeField] private SkillTooltipTrigger passiveSkillTooltip;
         [Tooltip("액티브 스킬 버튼에 붙인 Hover 트리거")]
         [SerializeField] private SkillTooltipTrigger activeSkillTooltip;
 
         [Header("Current Player SP")]
         [Tooltip("SP 이미지를 나열할 빈 UI 컨테이너 (Layout Group 없이 사용)")]
         [SerializeField] private RectTransform spContainer;
-        [Tooltip("프로젝트에 있는 SP 이미지 에셋 (Sprite)")]
+        [Tooltip("현재 보유한 SP를 표시할 이미지")]
         [SerializeField] private Sprite spSprite;
+        [Tooltip("아직 채워지지 않은 SP를 표시할 이미지")]
+        [SerializeField] private Sprite emptySpSprite;
         [Tooltip("SP 이미지 한 개의 표시 크기")]
         [SerializeField] private Vector2 spImageSize = new Vector2(32f, 32f);
         [Tooltip("SP 이미지 사이 간격")]
@@ -59,6 +60,7 @@ namespace YutArena.UI
             if (gameManager == null) gameManager = FindFirstObjectByType<TestGameManager>();
             if (turnManager == null) turnManager = FindFirstObjectByType<TestTurnManager>();
             if (playerManager == null) playerManager = FindFirstObjectByType<PlayerManager>();
+            if (winConditionManager == null) winConditionManager = FindFirstObjectByType<TestWinConditionManager>();
         }
 
         private void OnEnable()
@@ -88,7 +90,7 @@ namespace YutArena.UI
         private void Update()
         {
             RefreshTimers();
-            RefreshEscapeCounts();
+            RefreshVictoryConditions();
         }
 
         public void RefreshAll()
@@ -134,8 +136,16 @@ namespace YutArena.UI
             int playerId = turnManager != null && turnManager.CurrentTurn != null
                 ? (int)turnManager.CurrentTurn.currentPlayer : 0;
             int count = CharacterSkillRegistry.GetSkillPoints(playerId);
+            int maximum = CharacterSkillRegistry.GetMaxSkillPoints(playerId);
+            RefreshSPImages(count, maximum);
+        }
+
+        private void RefreshSPImages(int count, int maximum)
+        {
+            maximum = Mathf.Max(0, maximum);
+            count = Mathf.Clamp(count, 0, maximum);
             Vector2 size = new Vector2(Mathf.Max(1f, spImageSize.x), Mathf.Max(1f, spImageSize.y));
-            while (spImages.Count < count)
+            while (spImages.Count < maximum)
             {
                 GameObject icon = new GameObject($"SP_{spImages.Count + 1}", typeof(RectTransform), typeof(Image));
                 icon.transform.SetParent(spContainer, false);
@@ -148,8 +158,11 @@ namespace YutArena.UI
             {
                 Image image = spImages[i];
                 if (image == null) continue;
-                image.sprite = spSprite;
-                image.gameObject.SetActive(i < count);
+                bool filled = i < count;
+                image.sprite = filled || emptySpSprite == null ? spSprite : emptySpSprite;
+                image.color = !filled && emptySpSprite == null
+                    ? new Color(1f, 1f, 1f, 0.25f) : Color.white;
+                image.gameObject.SetActive(i < maximum);
                 RectTransform rect = image.rectTransform;
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
                 rect.pivot = new Vector2(0f, 0.5f);
@@ -170,6 +183,7 @@ namespace YutArena.UI
         {
             if (playerPanels == null) return;
 
+            GameStartSettings settings = GetSettings();
             int activeCount = playerManager != null ? playerManager.ActivePlayers.Count : 0;
             for (int i = 0; i < playerPanels.Length; i++)
             {
@@ -184,38 +198,37 @@ namespace YutArena.UI
                 }
 
                 PlayerController player = playerManager.ActivePlayers[i];
-                panel.Refresh(player, GetEscapeTarget());
+                panel.Refresh(player, settings, GetEscapeScore(settings, player));
             }
 
             PlayerSlot currentPlayer = turnManager != null && turnManager.CurrentTurn != null
                 ? turnManager.CurrentTurn.currentPlayer
                 : PlayerSlot.None;
             RefreshTurnHighlights(currentPlayer);
-            RefreshEscapeCounts();
+            RefreshVictoryConditions();
         }
 
-        private void RefreshEscapeCounts()
+        private void RefreshVictoryConditions()
         {
             if (playerPanels == null || playerManager == null) return;
 
-            int target = GetEscapeTarget();
+            GameStartSettings settings = GetSettings();
             int count = Mathf.Min(playerPanels.Length, playerManager.ActivePlayers.Count);
             for (int i = 0; i < count; i++)
             {
                 InGamePlayerPanelView panel = playerPanels[i];
                 if (panel == null) continue;
-                panel.RefreshEscapeCount(playerManager.ActivePlayers[i], target);
+                PlayerController player = playerManager.ActivePlayers[i];
+                panel.RefreshVictoryCondition(player, settings, GetEscapeScore(settings, player));
             }
         }
 
-        private int GetEscapeTarget()
+        private int GetEscapeScore(GameStartSettings settings, PlayerController player)
         {
-            GameStartSettings settings = GetSettings();
-            if (settings == null) return 0;
-
-            return settings.gameMode == GameMode.Escape
-                ? settings.targetEscapeCount
-                : settings.pieceCountPerPlayer;
+            if (settings == null || player == null || winConditionManager == null ||
+                settings.gameMode != GameMode.Escape) return 0;
+            TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)player.PlayerId);
+            return winConditionManager.GetEscapeCount(team);
         }
 
         private void RefreshTurnHighlights(PlayerSlot currentPlayer)
@@ -257,7 +270,7 @@ namespace YutArena.UI
 
         private void RefreshTurnInfo()
         {
-            if (turnCountText == null) return;
+            if (turnCountText == null && maxTurnCountText == null) return;
 
             GameStartSettings settings = GetSettings();
             int current = turnManager != null && turnManager.CurrentTurn != null
@@ -265,9 +278,10 @@ namespace YutArena.UI
                 : 0;
             int maximum = settings != null ? settings.maxTurnCount : 0;
 
-            turnCountText.text = maximum > 0
-                ? TurnCountPrefix + current + "/" + maximum
-                : TurnCountPrefix + current + "/" + UnlimitedText;
+            if (turnCountText != null)
+                turnCountText.text = current.ToString();
+            if (maxTurnCountText != null)
+                maxTurnCountText.text = maximum > 0 ? maximum.ToString() : UnlimitedText;
         }
 
         private void RefreshCurrentPlayerSkills()
@@ -287,16 +301,7 @@ namespace YutArena.UI
                 character = player.SelectedCharacter;
             }
 
-            SetSkillImage(passiveSkillImage, character != null ? character.passive_Icon : null);
             SetSkillImage(activeSkillImage, character != null ? character.active_Icon : null);
-
-            if (passiveSkillTooltip != null)
-            {
-                passiveSkillTooltip.Configure(
-                    character != null ? character.passive_Icon : null,
-                    character != null ? character.passive_Name : string.Empty,
-                    character != null ? character.passive_Desc : string.Empty);
-            }
 
             if (activeSkillTooltip != null)
             {

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce74e40b3430e6b419171f61153bef71, type: 3}
+  m_Name: GameModeDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.Common.GameModeDatabase
+  modes:
+  - index: 0
+    image: {fileID: 0}
+    modeName: Classic
+    description: 
+    gameMode: 0
+  - index: 1
+    image: {fileID: 0}
+    modeName: Escape
+    description: 
+    gameMode: 1
+  - index: 2
+    image: {fileID: 0}
+    modeName: Kill The King
+    description: 
+    gameMode: 2

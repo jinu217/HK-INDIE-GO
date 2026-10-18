@@ -10,6 +10,8 @@ namespace YutArena.Common
         public int mapType;
         public int matchComposition;
         public int playerCount;
+        public int pieceCountPerPlayer;
+        public int targetEscapeCount;
         public int maxTurnCount;
         public int turnTimeSeconds;
         public bool isTeamMode;
@@ -25,8 +27,10 @@ namespace YutArena.Common
                 isTeamMode = isTeamMode,
                 playerTeams = playerTeams != null ? (int[])playerTeams.Clone() : null,
                 playerCount = playerCount,
-                pieceCountPerPlayer = GameRuleDefine.DefaultPieceCountPerPlayer,
-                targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount,
+                pieceCountPerPlayer = pieceCountPerPlayer > 0
+                    ? pieceCountPerPlayer : GameRuleDefine.DefaultPieceCountPerPlayer,
+                targetEscapeCount = targetEscapeCount > 0
+                    ? targetEscapeCount : GameRuleDefine.DefaultTargetEscapeCount,
                 timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
                 maxTurnCount = maxTurnCount,
                 turnTimeMode = TurnTimeMode.Limited,

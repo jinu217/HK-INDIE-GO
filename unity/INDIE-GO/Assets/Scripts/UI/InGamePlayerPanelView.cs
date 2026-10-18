@@ -1,8 +1,10 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using YutArena.Common;
 
 namespace YutArena.UI
 {
@@ -11,14 +13,31 @@ namespace YutArena.UI
     /// </summary>
     public sealed class InGamePlayerPanelView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
-        private const string EscapePrefix = "ESCAPED ";
-
         [Tooltip("선택한 캐릭터 이미지")]
         [SerializeField] private Image characterImage;
         [Tooltip("선택한 캐릭터 이름")]
         [SerializeField] private TMP_Text characterNameText;
-        [Tooltip("탈출한 말 수")]
-        [SerializeField] private TMP_Text escapeCountText;
+        [Tooltip("패시브 스킬 이미지")]
+        [SerializeField] private Image passiveSkillImage;
+        [Tooltip("패시브 스킬 이름")]
+        [SerializeField] private TMP_Text passiveSkillNameText;
+        [Tooltip("액티브 스킬 이미지")]
+        [SerializeField] private Image activeSkillImage;
+        [Tooltip("액티브 스킬 이름")]
+        [SerializeField] private TMP_Text activeSkillNameText;
+        [Header("Victory Conditions")]
+        [SerializeField] private GameObject escapeVictoryPanel;
+        [SerializeField] private TMP_Text currentEscapeCountText;
+        [SerializeField] private TMP_Text targetEscapeCountText;
+        [SerializeField] private GameObject classicVictoryPanel;
+        [SerializeField] private Image[] classicPieceImages;
+        [Tooltip("클래식에서 아직 탈출하지 않은 말의 이미지 (1~4번)")]
+        [SerializeField] private Sprite[] classicPendingSprites;
+        [Tooltip("클래식에서 탈출한 말의 이미지 (1~4번)")]
+        [SerializeField] private Sprite[] classicFinishedSprites;
+        [Header("Available Pieces")]
+        [Tooltip("게임 시작 시 플레이어의 말 개수만큼 복제할 버튼. 씬에서는 비활성화해 둡니다.")]
+        [SerializeField] private Button availablePieceButtonTemplate;
         [Tooltip("현재 차례일 때만 활성화할 테두리 또는 표식")]
         [SerializeField] private GameObject currentTurnHighlight;
         [Tooltip("다음 차례일 때만 활성화할 테두리 또는 표식")]
@@ -31,8 +50,12 @@ namespace YutArena.UI
 
         private CharacterData currentCharacter;
         private Coroutine hoverCoroutine;
+        private PlayerController availablePiecePlayer;
+        private readonly List<Button> availablePieceButtons = new List<Button>();
+        private int[] pieceIdByButton;
+        private bool[] hiddenPieceIds;
 
-        public void Refresh(PlayerController player, int targetEscapeCount)
+        public void Refresh(PlayerController player, GameStartSettings settings, int escapeScore)
         {
             if (player == null || player.RuntimeData == null)
             {
@@ -56,7 +79,18 @@ namespace YutArena.UI
                 characterImage.enabled = characterImage.sprite != null;
             }
 
-            RefreshEscapeCount(player, targetEscapeCount);
+            SetImage(passiveSkillImage, character != null ? character.passive_Icon : null);
+            SetImage(activeSkillImage, character != null ? character.active_Icon : null);
+            SetText(passiveSkillNameText, character != null ? character.passive_Name : string.Empty);
+            SetText(activeSkillNameText, character != null ? character.active_Name : string.Empty);
+            RefreshVictoryCondition(player, settings, escapeScore);
+        }
+
+        private static void SetImage(Image target, Sprite sprite)
+        {
+            if (target == null) return;
+            target.sprite = sprite;
+            target.enabled = sprite != null;
         }
 
         public void OnPointerEnter(PointerEventData eventData)
@@ -79,17 +113,116 @@ namespace YutArena.UI
             if (skillDetailPanel != null) skillDetailPanel.Hide();
         }
 
-        public void RefreshEscapeCount(PlayerController player, int targetEscapeCount)
+        public void RefreshVictoryCondition(PlayerController player, GameStartSettings settings, int escapeScore)
         {
             if (player == null || player.RuntimeData == null) return;
 
-            int escapedCount = 0;
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+            RefreshAvailablePieces(player);
+
+            bool isEscape = settings != null && settings.gameMode == GameMode.Escape;
+            bool isClassic = settings != null && settings.gameMode == GameMode.Classic;
+            if (escapeVictoryPanel != null) escapeVictoryPanel.SetActive(isEscape);
+            if (classicVictoryPanel != null) classicVictoryPanel.SetActive(isClassic);
+
+            if (isEscape)
             {
-                if (piece.IsFinished) escapedCount++;
+                SetText(currentEscapeCountText, Mathf.Max(0, escapeScore).ToString());
+                SetText(targetEscapeCountText, settings.targetEscapeCount.ToString());
             }
 
-            SetText(escapeCountText, EscapePrefix + escapedCount + "/" + targetEscapeCount);
+            if (!isClassic || classicPieceImages == null) return;
+
+            int finishedCount = 0;
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                if (piece.IsFinished) finishedCount++;
+
+            for (int i = 0; i < classicPieceImages.Length; i++)
+            {
+                Image image = classicPieceImages[i];
+                if (image == null) continue;
+                Sprite[] sprites = i < finishedCount ? classicFinishedSprites : classicPendingSprites;
+                Sprite sprite = sprites != null && i < sprites.Length ? sprites[i] : null;
+                image.sprite = sprite;
+                image.enabled = sprite != null;
+            }
+        }
+
+        private void RefreshAvailablePieces(PlayerController player)
+        {
+            if (availablePieceButtonTemplate == null) return;
+
+            int pieceCount = player.RuntimeData.Pieces.Count;
+            EnsurePieceButtonCount(pieceCount);
+
+            if (availablePiecePlayer != player || hiddenPieceIds == null ||
+                hiddenPieceIds.Length != pieceCount)
+            {
+                availablePiecePlayer = player;
+                hiddenPieceIds = new bool[pieceCount];
+            }
+            if (pieceIdByButton == null || pieceIdByButton.Length != pieceCount)
+                pieceIdByButton = new int[pieceCount];
+
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                if (piece.State != PieceState.Waiting)
+                    hiddenPieceIds[piece.PieceId] = false;
+
+            int index = 0;
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+            {
+                if (piece.State != PieceState.Waiting || hiddenPieceIds[piece.PieceId]) continue;
+                if (index >= availablePieceButtons.Count) break;
+
+                int slot = index++;
+                Button button = availablePieceButtons[slot];
+                if (button == null) continue;
+                pieceIdByButton[slot] = piece.PieceId;
+                button.gameObject.SetActive(true);
+                button.interactable = true;
+                Image buttonImage = button.targetGraphic as Image;
+                if (buttonImage != null)
+                {
+                    buttonImage.sprite = player.SelectedCharacter != null
+                        ? player.SelectedCharacter.pieceImage : null;
+                    buttonImage.preserveAspect = true;
+                    buttonImage.color = Color.white;
+                }
+            }
+
+            for (; index < availablePieceButtons.Count; index++)
+                if (availablePieceButtons[index] != null)
+                    availablePieceButtons[index].gameObject.SetActive(false);
+        }
+
+        private void EnsurePieceButtonCount(int pieceCount)
+        {
+            availablePieceButtonTemplate.gameObject.SetActive(false);
+            while (availablePieceButtons.Count < pieceCount)
+            {
+                int slot = availablePieceButtons.Count;
+                Button button = Instantiate(availablePieceButtonTemplate,
+                    availablePieceButtonTemplate.transform.parent, false);
+                button.name = $"Piece{slot + 1}Button";
+                button.onClick.AddListener(() => HidePieceButton(slot));
+                availablePieceButtons.Add(button);
+            }
+
+            while (availablePieceButtons.Count > pieceCount)
+            {
+                int last = availablePieceButtons.Count - 1;
+                Button button = availablePieceButtons[last];
+                availablePieceButtons.RemoveAt(last);
+                if (button != null) Destroy(button.gameObject);
+            }
+        }
+
+        private void HidePieceButton(int slot)
+        {
+            if (availablePiecePlayer == null || slot < 0 || slot >= pieceIdByButton.Length) return;
+            int pieceId = pieceIdByButton[slot];
+            if (pieceId < 0 || pieceId >= hiddenPieceIds.Length) return;
+            hiddenPieceIds[pieceId] = true;
+            RefreshAvailablePieces(availablePiecePlayer);
         }
 
         public void SetTurnState(bool isCurrentTurn, bool isNextTurn)

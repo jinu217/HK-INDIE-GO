@@ -54,6 +54,11 @@ public class CharacterData : ScriptableObject
     public Sprite char_Icon;
     [Tooltip("픽창 PlayerPanelView에 표시할 캐릭터 이미지")]
     public Sprite panelViewImage;
+    [Tooltip("캐릭터 일러스트 이미지")]
+    public Sprite illustrationImage;
+    [Tooltip("캐릭터 말 이미지")]
+    public Sprite pieceImage;
+
     [Header("# Skills")]
     [Tooltip("인게임 UI에 표시할 패시브 스킬 이미지")]
     public Sprite passive_Icon;

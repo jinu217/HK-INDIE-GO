@@ -1,7 +1,6 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
@@ -10,8 +9,6 @@ namespace YutArena.UI
 {
     public class LobbySceneUIController : MonoBehaviour
     {
-        private const int MaxTeamSlotCount = 2;
-
         private readonly GameMode[] gameModeOptions =
         {
             GameMode.Classic,
@@ -19,45 +16,27 @@ namespace YutArena.UI
             GameMode.KillTheKing
         };
 
-        private readonly string[] gameModeLabels =
-        {
-            "Classic",
-            "Escape",
-            "Kill The King"
-        };
-
-        private readonly MapType[] mapOptions =
-        {
-            MapType.Random,
-            MapType.Basic,
-            MapType.Korean,
-            MapType.Grassland
-        };
-
-        private readonly string[] mapLabels =
-        {
-            "Random",
-            "Basic",
-            "Korean",
-            "Grassland"
-        };
-
-        private readonly string[] teamLabels =
-        {
-            "No Team",
-            "Red",
-            "Blue"
-        };
-
         private readonly int[] turnTimeOptions = { 30, 40, 50, 60 };
 
         [Header("Mode")]
-        [Tooltip("게임 모드 이전 버튼")]
-        [SerializeField] private Button gameModeLeftButton;
-        [Tooltip("게임 모드 다음 버튼")]
-        [SerializeField] private Button gameModeRightButton;
-        [Tooltip("게임 모드 텍스트")]
-        [SerializeField] private TMP_Text gameModeValueText;
+        [SerializeField] private GameModeDatabase gameModeDatabase;
+        [Tooltip("Classic, Escape, KillTheKing 순서의 카드 표시")]
+        [SerializeField] private GameModeCardView[] gameModeCards;
+        [Tooltip("Classic, Escape, KillTheKing 순서의 모드 선택 버튼")]
+        [SerializeField] private Button[] gameModeButtons;
+        [SerializeField] private GameObject[] gameModeFramesOn;
+        [SerializeField] private GameObject[] gameModeFramesOff;
+
+        [Header("Mode Rules")]
+        [SerializeField] private GameObject classicRules;
+        [SerializeField] private GameObject escapeRules;
+        [SerializeField] private GameObject killTheKingRules;
+        [SerializeField] private Button startPieceCountLeftButton;
+        [SerializeField] private Button startPieceCountRightButton;
+        [SerializeField] private TMP_Text startPieceCountValueText;
+        [SerializeField] private Button escapeTargetLeftButton;
+        [SerializeField] private Button escapeTargetRightButton;
+        [SerializeField] private TMP_Text escapeTargetValueText;
 
         [Header("Players")]
         [Tooltip("플레이어 수 감소 버튼")]
@@ -66,12 +45,12 @@ namespace YutArena.UI
         [SerializeField] private Button playerCountRightButton;
         [Tooltip("플레이어 수 텍스트")]
         [SerializeField] private TMP_Text playerCountValueText;
-        [Tooltip("팀 모드 이전 버튼")]
-        [SerializeField] private Button teamModeLeftButton;
-        [Tooltip("팀 모드 다음 버튼")]
-        [SerializeField] private Button teamModeRightButton;
-        [Tooltip("팀 모드 텍스트")]
-        [SerializeField] private TMP_Text teamModeValueText;
+        [SerializeField] private Button soloModeButton;
+        [SerializeField] private Button teamModeButton;
+        [SerializeField] private GameObject soloModeOn;
+        [SerializeField] private GameObject soloModeOff;
+        [SerializeField] private GameObject teamModeOn;
+        [SerializeField] private GameObject teamModeOff;
         [Tooltip("1P 입력 장치 이전 버튼")]
         [SerializeField] private Button sharedInputLeftButton;
         [Tooltip("1P 입력 장치 다음 버튼")]
@@ -80,20 +59,32 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text sharedInputLabel;
         [Tooltip("플레이어 행")]
         [SerializeField] private GameObject[] playerRows;
-        [Tooltip("플레이어 팀 이전 버튼")]
-        [SerializeField] private Button[] playerTeamLeftButtons;
-        [Tooltip("플레이어 팀 다음 버튼")]
-        [SerializeField] private Button[] playerTeamRightButtons;
         [Tooltip("플레이어 팀 텍스트")]
         [SerializeField] private TMP_Text[] playerTeamValueTexts;
+        [Tooltip("팀전에서 플레이어별 빨강/파랑을 바꾸는 버튼")]
+        [SerializeField] private Button[] playerTeamRightButtons;
+        [Tooltip("플레이어 카드의 색상 탭 이미지")]
+        [SerializeField] private Image[] playerTabImages;
+        [Tooltip("플레이어 카드의 깃발 이미지")]
+        [SerializeField] private Image[] playerFlagImages;
+        [Tooltip("개인전 플레이어별 탭 이미지")]
+        [SerializeField] private Sprite[] soloTabSprites;
+        [Tooltip("개인전 플레이어별 깃발 이미지")]
+        [SerializeField] private Sprite[] soloFlagSprites;
+        [SerializeField] private Sprite redTeamTabSprite;
+        [SerializeField] private Sprite blueTeamTabSprite;
+        [SerializeField] private Sprite redTeamFlagSprite;
+        [SerializeField] private Sprite blueTeamFlagSprite;
 
         [Header("Map")]
+        [SerializeField] private MapDatabase mapDatabase;
+        [SerializeField] private Image mapImage;
+        [SerializeField] private TMP_Text mapNameText;
+        [SerializeField] private TMP_Text mapDescriptionText;
         [Tooltip("맵 이전 버튼")]
         [SerializeField] private Button mapLeftButton;
         [Tooltip("맵 다음 버튼")]
         [SerializeField] private Button mapRightButton;
-        [Tooltip("맵 텍스트")]
-        [SerializeField] private TMP_Text mapValueText;
 
         [Header("Turn")]
         [Tooltip("턴 길이 감소 버튼")]
@@ -111,10 +102,6 @@ namespace YutArena.UI
         [Tooltip("턴 시간 텍스트")]
         [SerializeField] private TMP_Text turnTimeValueText;
 
-        [Header("Text")]
-        [Tooltip("시작 조건 텍스트")]
-        [SerializeField] private TMP_Text startConditionText;
-
         [Header("Navigation")]
         [Tooltip("게임 시작 버튼")]
         [SerializeField] private Button startGameButton;
@@ -128,25 +115,16 @@ namespace YutArena.UI
         private int gameModeIndex = 1;
         private int selectedPlayerCount = GameRuleDefine.DefaultPlayerCount;
         private int mapIndex;
+        private MapEntry[] maps = System.Array.Empty<MapEntry>();
         private int turnLength = GameRuleDefine.DefaultMaxTurnCount;
         private int turnTimeIndex;
+        private int startPieceCount = GameRuleDefine.DefaultPieceCountPerPlayer;
+        private int targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount;
         private bool isTeamMode;
-        private int[] playerTeamIndexes = { 0, 0, 0, 0 };
+        private readonly int[] playerTeamIndexes = { 1, 2, 1, 2 };
         private ButtonSound startButtonSound;
-        private int navigationRow = -1;
-        private Button navigationButton;
-        private TMP_Text highlightedText;
-        private Color highlightedTextColor;
         private EventSystem navigationEventSystem;
         private bool previousNavigationEvents;
-
-        // The bottom option is TurnLength; the last row contains Start and Back.
-        private TMP_Text[] NavigationTexts => new[] { gameModeValueText, playerCountValueText,
-            teamModeValueText, sharedInputLabel, mapValueText, turnTimeValueText, turnLengthValueText };
-        private Button[] NavigationLeftButtons => new[] { gameModeLeftButton, playerCountLeftButton,
-            teamModeLeftButton, sharedInputLeftButton, mapLeftButton, turnTimeLeftButton, turnLengthLeftButton };
-        private Button[] NavigationRightButtons => new[] { gameModeRightButton, playerCountRightButton,
-            teamModeRightButton, sharedInputRightButton, mapRightButton, turnTimeRightButton, turnLengthRightButton };
 
         private GameMode SelectedGameMode
         {
@@ -155,7 +133,7 @@ namespace YutArena.UI
 
         private MapType SelectedMapType
         {
-            get { return mapOptions[mapIndex]; }
+            get { return maps.Length > 0 ? maps[mapIndex].mapType : MapType.Random; }
         }
 
         private void Awake()
@@ -165,6 +143,8 @@ namespace YutArena.UI
                 startButtonSound = startGameButton.GetComponent<ButtonSound>();
             }
 
+            maps = mapDatabase != null ? mapDatabase.GetOrderedMaps() : System.Array.Empty<MapEntry>();
+            mapIndex = 0;
             BindButtons();
             RefreshUI();
         }
@@ -174,7 +154,7 @@ namespace YutArena.UI
             LocalSelectionInput.Poll(selectedPlayerCount);
             if (sharedInputLabel != null)
                 sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
-            ProcessNavigation();
+            DisableNavigationEvents();
             RefreshStartAvailability();
         }
 
@@ -188,98 +168,39 @@ namespace YutArena.UI
             LocalSelectionInput.SelectSharedGamepadMode();
         }
 
-        private void ProcessNavigation()
+        private void OnEnable()
         {
-            if (navigationEventSystem == null && EventSystem.current != null)
-            {
-                navigationEventSystem = EventSystem.current;
-                previousNavigationEvents = navigationEventSystem.sendNavigationEvents;
-                navigationEventSystem.sendNavigationEvents = false;
-            }
-            Keyboard keyboard = Keyboard.current;
-            bool up = keyboard != null && keyboard.upArrowKey.wasPressedThisFrame;
-            bool down = keyboard != null && keyboard.downArrowKey.wasPressedThisFrame;
-            bool left = keyboard != null && keyboard.leftArrowKey.wasPressedThisFrame;
-            bool right = keyboard != null && keyboard.rightArrowKey.wasPressedThisFrame;
-            bool submit = keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame);
-            // Assigned controllers can also operate the common lobby options.
-            {
-                for (int i = 0; i < selectedPlayerCount; i++)
-                {
-                    Gamepad pad = LocalSelectionInput.GetGamepad(i);
-                    if (i == 0 && pad == null) pad = LocalSelectionInput.GetInputGamepad(i);
-                    if (pad == null || LocalSelectionInput.JoinedThisFrame(i)) continue;
-                    up |= pad.dpad.up.wasPressedThisFrame || pad.leftStick.up.wasPressedThisFrame;
-                    down |= pad.dpad.down.wasPressedThisFrame || pad.leftStick.down.wasPressedThisFrame;
-                    left |= pad.dpad.left.wasPressedThisFrame || pad.leftStick.left.wasPressedThisFrame;
-                    right |= pad.dpad.right.wasPressedThisFrame || pad.leftStick.right.wasPressedThisFrame;
-                    submit |= pad.buttonSouth.wasPressedThisFrame;
-                }
-            }
-            if (up || down)
-            {
-                int buttonRow = NavigationTexts.Length;
-                int rowCount = buttonRow + 1;
-                navigationRow = navigationRow < 0 ? 0 : (navigationRow + (down ? 1 : rowCount - 1)) % rowCount;
-                HighlightNavigationRow();
-                return;
-            }
-            if (navigationRow < 0) return;
-            if (left || right)
-            {
-                Button target = navigationRow == NavigationTexts.Length
-                    ? (navigationButton == startGameButton ? backButton : startGameButton)
-                    : (left ? NavigationLeftButtons[navigationRow] : NavigationRightButtons[navigationRow]);
-                SelectNavigationButton(target);
-                if (navigationRow != NavigationTexts.Length && target != null && target.isActiveAndEnabled && target.IsInteractable())
-                    target.onClick.Invoke();
-                return;
-            }
-            if (submit && navigationRow == NavigationTexts.Length && navigationButton != null && navigationButton.isActiveAndEnabled && navigationButton.IsInteractable())
-                navigationButton.onClick.Invoke();
+            DisableNavigationEvents();
         }
 
-        private void HighlightNavigationRow()
+        private void DisableNavigationEvents()
         {
-            if (highlightedText != null) highlightedText.color = highlightedTextColor;
-            highlightedText = null;
-            SelectNavigationButton(null);
-            if (navigationRow == NavigationTexts.Length)
-                SelectNavigationButton(startGameButton);
-            else
-            {
-                highlightedText = NavigationTexts[navigationRow];
-                if (highlightedText != null)
-                {
-                    highlightedTextColor = highlightedText.color;
-                    highlightedText.color = Color.yellow;
-                }
-            }
+            if (navigationEventSystem != null || EventSystem.current == null) return;
+
+            navigationEventSystem = EventSystem.current;
+            previousNavigationEvents = navigationEventSystem.sendNavigationEvents;
+            // 로비 설정은 포인터로만 조작합니다. Move/Submit/Cancel 입력을 차단합니다.
+            navigationEventSystem.sendNavigationEvents = false;
         }
 
-        private void SelectNavigationButton(Button button)
+        private void OnDisable()
         {
-            navigationButton = button;
             if (navigationEventSystem != null)
-                navigationEventSystem.SetSelectedGameObject(button != null && button.isActiveAndEnabled
-                    ? button.gameObject : null);
+                navigationEventSystem.sendNavigationEvents = previousNavigationEvents;
+            navigationEventSystem = null;
         }
-
-        private void OnDestroy()
-        {
-            if (highlightedText != null) highlightedText.color = highlightedTextColor;
-            if (navigationEventSystem != null) navigationEventSystem.sendNavigationEvents = previousNavigationEvents;
-        }
-
 
         private void BindButtons()
         {
-            AddClick(gameModeLeftButton, PreviousGameMode);
-            AddClick(gameModeRightButton, NextGameMode);
+            for (int i = 0; i < GetArrayLength(gameModeButtons); i++)
+            {
+                int modeIndex = i;
+                AddClick(gameModeButtons[i], () => SelectGameMode(modeIndex));
+            }
             AddClick(playerCountLeftButton, PreviousPlayerCount);
             AddClick(playerCountRightButton, NextPlayerCount);
-            AddClick(teamModeLeftButton, ToggleTeamMode);
-            AddClick(teamModeRightButton, ToggleTeamMode);
+            AddClick(soloModeButton, () => SelectTeamMode(false));
+            AddClick(teamModeButton, () => SelectTeamMode(true));
             AddClick(sharedInputLeftButton, ToggleSharedInput);
             AddClick(sharedInputRightButton, ToggleSharedInput);
             AddClick(mapLeftButton, PreviousMap);
@@ -288,37 +209,62 @@ namespace YutArena.UI
             AddClick(turnLengthRightButton, IncreaseTurnLength);
             AddClick(turnTimeLeftButton, PreviousTurnTime);
             AddClick(turnTimeRightButton, NextTurnTime);
+            AddClick(startPieceCountLeftButton, () => ChangeStartPieceCount(-1));
+            AddClick(startPieceCountRightButton, () => ChangeStartPieceCount(1));
+            AddClick(escapeTargetLeftButton, () => ChangeEscapeTarget(-1));
+            AddClick(escapeTargetRightButton, () => ChangeEscapeTarget(1));
             AddClick(startGameButton, StartGame);
             AddClick(backButton, BackToStartScene);
 
-            BindTeamButtons(playerTeamLeftButtons, -1);
-            BindTeamButtons(playerTeamRightButtons, 1);
-        }
-
-        private void BindTeamButtons(Button[] buttons, int direction)
-        {
-            if (buttons == null)
-            {
-                return;
-            }
-
-            for (int i = 0; i < buttons.Length; i++)
+            for (int i = 0; i < GetArrayLength(playerTeamRightButtons); i++)
             {
                 int playerIndex = i;
-                AddClick(buttons[i], delegate { ChangePlayerTeam(playerIndex, direction); });
+                AddClick(playerTeamRightButtons[i], () => ChangePlayerTeam(playerIndex));
             }
         }
 
-        private void PreviousGameMode()
+        private void ChangePlayerTeam(int playerIndex)
         {
-            gameModeIndex = WrapIndex(gameModeIndex - 1, gameModeOptions.Length);
+            if (!isTeamMode || playerIndex < 0 || playerIndex >= playerTeamIndexes.Length) return;
+            playerTeamIndexes[playerIndex] = playerTeamIndexes[playerIndex] == 1 ? 2 : 1;
             RefreshUI();
         }
 
-        private void NextGameMode()
+        private void SelectGameMode(int index)
         {
-            gameModeIndex = WrapIndex(gameModeIndex + 1, gameModeOptions.Length);
+            if (index < 0 || index >= gameModeOptions.Length) return;
+            gameModeIndex = index;
             RefreshUI();
+        }
+
+        private void ChangeStartPieceCount(int step)
+        {
+            if (SelectedGameMode != GameMode.Escape) return;
+            startPieceCount = Mathf.Clamp(startPieceCount + step,
+                GameRuleDefine.MinPieceCountPerPlayer, GameRuleDefine.MaxPieceCountPerPlayer);
+            RefreshUI();
+        }
+
+        private void ChangeEscapeTarget(int step)
+        {
+            if (SelectedGameMode != GameMode.Escape) return;
+            targetEscapeCount = Mathf.Clamp(targetEscapeCount + step,
+                GameRuleDefine.MinTargetEscapeCount, GameRuleDefine.MaxTargetEscapeCount);
+            RefreshUI();
+        }
+
+        private void RefreshGameModeSelection()
+        {
+            for (int i = 0; i < GetArrayLength(gameModeCards) && i < gameModeOptions.Length; i++)
+            {
+                if (gameModeCards[i] != null)
+                    gameModeCards[i].Refresh(gameModeDatabase != null
+                        ? gameModeDatabase.FindByMode(gameModeOptions[i]) : null);
+            }
+            for (int i = 0; i < GetArrayLength(gameModeFramesOn); i++)
+                SetActive(gameModeFramesOn[i], i == gameModeIndex);
+            for (int i = 0; i < GetArrayLength(gameModeFramesOff); i++)
+                SetActive(gameModeFramesOff[i], i != gameModeIndex);
         }
 
         private void PreviousPlayerCount()
@@ -333,28 +279,35 @@ namespace YutArena.UI
             RefreshUI();
         }
 
-        private void ToggleTeamMode()
+        private void SelectTeamMode(bool teamMode)
         {
-            if (!CanUseTeamMode())
-            {
-                isTeamMode = false;
-                RefreshUI();
-                return;
-            }
-
-            isTeamMode = !isTeamMode;
+            isTeamMode = teamMode && CanUseTeamMode();
             RefreshUI();
+        }
+
+        private void RefreshMap()
+        {
+            MapEntry map = maps.Length > 0 ? maps[mapIndex] : null;
+            SetText(mapNameText, map != null ? map.mapName : string.Empty);
+            SetText(mapDescriptionText, map != null ? map.description : string.Empty);
+            if (mapImage != null)
+            {
+                mapImage.sprite = map != null ? map.image : null;
+                mapImage.enabled = mapImage.sprite != null;
+            }
+            SetInteractable(mapLeftButton, maps.Length > 1);
+            SetInteractable(mapRightButton, maps.Length > 1);
         }
 
         private void PreviousMap()
         {
-            mapIndex = WrapIndex(mapIndex - 1, mapOptions.Length);
+            mapIndex = WrapIndex(mapIndex - 1, maps.Length);
             RefreshUI();
         }
 
         private void NextMap()
         {
-            mapIndex = WrapIndex(mapIndex + 1, mapOptions.Length);
+            mapIndex = WrapIndex(mapIndex + 1, maps.Length);
             RefreshUI();
         }
 
@@ -382,17 +335,6 @@ namespace YutArena.UI
             RefreshUI();
         }
 
-        private void ChangePlayerTeam(int playerIndex, int direction)
-        {
-            if (!isTeamMode || playerIndex < 0 || playerIndex >= playerTeamIndexes.Length)
-            {
-                return;
-            }
-
-            playerTeamIndexes[playerIndex] = WrapIndex(playerTeamIndexes[playerIndex] + direction, teamLabels.Length);
-            RefreshUI();
-        }
-
         private void RefreshUI()
         {
             if (!CanUseTeamMode())
@@ -400,17 +342,29 @@ namespace YutArena.UI
                 isTeamMode = false;
             }
 
-            SetText(gameModeValueText, gameModeLabels[gameModeIndex]);
+            RefreshGameModeSelection();
+            SetActive(classicRules, SelectedGameMode == GameMode.Classic);
+            SetActive(escapeRules, SelectedGameMode == GameMode.Escape);
+            SetActive(killTheKingRules, SelectedGameMode == GameMode.KillTheKing);
+            SetText(startPieceCountValueText, startPieceCount.ToString());
+            SetText(escapeTargetValueText, targetEscapeCount.ToString());
+            SetInteractable(startPieceCountLeftButton, startPieceCount > GameRuleDefine.MinPieceCountPerPlayer);
+            SetInteractable(startPieceCountRightButton, startPieceCount < GameRuleDefine.MaxPieceCountPerPlayer);
+            SetInteractable(escapeTargetLeftButton, targetEscapeCount > GameRuleDefine.MinTargetEscapeCount);
+            SetInteractable(escapeTargetRightButton, targetEscapeCount < GameRuleDefine.MaxTargetEscapeCount);
             SetText(playerCountValueText, selectedPlayerCount + " Players");
-            SetText(teamModeValueText, isTeamMode ? "Team" : "Solo");
-            SetText(mapValueText, mapLabels[mapIndex]);
+            SetActive(soloModeOn, !isTeamMode);
+            SetActive(soloModeOff, isTeamMode);
+            SetActive(teamModeOn, isTeamMode);
+            SetActive(teamModeOff, !isTeamMode);
+            RefreshMap();
             SetText(turnLengthValueText, turnLength + " Turns");
             SetText(turnTimeValueText, turnTimeOptions[turnTimeIndex] + " Seconds");
 
             SetInteractable(playerCountLeftButton, selectedPlayerCount > GameRuleDefine.MinDemoPlayerCount);
             SetInteractable(playerCountRightButton, selectedPlayerCount < GameRuleDefine.MaxDemoPlayerCount);
-            SetInteractable(teamModeLeftButton, CanUseTeamMode());
-            SetInteractable(teamModeRightButton, CanUseTeamMode());
+            SetInteractable(soloModeButton, true);
+            SetInteractable(teamModeButton, CanUseTeamMode());
             SetInteractable(turnLengthLeftButton, turnLength > GameRuleDefine.MinMaxTurnCount);
             SetInteractable(turnLengthRightButton, turnLength < GameRuleDefine.MaxMaxTurnCount);
             SetInteractable(turnTimeLeftButton, turnTimeIndex > 0);
@@ -423,10 +377,7 @@ namespace YutArena.UI
 
         private void RefreshStartAvailability()
         {
-            string reason;
-            bool canStart = CanStartGame(out reason);
-            SetInteractable(startGameButton, true);
-            SetText(startConditionText, canStart ? "Ready" : reason);
+            SetInteractable(startGameButton, CanStartGame());
         }
 
         private void RefreshPlayerRows()
@@ -439,48 +390,66 @@ namespace YutArena.UI
             for (int i = 0; i < GetArrayLength(playerTeamValueTexts); i++)
             {
                 SetText(playerTeamValueTexts[i], GetTeamLabel(i));
-                SetActive(playerTeamValueTexts[i] != null ? playerTeamValueTexts[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
-            }
-
-            for (int i = 0; i < GetArrayLength(playerTeamLeftButtons); i++)
-            {
-                SetActive(playerTeamLeftButtons[i] != null ? playerTeamLeftButtons[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
+                SetActive(playerTeamValueTexts[i] != null ? playerTeamValueTexts[i].gameObject : null, i < selectedPlayerCount);
             }
 
             for (int i = 0; i < GetArrayLength(playerTeamRightButtons); i++)
             {
-                SetActive(playerTeamRightButtons[i] != null ? playerTeamRightButtons[i].gameObject : null, i < selectedPlayerCount && isTeamMode);
+                Button button = playerTeamRightButtons[i];
+                SetActive(button != null ? button.gameObject : null, i < selectedPlayerCount && isTeamMode);
+                SetInteractable(button, i < selectedPlayerCount && isTeamMode);
             }
+
+            for (int i = 0; i < GetArrayLength(playerTabImages); i++)
+            {
+                if (playerTabImages[i] != null)
+                    playerTabImages[i].sprite = isTeamMode
+                        ? (playerTeamIndexes[i] == 1 ? redTeamTabSprite : blueTeamTabSprite)
+                        : soloTabSprites[i];
+            }
+
+            for (int i = 0; i < GetArrayLength(playerFlagImages); i++)
+            {
+                if (playerFlagImages[i] != null)
+                    playerFlagImages[i].sprite = isTeamMode
+                        ? (playerTeamIndexes[i] == 1 ? redTeamFlagSprite : blueTeamFlagSprite)
+                        : soloFlagSprites[i];
+            }
+
         }
 
-        private bool CanStartGame(out string reason)
+        private bool CanStartGame()
         {
             if (!LocalSelectionInput.SharedInputAvailable)
-            {
-                reason = LocalSelectionInput.SharedGamepadSelected
-                    ? "Connect the 1P pad."
-                    : "1P input device disconnected.";
                 return false;
-            }
+
             if (SelectedGameMode == GameMode.KillTheKing)
-            {
-                reason = "Kill The King is coming soon.";
                 return false;
-            }
 
             if (selectedPlayerCount < GameRuleDefine.MinDemoPlayerCount || selectedPlayerCount > GameRuleDefine.MaxDemoPlayerCount)
-            {
-                reason = "Only 2-4 players are available for now.";
                 return false;
+
+            if (isTeamMode)
+            {
+                if (!CanUseTeamMode()) return false;
+                if (!HasBalancedTeams()) return false;
             }
 
-            if (isTeamMode && !IsValidTeamSelection(out reason))
-            {
-                return false;
-            }
-
-            reason = string.Empty;
             return true;
+        }
+
+        private bool HasBalancedTeams()
+        {
+            int redCount = 0;
+            int blueCount = 0;
+
+            for (int i = 0; i < selectedPlayerCount; i++)
+            {
+                if (playerTeamIndexes[i] == 1) redCount++;
+                else if (playerTeamIndexes[i] == 2) blueCount++;
+            }
+
+            return redCount == 2 && blueCount == 2;
         }
 
         private int GetConnectedRequiredPlayerCount()
@@ -498,70 +467,10 @@ namespace YutArena.UI
             return connectedCount;
         }
 
-        private bool IsValidTeamSelection(out string reason)
-        {
-            if (!CanUseTeamMode())
-            {
-                reason = "Team mode is only available with 4 players for now.";
-                return false;
-            }
-
-            int[] teamCounts = new int[MaxTeamSlotCount];
-
-            for (int i = 0; i < selectedPlayerCount; i++)
-            {
-                int teamIndex = playerTeamIndexes[i] - 1;
-
-                if (teamIndex < 0 || teamIndex >= MaxTeamSlotCount)
-                {
-                    reason = "Every player must choose Red or Blue.";
-                    return false;
-                }
-
-                teamCounts[teamIndex]++;
-            }
-
-            int expectedCount = 0;
-            int usedTeamCount = 0;
-
-            foreach (int count in teamCounts)
-            {
-                if (count <= 0)
-                {
-                    continue;
-                }
-
-                if (expectedCount == 0)
-                {
-                    expectedCount = count;
-                }
-
-                if (count != expectedCount)
-                {
-                    reason = "Each team must have the same number of players.";
-                    return false;
-                }
-
-                usedTeamCount++;
-            }
-
-            if (usedTeamCount < 2)
-            {
-                reason = "Team mode needs at least 2 teams.";
-                return false;
-            }
-
-            reason = string.Empty;
-            return true;
-        }
-
         private void StartGame()
         {
-            string reason;
-
-            if (!CanStartGame(out reason))
+            if (!CanStartGame())
             {
-                SetText(startConditionText, reason);
                 PlayInvalidStartSound();
                 return;
             }
@@ -610,6 +519,10 @@ namespace YutArena.UI
                 mapType = (int)SelectedMapType,
                 matchComposition = (int)GetMatchComposition(),
                 playerCount = selectedPlayerCount,
+                pieceCountPerPlayer = SelectedGameMode == GameMode.Escape
+                    ? startPieceCount : GameRuleDefine.DefaultPieceCountPerPlayer,
+                targetEscapeCount = SelectedGameMode == GameMode.Escape
+                    ? targetEscapeCount : GameRuleDefine.DefaultTargetEscapeCount,
                 maxTurnCount = turnLength,
                 turnTimeSeconds = turnTimeOptions[turnTimeIndex],
                 isTeamMode = isTeamMode,
@@ -667,12 +580,17 @@ namespace YutArena.UI
 
         private string GetTeamLabel(int playerIndex)
         {
-            if (playerIndex < 0 || playerIndex >= playerTeamIndexes.Length)
-            {
-                return teamLabels[0];
-            }
+            if (playerIndex < 0 || playerIndex >= selectedPlayerCount) return string.Empty;
+            if (isTeamMode) return playerTeamIndexes[playerIndex] == 1 ? "빨강" : "파랑";
 
-            return teamLabels[playerTeamIndexes[playerIndex]];
+            switch (playerIndex)
+            {
+                case 0: return "빨강";
+                case 1: return "파랑";
+                case 2: return "초록";
+                case 3: return "노랑";
+                default: return string.Empty;
+            }
         }
 
         private static int WrapIndex(int index, int length)

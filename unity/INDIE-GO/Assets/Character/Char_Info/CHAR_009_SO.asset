@@ -15,11 +15,19 @@ MonoBehaviour:
   char_ID: 9
   char_Name: "SF \uB85C\uBD07"
   char_Desc: 
-  char_Icon: {fileID: 0}
+  char_Icon: {fileID: -8044974086161588717, guid: 3b3669508d4b4ef48a94e83d7d027d28, type: 3}
+  panelViewImage: {fileID: 0}
+  illustrationImage: {fileID: -270286072080164570, guid: 6176d6bb7a1749049afe4dba424e2117, type: 3}
+  passive_Icon: {fileID: 0}
   passive_Name: "\uC7AC\uC870\uB9BD"
-  passive_Desc: "리타이어되면 원래 칸에 2턴간 부품으로 남는다. 아군이 그 칸에 멈추면 부활해 아군 말 아래 업힌다."
+  passive_Desc: "\uB9AC\uD0C0\uC774\uC5B4\uB418\uBA74 \uC6D0\uB798 \uCE78\uC5D0 2\uD134\uAC04
+    \uBD80\uD488\uC73C\uB85C \uB0A8\uB294\uB2E4. \uC544\uAD70\uC774 \uADF8 \uCE78\uC5D0
+    \uBA48\uCD94\uBA74 \uBD80\uD65C\uD574 \uC544\uAD70 \uB9D0 \uC544\uB798 \uC5C5\uD78C\uB2E4."
+  active_Icon: {fileID: 0}
   active_Name: "\uC790\uD3ED"
-  active_Desc: "현재 칸과 경로상 앞뒤 1칸의 모든 말을 리타이어시킨다. 아군과 자신도 영향을 받는다."
+  active_Desc: "\uD604\uC7AC \uCE78\uACFC \uACBD\uB85C\uC0C1 \uC55E\uB4A4 1\uCE78\uC758
+    \uBAA8\uB4E0 \uB9D0\uC744 \uB9AC\uD0C0\uC774\uC5B4\uC2DC\uD0A8\uB2E4. \uC544\uAD70\uACFC
+    \uC790\uC2E0\uB3C4 \uC601\uD5A5\uC744 \uBC1B\uB294\uB2E4."
   active_CooldownTurns: 3
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
@@ -37,7 +45,7 @@ MonoBehaviour:
     charges: -1
     ignoresInstalledItems: 0
     isSimpleMove: 1
-  passive_Immunities: []
+  passive_Immunities: 
   active_Range: 0
   passive_Status: 0
   active_Status: 0

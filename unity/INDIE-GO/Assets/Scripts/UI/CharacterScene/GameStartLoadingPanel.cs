@@ -1,7 +1,9 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
+using TMPro;
+using YutArena.Common;
+using UnityEngine.Serialization;
 
 namespace YutArena.UI.CharacterScene
 {
@@ -10,10 +12,14 @@ namespace YutArena.UI.CharacterScene
         public static bool IsBlockingGameplay { get; private set; }
 
         [SerializeField] private GameObject panelRoot;
-        [SerializeField] private Image progressFill;
+        [SerializeField] private TMP_Text loadingText;
         [SerializeField] private RectTransform playerListRoot;
-        [SerializeField] private PlayerCharacterPanelView playerEntryTemplate;
-        [SerializeField, Min(0f)] private float minimumFinishDuration = 1f;
+        [SerializeField] private LoadingPlayerEntryView playerEntryTemplate;
+        [SerializeField] private GameModeDatabase gameModeDatabase;
+        [SerializeField] private TMP_Text gameModeText;
+        [SerializeField] private TMP_Text teamModeText;
+        [FormerlySerializedAs("minimumFinishDuration")]
+        [SerializeField, Min(0f)] private float minimumDisplayDuration = 3f;
         [SerializeField, Min(0f)] private float completedHoldDuration = 0.15f;
 
         private bool isLoading;
@@ -24,8 +30,9 @@ namespace YutArena.UI.CharacterScene
                 IsBlockingGameplay = false;
         }
 
-        public void SetPlayers(CharacterData[] characters, int playerCount)
+        public void SetPlayers(CharacterData[] characters, int playerCount, PlayerSelectionMarkerView[] markers)
         {
+            RefreshGameInformation();
             if (playerListRoot == null || playerEntryTemplate == null) return;
 
             for (int i = playerListRoot.childCount - 1; i >= 0; i--)
@@ -38,11 +45,25 @@ namespace YutArena.UI.CharacterScene
             int count = Mathf.Min(playerCount, characters != null ? characters.Length : 0);
             for (int i = 0; i < count; i++)
             {
-                PlayerCharacterPanelView entry = Instantiate(playerEntryTemplate, playerListRoot);
+                LoadingPlayerEntryView entry = Instantiate(playerEntryTemplate, playerListRoot);
                 entry.name = $"Player{i + 1}LoadingInfo";
                 entry.gameObject.SetActive(true);
-                entry.Refresh(i, characters[i], true);
+                entry.Refresh(characters[i], markers != null && i < markers.Length ? markers[i] : null);
             }
+        }
+
+        private void RefreshGameInformation()
+        {
+            GameStartSettings settings = GameStartSettingsHolder.Current;
+            if (settings == null) return;
+
+            GameModeEntry mode = gameModeDatabase != null
+                ? gameModeDatabase.FindByMode(settings.gameMode) : null;
+            if (gameModeText != null)
+                gameModeText.text = mode != null && !string.IsNullOrWhiteSpace(mode.modeName)
+                    ? mode.modeName : settings.gameMode.ToString();
+            if (teamModeText != null)
+                teamModeText.text = settings.isTeamMode ? "팀전" : "개인전";
         }
 
         private void Awake()
@@ -63,11 +84,12 @@ namespace YutArena.UI.CharacterScene
             IsBlockingGameplay = true;
             transform.SetParent(null, true);
             DontDestroyOnLoad(gameObject);
-            SetProgress(0f);
             if (panelRoot != null) panelRoot.SetActive(true);
+            StartCoroutine(AnimateLoadingText());
 
             // 패널이 먼저 화면에 그려진 뒤 씬 로딩을 시작한다.
             yield return null;
+            float displayStartedAt = Time.realtimeSinceStartup;
 
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
             if (operation == null)
@@ -80,23 +102,17 @@ namespace YutArena.UI.CharacterScene
             operation.allowSceneActivation = false;
             while (operation.progress < 0.9f)
             {
-                SetProgress(Mathf.Lerp(0f, 0.7f, Mathf.Clamp01(operation.progress / 0.9f)));
                 yield return null;
             }
 
-            SetProgress(0.7f);
             operation.allowSceneActivation = true;
             while (!operation.isDone) yield return null;
 
-            float elapsed = 0f;
-            while (elapsed < minimumFinishDuration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                SetProgress(Mathf.Lerp(0.7f, 1f, Mathf.Clamp01(elapsed / minimumFinishDuration)));
-                yield return null;
-            }
+            float remainingDisplayDuration = Mathf.Max(0f,
+                minimumDisplayDuration - (Time.realtimeSinceStartup - displayStartedAt) - completedHoldDuration);
+            if (remainingDisplayDuration > 0f)
+                yield return new WaitForSecondsRealtime(remainingDisplayDuration);
 
-            SetProgress(1f);
             if (completedHoldDuration > 0f)
                 yield return new WaitForSecondsRealtime(completedHoldDuration);
             if (panelRoot != null) panelRoot.SetActive(false);
@@ -104,10 +120,16 @@ namespace YutArena.UI.CharacterScene
             Destroy(gameObject);
         }
 
-        private void SetProgress(float progress)
+        private IEnumerator AnimateLoadingText()
         {
-            if (progressFill != null)
-                progressFill.fillAmount = Mathf.Clamp01(progress);
+            int dotCount = 1;
+            while (isLoading)
+            {
+                if (loadingText != null)
+                    loadingText.text = "로딩중 " + new string('.', dotCount);
+                dotCount = dotCount % 3 + 1;
+                yield return new WaitForSecondsRealtime(0.1f);
+            }
         }
     }
 }

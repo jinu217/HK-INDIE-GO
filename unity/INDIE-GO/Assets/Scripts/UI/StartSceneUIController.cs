@@ -11,8 +11,6 @@ namespace YutArena.UI
     public class StartSceneUIController : MonoBehaviour
     {
         [Header("Main Buttons")]
-        [Tooltip("게임 시작 버튼")]
-        [SerializeField] private Button startGameButton;
         [Tooltip("도움말 버튼")]
         [SerializeField] private Button helpButton;
         [Tooltip("설정 버튼")]
@@ -43,9 +41,6 @@ namespace YutArena.UI
         [SerializeField] private Button modeHelpButton;
 
         [Header("Panels")]
-        [Tooltip("플레이 모드 버튼 묶음")]
-        [FormerlySerializedAs("playModePanel")]
-        [SerializeField] private GameObject playModeButtons;
         [Tooltip("온라인 게임 버튼 묶음")]
         [FormerlySerializedAs("onlineGamePanel")]
         [SerializeField] private GameObject onlineGameButtons;
@@ -127,7 +122,6 @@ namespace YutArena.UI
 
         private void BindButtons()
         {
-            AddClick(startGameButton, ShowPlayModePanel);
             AddClick(helpButton, OpenHelp);
             AddClick(settingsButton, OpenSettings);
             AddClick(quitButton, QuitGame);
@@ -151,7 +145,6 @@ namespace YutArena.UI
                 return;
             }
 
-            WarnIfMissing(startGameButton, nameof(startGameButton));
             WarnIfMissing(helpButton, nameof(helpButton));
             WarnIfMissing(settingsButton, nameof(settingsButton));
             WarnIfMissing(quitButton, nameof(quitButton));
@@ -159,7 +152,6 @@ namespace YutArena.UI
             WarnIfMissing(onlinePlayButton, nameof(onlinePlayButton));
             WarnIfMissing(onlineCreateGameButton, nameof(onlineCreateGameButton));
             WarnIfMissing(onlineJoinGameButton, nameof(onlineJoinGameButton));
-            WarnIfMissing(playModeButtons, nameof(playModeButtons));
             WarnIfMissing(onlineGameButtons, nameof(onlineGameButtons));
             WarnIfMissing(onlineJoinPanel, nameof(onlineJoinPanel));
             WarnIfMissing(helpPanel, nameof(helpPanel));
@@ -287,21 +279,9 @@ namespace YutArena.UI
             }
         }
 
-        private void ShowPlayModePanel()
-        {
-            if (IsActive(playModeButtons) && !IsActive(onlineGameButtons))
-            {
-                return;
-            }
-
-            HideAllPanels();
-            SetActive(playModeButtons, true);
-        }
-
         private void ShowOnlineGamePanel()
         {
             ClosePopups();
-            SetActive(playModeButtons, true);
             SetActive(onlineGameButtons, true);
         }
 
@@ -358,7 +338,6 @@ namespace YutArena.UI
 
         private void HideAllPanels()
         {
-            SetActive(playModeButtons, false);
             SetActive(onlineGameButtons, false);
             SetActive(onlineJoinPanel, false);
             SetActive(helpPanel, false);

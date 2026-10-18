@@ -15,11 +15,19 @@ MonoBehaviour:
   char_ID: 10
   char_Name: "SF \uAD70\uC778"
   char_Desc: 
-  char_Icon: {fileID: 0}
+  char_Icon: {fileID: 2599193830102480480, guid: 44d51720a6d08e044b38c32761822e6a, type: 3}
+  panelViewImage: {fileID: 0}
+  illustrationImage: {fileID: 7248464210038312623, guid: 9acb14dcdda35b0438b8e692560005db, type: 3}
+  passive_Icon: {fileID: 0}
   passive_Name: "\uBD84\uB300 \uC804\uC220"
-  passive_Desc: "윷 결과 이동을 마친 뒤 업은 실제 말 수만큼 별도 이동한다. 두 착지점 모두 잡을 수 있다."
+  passive_Desc: "\uC737 \uACB0\uACFC \uC774\uB3D9\uC744 \uB9C8\uCE5C \uB4A4 \uC5C5\uC740
+    \uC2E4\uC81C \uB9D0 \uC218\uB9CC\uD07C \uBCC4\uB3C4 \uC774\uB3D9\uD55C\uB2E4.
+    \uB450 \uCC29\uC9C0\uC810 \uBAA8\uB450 \uC7A1\uC744 \uC218 \uC788\uB2E4."
+  active_Icon: {fileID: 0}
   active_Name: "\uC791\uC804\uC0C1 \uD6C4\uD1F4"
-  active_Desc: "업은 실제 말 수보다 1칸 더 후진한다. 이동 후 즉시 턴이 끝나고 추가 던지기는 없다."
+  active_Desc: "\uC5C5\uC740 \uC2E4\uC81C \uB9D0 \uC218\uBCF4\uB2E4 1\uCE78 \uB354
+    \uD6C4\uC9C4\uD55C\uB2E4. \uC774\uB3D9 \uD6C4 \uC989\uC2DC \uD134\uC774 \uB05D\uB098\uACE0
+    \uCD94\uAC00 \uB358\uC9C0\uAE30\uB294 \uC5C6\uB2E4."
   active_CooldownTurns: 3
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
@@ -37,7 +45,7 @@ MonoBehaviour:
     charges: -1
     ignoresInstalledItems: 0
     isSimpleMove: 1
-  passive_Immunities: []
+  passive_Immunities: 
   active_Range: 0
   passive_Status: 0
   active_Status: 0
