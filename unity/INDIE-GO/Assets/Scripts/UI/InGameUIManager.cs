@@ -13,8 +13,6 @@ namespace YutArena.UI
     /// </summary>
     public sealed class InGameUIManager : MonoBehaviour
     {
-        private const string TurnTimePrefix = "TURN TIME \n";
-        private const string UnlimitedText = "UNLIMITED";
 
         [Header("Managers")]
         [SerializeField] private TestGameManager gameManager;
@@ -29,7 +27,7 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text turnTimeText;
         [Tooltip("현재 턴(라운드) 숫자")]
         [SerializeField] private TMP_Text turnCountText;
-        [Tooltip("최대 턴 숫자. 제한이 없으면 UNLIMITED 표시")]
+        [Tooltip("최대 턴 숫자. 제한이 없으면 0 표시")]
         [SerializeField] private TMP_Text maxTurnCountText;
 
         [Header("Current Player Skills")]
@@ -281,7 +279,7 @@ namespace YutArena.UI
             if (turnCountText != null)
                 turnCountText.text = current.ToString();
             if (maxTurnCountText != null)
-                maxTurnCountText.text = maximum > 0 ? maximum.ToString() : UnlimitedText;
+                maxTurnCountText.text = Mathf.Max(0, maximum).ToString();
         }
 
         private void RefreshCurrentPlayerSkills()
@@ -319,10 +317,9 @@ namespace YutArena.UI
         {
             if (turnTimeText != null)
             {
-                turnTimeText.text = TurnTimePrefix +
-                                    (turnManager != null && turnManager.IsTurnTimerLimited
-                                        ? FormatTime(turnManager.RemainingTurnSeconds)
-                                        : UnlimitedText);
+                turnTimeText.text = turnManager != null && turnManager.IsTurnTimerLimited
+                    ? FormatTime(turnManager.RemainingTurnSeconds)
+                    : "00";
             }
         }
 
@@ -335,7 +332,7 @@ namespace YutArena.UI
         private static string FormatTime(float seconds)
         {
             int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));
-            return string.Format("{0:00}:{1:00}", totalSeconds / 60, totalSeconds % 60);
+            return totalSeconds.ToString("00");
         }
 
         private static void SetSkillImage(Image target, Sprite sprite)
