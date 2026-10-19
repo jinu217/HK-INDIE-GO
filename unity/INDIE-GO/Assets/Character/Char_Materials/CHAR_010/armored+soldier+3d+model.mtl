@@ -1,0 +1,11 @@
+newmtl tripo_material_c1c1e440_60c0_4f12_9b68_e5a346f66bed
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd armored+soldier+3d+model_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr armored+soldier+3d+model_roughness.png
+map_Pm armored+soldier+3d+model_metallic.png
+norm armored+soldier+3d+model_normal.png
+

@@ -1,0 +1,11 @@
+newmtl tripo_material_3b3e3474_1cf4_45b3_a185_d5b09a7b1696
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd robot+character+3d+model_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr robot+character+3d+model_roughness.png
+map_Pm robot+character+3d+model_metallic.png
+norm robot+character+3d+model_normal.png
+

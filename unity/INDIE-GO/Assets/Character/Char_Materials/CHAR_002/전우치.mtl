@@ -1,0 +1,11 @@
+newmtl tripo_material_3350019a_c4ed_43f5_9f13_fd876e0d4d5c
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd 전우치_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr 전우치_roughness.png
+map_Pm 전우치_metallic.png
+norm 전우치_normal.png
+

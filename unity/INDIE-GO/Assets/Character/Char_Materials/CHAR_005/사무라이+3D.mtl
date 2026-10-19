@@ -1,0 +1,11 @@
+newmtl tripo_material_66600ed3_1411_4a2b_97fc_c0629e0a4adf
+Kd 1.000000000 1.000000000 1.000000000
+d 1.000000000
+illum 2
+map_Kd 사무라이+3D_basecolor.jpg
+Pr 1.000000000
+Pm 1.000000000
+map_Pr 사무라이+3D_roughness.png
+map_Pm 사무라이+3D_metallic.png
+norm 사무라이+3D_normal.png
+
