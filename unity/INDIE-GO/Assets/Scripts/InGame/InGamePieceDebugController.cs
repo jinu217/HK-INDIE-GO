@@ -160,6 +160,7 @@ namespace YutArena.InGame
                 AttachFixedFoothold(view, pieceObject.transform, player.PlayerId);
                 view.Configure(player.PlayerId, piece.PieceId);
                 view.SetBaseScaleMultiplier(pieceScaleMultiplier);
+                view.SetWaitingHidden(piece.State == PieceState.Waiting);
                 pieceViews.Add(view);
             }
 
@@ -321,11 +322,13 @@ namespace YutArena.InGame
             {
                 if (!playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
                     !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece)) continue;
+                view.SetWaitingHidden(piece.State == PieceState.Waiting);
                 Vector3 formationOffset = tileFormationOffsets.TryGetValue(view, out Vector3 offset)
                     ? offset
                     : Vector3.zero;
                 Vector3 target = GetDisplayPosition(piece, view.PlayerId, view.PieceId) + formationOffset;
-                if (visualMoves.TryGetValue(view, out VisualMove move) && !IsCarriedPiece(piece))
+                if (piece.State != PieceState.Waiting &&
+                    visualMoves.TryGetValue(view, out VisualMove move) && !IsCarriedPiece(piece))
                     AdvanceVisualMove(view, move, target);
                 else
                 {

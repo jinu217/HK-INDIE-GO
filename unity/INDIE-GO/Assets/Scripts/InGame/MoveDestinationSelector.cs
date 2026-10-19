@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using YutArena.Common;
 using YutArena.Managers;
@@ -10,7 +11,7 @@ namespace YutArena.InGame
 {
     /// <summary>
     /// 이동 선택 3단계 흐름 (WaitAction 단계). 마커는 MoveMarker 하나로 역할만 다르게 쓴다.
-    /// 1) 윷을 다 던지면 → 움직일 수 있는 현재 플레이어 말마다 파란 화살표(MoveMarker.PieceSelect).
+    /// 1) 윷을 다 던지면 → 보드 위 말은 직접 클릭, 대기 말은 공용 HUD의 말 버튼으로 선택.
     /// 2) 화살표 클릭 → 그 말이 남은 결과(모/개…)로 갈 수 있는 보드 칸에 노란 핀(MoveMarker.Destination, 안에 결과 이름).
     /// 3) 노란 핀 클릭 → 그 결과로 이동. 결과가 소비되면 다시 1단계(말 선택)로.
     /// </summary>
@@ -132,6 +133,44 @@ namespace YutArena.InGame
 
         private void HandleTurnEnded(PlayerSlot _) => ClearAll();
 
+        /// <summary>공용 HUD의 대기 말 버튼이 지금 출루 선택에 사용 가능한지 검사합니다.</summary>
+        public bool CanSelectWaitingPiece(int playerId, int pieceId)
+        {
+            if (!isActiveAndEnabled || !subscribed || turnManager == null ||
+                playerManager == null || pieceMovementManager == null ||
+                turnManager.CurrentTurn == null || turnManager.CurrentTurn.isGameEnded ||
+                turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction ||
+                (int)turnManager.CurrentTurn.currentPlayer != playerId ||
+                turnManager.TryGetPendingForcedMove(out _) ||
+                !playerManager.TryGetPlayer(playerId, out PlayerController player) ||
+                !player.TryGetPieceData(pieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
+                piece.State != PieceState.Waiting || !CanMovePiece(piece))
+            {
+                return false;
+            }
+
+            foreach (YutThrowData result in turnManager.PendingResults)
+            {
+                if (YutResultRule.GetMoveCount(result.result) > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>대기 말은 즉시 이동시키지 않고, 선택한 말의 출루 목적지만 표시합니다.</summary>
+        public bool TrySelectWaitingPiece(int playerId, int pieceId)
+        {
+            if (!CanSelectWaitingPiece(playerId, pieceId))
+                return false;
+
+            pendingResults.Clear();
+            pendingResults.AddRange(turnManager.PendingResults);
+            selectedPieceId = pieceId;
+            BuildDestinationMarkers();
+            return selectedPieceId == pieceId && destMarkers.Count > 0;
+        }
+
         private void Update()
         {
             if (turnManager == null || Mouse.current == null) return;
@@ -162,6 +201,8 @@ namespace YutArena.InGame
             }
 
             if (!Mouse.current.leftButton.wasPressedThisFrame) return;
+            // 대기 말 버튼 등 UI를 누른 클릭이 보드까지 전달되어 선택을 취소/실행하지 않도록 합니다.
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
 
             if (forcedMoveActive)
             {
@@ -298,13 +339,12 @@ namespace YutArena.InGame
             return found != null;
         }
 
-        // 1단계: 움직일 수 있는 현재 플레이어 말마다 화살표 (사용자가 이동할 말을 고름).
+        // 1단계: 보드 위의 움직일 수 있는 현재 플레이어 말마다 화살표.
+        // Waiting 상태의 말은 공용 HUD 버튼으로만 출루 선택합니다.
         // 화살표는 각 말 정수리 바로 위에 뜬다.
         private void BuildPieceSelectArrows()
         {
             int playerId = (int)turnManager.CurrentTurn.currentPlayer;
-            bool onlyBackDo = OnlyBackDoRemaining();
-
             int count = 0;
             foreach (DebugPieceView view in FindObjectsByType<DebugPieceView>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
@@ -313,8 +353,7 @@ namespace YutArena.InGame
                 if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
                     !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece))
                     continue;
-                if (!CanMovePiece(piece)) continue;
-                if (onlyBackDo && piece.State != PieceState.InBoard) continue;
+                if (piece.State != PieceState.InBoard || !CanMovePiece(piece)) continue;
 
                 var obj = new GameObject("PieceSelectArrow");
                 obj.transform.SetParent(transform, false);
@@ -429,15 +468,6 @@ namespace YutArena.InGame
                 destColor, outlineColor, outlineHoverColor, destScale);
             destMarkers.Add(marker);
             if (verboseLog) Debug.Log($"[MoveSelector]   {result} → {landingTile} finish={reachesFinish} piece={pieceOnTile} {tilePos}", this);
-            return true;
-        }
-
-        private bool OnlyBackDoRemaining()
-        {
-            if (pendingResults.Count == 0) return false;
-            foreach (YutThrowData t in pendingResults)
-                if (t.result != YutResult.BackDo)
-                    return false;
             return true;
         }
 

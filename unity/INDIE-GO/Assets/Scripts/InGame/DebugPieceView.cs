@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace YutArena.InGame
@@ -7,6 +8,9 @@ namespace YutArena.InGame
         public int PlayerId { get; private set; }
         public int PieceId { get; private set; }
         private Vector3 initialScale;
+        private bool waitingHidden;
+        private readonly Dictionary<Renderer, bool> waitingRendererStates = new Dictionary<Renderer, bool>();
+        private readonly Dictionary<Collider, bool> waitingColliderStates = new Dictionary<Collider, bool>();
 
         private void Awake()
         {
@@ -33,6 +37,38 @@ namespace YutArena.InGame
         public void SetSelected(bool selected)
         {
             transform.localScale = initialScale * (selected ? 1.1f : 1f);
+        }
+
+        /// <summary>
+        /// 대기 말은 외형(발판 포함)과 클릭 판정만 숨깁니다.
+        /// GameObject는 활성 상태로 두어 캐릭터 스킬 등록과 턴 처리를 유지합니다.
+        /// </summary>
+        public void SetWaitingHidden(bool hidden)
+        {
+            if (waitingHidden == hidden) return;
+            waitingHidden = hidden;
+
+            if (hidden)
+            {
+                foreach (Renderer modelRenderer in GetComponentsInChildren<Renderer>(true))
+                {
+                    waitingRendererStates[modelRenderer] = modelRenderer.forceRenderingOff;
+                    modelRenderer.forceRenderingOff = true;
+                }
+                foreach (Collider modelCollider in GetComponentsInChildren<Collider>(true))
+                {
+                    waitingColliderStates[modelCollider] = modelCollider.enabled;
+                    modelCollider.enabled = false;
+                }
+                return;
+            }
+
+            foreach (KeyValuePair<Renderer, bool> entry in waitingRendererStates)
+                if (entry.Key != null) entry.Key.forceRenderingOff = entry.Value;
+            foreach (KeyValuePair<Collider, bool> entry in waitingColliderStates)
+                if (entry.Key != null) entry.Key.enabled = entry.Value;
+            waitingRendererStates.Clear();
+            waitingColliderStates.Clear();
         }
 
         public void AttachFoothold(GameObject foothold)
@@ -116,6 +152,7 @@ namespace YutArena.InGame
         private bool TryGetPointerHitDistance(Ray pointerRay, Camera selectionCamera, out float distance)
         {
             distance = float.PositiveInfinity;
+            if (waitingHidden) return false;
             bool wasHit = false;
 
             foreach (Collider modelCollider in GetComponentsInChildren<Collider>(false))

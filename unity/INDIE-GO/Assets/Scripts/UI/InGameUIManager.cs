@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using YutArena.Common;
 using YutArena.Managers;
+using YutArena.InGame;
 
 namespace YutArena.UI
 {
@@ -55,9 +56,13 @@ namespace YutArena.UI
         [SerializeField] private RectTransform commonAvailablePiecesContainer;
         [Tooltip("대기 말 수만큼 복제할 버튼. 씬에서는 비활성화해 둡니다.")]
         [SerializeField] private Button commonAvailablePieceButtonTemplate;
+        [Tooltip("대기 말 버튼을 눌렀을 때 목적지를 표시할 이동 선택기. 비우면 씬에서 찾습니다.")]
+        [SerializeField] private MoveDestinationSelector moveDestinationSelector;
 
         private readonly List<Image> spImages = new List<Image>();
         private readonly List<Button> commonPieceButtons = new List<Button>();
+        private readonly List<int> waitingPieceIds = new List<int>();
+        private int waitingPlayerId;
 
         private void Awake()
         {
@@ -66,6 +71,7 @@ namespace YutArena.UI
             if (turnManager == null) turnManager = FindFirstObjectByType<TestTurnManager>();
             if (playerManager == null) playerManager = FindFirstObjectByType<PlayerManager>();
             if (winConditionManager == null) winConditionManager = FindFirstObjectByType<TestWinConditionManager>();
+            if (moveDestinationSelector == null) moveDestinationSelector = FindFirstObjectByType<MoveDestinationSelector>();
         }
 
         private void OnEnable()
@@ -126,30 +132,32 @@ namespace YutArena.UI
             if (commonAvailablePiecesContainer == null || commonAvailablePieceButtonTemplate == null) return;
             commonAvailablePieceButtonTemplate.gameObject.SetActive(false);
 
-            int waitingCount = 0;
+            waitingPieceIds.Clear();
             Sprite pieceSprite = null;
             int playerId = turnManager != null && turnManager.CurrentTurn != null
                 ? (int)turnManager.CurrentTurn.currentPlayer : 0;
+            waitingPlayerId = playerId;
             if (playerId > 0 && playerManager != null &&
                 playerManager.TryGetPlayer(playerId, out PlayerController player) &&
                 player.RuntimeData != null)
             {
                 foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
-                    if (piece.State == PieceState.Waiting) waitingCount++;
+                    if (piece.State == PieceState.Waiting) waitingPieceIds.Add(piece.PieceId);
                 pieceSprite = player.SelectedCharacter != null
                     ? player.SelectedCharacter.pieceImage : null;
             }
 
-            while (commonPieceButtons.Count < waitingCount)
+            while (commonPieceButtons.Count < waitingPieceIds.Count)
             {
                 int index = commonPieceButtons.Count;
                 Button button = Instantiate(commonAvailablePieceButtonTemplate,
                     commonAvailablePiecesContainer, false);
                 button.name = $"Piece{index + 1}Button";
+                button.onClick.AddListener(() => HandleWaitingPieceClicked(index));
                 commonPieceButtons.Add(button);
             }
 
-            while (commonPieceButtons.Count > waitingCount)
+            while (commonPieceButtons.Count > waitingPieceIds.Count)
             {
                 int last = commonPieceButtons.Count - 1;
                 Button button = commonPieceButtons[last];
@@ -159,15 +167,29 @@ namespace YutArena.UI
                 Destroy(button.gameObject);
             }
 
-            foreach (Button button in commonPieceButtons)
+            for (int i = 0; i < commonPieceButtons.Count; i++)
             {
+                Button button = commonPieceButtons[i];
                 if (button == null) continue;
+                int pieceId = waitingPieceIds[i];
+                button.name = $"Piece{pieceId + 1}Button";
+                button.interactable = moveDestinationSelector != null &&
+                    moveDestinationSelector.CanSelectWaitingPiece(playerId, pieceId);
                 Image image = button.targetGraphic as Image;
                 if (image == null) continue;
                 image.sprite = pieceSprite;
                 image.enabled = pieceSprite != null;
                 button.gameObject.SetActive(true);
             }
+        }
+
+        private void HandleWaitingPieceClicked(int buttonIndex)
+        {
+            if (moveDestinationSelector == null ||
+                buttonIndex < 0 || buttonIndex >= waitingPieceIds.Count)
+                return;
+
+            moveDestinationSelector.TrySelectWaitingPiece(waitingPlayerId, waitingPieceIds[buttonIndex]);
         }
 
         private void HandleTurnPhaseChanged(TurnContext turn)
