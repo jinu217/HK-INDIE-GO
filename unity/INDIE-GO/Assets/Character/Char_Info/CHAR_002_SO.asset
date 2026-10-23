@@ -18,6 +18,7 @@ MonoBehaviour:
   char_Icon: {fileID: -226022335290975863, guid: c0b4b483af23f57459736b619bb38d0b, type: 3}
   panelViewImage: {fileID: 0}
   illustrationImage: {fileID: 6160567813913587780, guid: 3bcf64eee5f11b14fb6c24bf36db3ca0, type: 3}
+  pieceImage: {fileID: 0}
   passive_Icon: {fileID: 0}
   passive_Name: "\uB3C4\uC0AC\uC758 \uBD80\uC801"
   passive_Desc: "\uB9D0\uC774 \uD310\uC5D0 \uC62C\uB77C\uAC00\uBA74 \uAC00\uC7A5
@@ -54,4 +55,4 @@ MonoBehaviour:
   passive_Status: 3
   active_Status: 4
   piecePrefab: {fileID: 6318475477845430192, guid: 1afd0d65a3242954ea6321f0b5dda250, type: 3}
-  visualModelPrefab: {fileID: 0}
+  visualModelPrefab: {fileID: 6318475477845430192, guid: 1afd0d65a3242954ea6321f0b5dda250, type: 3}

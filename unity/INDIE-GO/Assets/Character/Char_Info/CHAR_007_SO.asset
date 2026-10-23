@@ -16,10 +16,18 @@ MonoBehaviour:
   char_Name: "\uD310\uD0C0\uC9C0 \uC624\uD06C"
   char_Desc: 
   char_Icon: {fileID: 0}
+  panelViewImage: {fileID: 0}
+  illustrationImage: {fileID: 0}
+  pieceImage: {fileID: 0}
+  passive_Icon: {fileID: 0}
   passive_Name: "\uC804\uD22C\uAD11"
-  passive_Desc: "적을 리타이어 시키면 스킬 포인트 획득"
+  passive_Desc: "\uC801\uC744 \uB9AC\uD0C0\uC774\uC5B4 \uC2DC\uD0A4\uBA74 \uC2A4\uD0AC
+    \uD3EC\uC778\uD2B8 \uD68D\uB4DD"
+  active_Icon: {fileID: 0}
   active_Name: "\uAD11\uD3ED \uB3CC\uC9C4"
-  active_Desc: "꼭짓점이나 중앙까지 단순 이동하고 경로의 모든 적을 1턴간 스턴시킨다. 설치형 아이템을 무시한다."
+  active_Desc: "\uAF2D\uC9D3\uC810\uC774\uB098 \uC911\uC559\uAE4C\uC9C0 \uB2E8\uC21C
+    \uC774\uB3D9\uD558\uACE0 \uACBD\uB85C\uC758 \uBAA8\uB4E0 \uC801\uC744 1\uD134\uAC04
+    \uC2A4\uD134\uC2DC\uD0A8\uB2E4. \uC124\uCE58\uD615 \uC544\uC774\uD15C\uC744 \uBB34\uC2DC\uD55C\uB2E4."
   active_CooldownTurns: 0
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
@@ -43,9 +51,9 @@ MonoBehaviour:
     charges: -1
     ignoresInstalledItems: 0
     isSimpleMove: 1
-  passive_Immunities: []
+  passive_Immunities: 
   active_Range: 0
   passive_Status: 1
   active_Status: 10
   piecePrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}
-  visualModelPrefab: {fileID: 0}
+  visualModelPrefab: {fileID: 2176126531978260934, guid: f4fe17565beae604fa76e71e347a93bd, type: 3}
