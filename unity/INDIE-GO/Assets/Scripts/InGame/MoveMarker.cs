@@ -44,6 +44,15 @@ namespace YutArena.InGame
         private bool outlineIsDiagonal;                 // 대각선(지름길) 칸인지 → Inspector 전용 각도 적용
         public bool OutlineIsDiagonal => outlineIsDiagonal;
         private static Sprite sharedFrameSprite;
+        // 새 보드(10/19) 칸 모델은 기울어진 입체 장식판이라 칸 Anchor 평면에 그린 네모가 안 맞음.
+        // 칸 3D 모델이 있으면 같은 모델을 살짝 크게 한 겹 더 뒤에 그려서(뒷면만 = 인버티드 헐)
+        // 칸 실루엣 그대로 가장자리에 노란 윤곽선이 보이게 한다. 칸 원래 재질은 안 건드림.
+        public const string TileHullName = "MoveMarkerTileHull";
+        private readonly System.Collections.Generic.List<Transform> tileHullPivots =
+            new System.Collections.Generic.List<Transform>();
+        private readonly System.Collections.Generic.List<Material> tileHullMaterials =
+            new System.Collections.Generic.List<Material>();
+        private bool outlineUsesTileHull;
 
         private Transform arrow;                 // ▼ (+글자)
         private SpriteRenderer arrowRenderer;
@@ -149,6 +158,7 @@ namespace YutArena.InGame
                 label.raycastTarget = false;
                 label.rectTransform.sizeDelta = new Vector2(4f, 2f);
                 label.sortingOrder = 60;
+                label.isOverlay = true;   // 두께 있는 3D 칸에 글자가 가려지지 않게 항상 맨 위에 그림
             }
             if (label != null)
                 label.gameObject.SetActive(showLabel);
@@ -171,11 +181,22 @@ namespace YutArena.InGame
             float tileSize, float angleDeg, float thickness01, float radius01)
         {
             if (outlineRing != null) Destroy(outlineRing.gameObject);
+            DestroyTileHulls();
             if (tileVisual == null)
             {
                 Debug.Log($"[MoveMarker] {Result} 테두리 생략: 칸 Transform 없음");
                 return;
             }
+
+            // 칸 3D 모델이 있으면 칸 모양 그대로 윤곽선 (없으면 아래 예전 디버그 보드용 네모 테두리)
+            if (TryCreateTileHulls(tileVisual, thickness01))
+            {
+                outlineUsesTileHull = true;
+                SetTileHullsActive(false);
+                Debug.Log($"[MoveMarker] {Result} 칸 윤곽선 생성: 칸='{tileVisual.name}' 모델 {tileHullPivots.Count}개");
+                return;
+            }
+            outlineUsesTileHull = false;
 
             frameBaseScale = Vector3.one * Mathf.Max(0.2f, tileSize);
 
@@ -192,7 +213,7 @@ namespace YutArena.InGame
             outlineRingSr.color = OpaqueRingColor(outlineBaseColor);
             // 꼭지점/분기점 칸은 3D로 솟아 있어서 보드 평면 스프라이트가 그 지오메트리에 가림.
             // 깊이 테스트를 무시하는 머티리얼로 항상 위에 그린다.
-            Material overlayMat = GetOverlaySpriteMaterial();
+            Material overlayMat = GetOverlaySpriteMaterial(outlineRingSr.sprite);
             if (overlayMat != null) outlineRingSr.sharedMaterial = overlayMat;
             if (arrowRenderer != null)
                 outlineRingSr.sortingLayerID = arrowRenderer.sortingLayerID;
@@ -202,12 +223,181 @@ namespace YutArena.InGame
             Debug.Log($"[MoveMarker] {Result} 테두리 생성: 칸='{tileVisual.name}' size={frameBaseScale.x:0.00} angle={angleDeg:0} order=45");
         }
 
-        // 평면 내 미세 회전 보정을 실시간으로 반영 (Inspector 슬라이더로 각도 맞추기).
-        public void SetOutlineAngle(float deg)
+        // 칸 Anchor 아래의 칸 3D 모델마다, 같은 메시를 모델 중심 기준으로 (1 + 굵기)배 키운 복사본을 만든다.
+        // 복사본은 앞면을 안 그리고 뒷면만 그려서(Cull Front) 원래 칸에 가려지고 가장자리만 삐져나와 윤곽선이 된다.
+        // 말(DebugPieceView)과 다른 마커가 만든 윤곽선 복사본은 제외.
+        private bool TryCreateTileHulls(Transform tileAnchor, float thickness01)
         {
-            if (Role != MoveMarkerRole.Destination || outlineRing == null) return;
-            if (Mathf.Approximately(outlineAngleDeg, deg)) return;
-            outlineAngleDeg = deg;
+            foreach (MeshRenderer tileRenderer in tileAnchor.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (tileRenderer.name == TileHullName ||
+                    tileRenderer.GetComponentInParent<DebugPieceView>() != null)
+                    continue;
+                MeshFilter tileMeshFilter = tileRenderer.GetComponent<MeshFilter>();
+                if (tileMeshFilter == null || tileMeshFilter.sharedMesh == null) continue;
+
+                Material hullMaterial = CreateTileHullMaterial(tileRenderer.sharedMaterial);
+                if (hullMaterial == null) continue;
+
+                Mesh tileMesh = tileMeshFilter.sharedMesh;
+                var pivot = new GameObject(TileHullName + "Pivot").transform;
+                pivot.SetParent(tileRenderer.transform, false);
+                pivot.localPosition = tileMesh.bounds.center;   // 모델 중심 기준으로 키움
+
+                var hullObject = new GameObject(TileHullName);
+                hullObject.transform.SetParent(pivot, false);
+                hullObject.transform.localPosition = -tileMesh.bounds.center;
+                hullObject.AddComponent<MeshFilter>().sharedMesh = tileMesh;
+                var hullRenderer = hullObject.AddComponent<MeshRenderer>();
+                var materials = new Material[Mathf.Max(1, tileMesh.subMeshCount)];
+                for (int i = 0; i < materials.Length; i++) materials[i] = hullMaterial;
+                hullRenderer.sharedMaterials = materials;
+                hullRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                hullRenderer.receiveShadows = false;
+
+                tileHullPivots.Add(pivot);
+                tileHullMaterials.Add(hullMaterial);
+            }
+            SetTileHullThickness(thickness01);
+            return tileHullPivots.Count > 0;
+        }
+
+        // 윤곽선 굵기 = 칸 모델보다 얼마나 크게 그릴지 (0.07 = 7% 크게)
+        private void SetTileHullThickness(float thickness01)
+        {
+            float scale = 1f + Mathf.Clamp(thickness01, 0.005f, 0.5f);
+            foreach (Transform pivot in tileHullPivots)
+                if (pivot != null) pivot.localScale = Vector3.one * scale;
+        }
+
+        // 뒷면만 그리는 단색 머티리얼. URP Unlit 우선, 빌드에서 못 찾으면 칸 원래 머티리얼(URP Lit)을 복사해서 발광색으로 씀.
+        private Material CreateTileHullMaterial(Material tileMaterial)
+        {
+            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            Material material = unlit != null
+                ? new Material(unlit)
+                : tileMaterial != null ? new Material(tileMaterial) : null;
+            if (material == null) return null;
+
+            material.name = "MoveMarkerTileHull";
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", null);
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Front);
+            if (material.HasProperty("_EmissionColor")) material.EnableKeyword("_EMISSION");
+            SetTileHullColor(material, OpaqueRingColor(outlineBaseColor));
+            return material;
+        }
+
+        private static void SetTileHullColor(Material material, Color color)
+        {
+            if (material == null) return;
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+            if (material.HasProperty("_EmissionColor")) material.SetColor("_EmissionColor", color);
+        }
+
+        private void SetTileHullsActive(bool active)
+        {
+            foreach (Transform pivot in tileHullPivots)
+                if (pivot != null) pivot.gameObject.SetActive(active);
+        }
+
+        private void DestroyTileHulls()
+        {
+            foreach (Transform pivot in tileHullPivots)
+                if (pivot != null) Destroy(pivot.gameObject);
+            foreach (Material material in tileHullMaterials)
+                if (material != null) Destroy(material);
+            tileHullPivots.Clear();
+            tileHullMaterials.Clear();
+            outlineUsesTileHull = false;
+        }
+
+        // 화살표를 디자인 이미지로 교체. 이미지 원래 색이 보이게 틴트는 흰색.
+        // (이미지는 기본 ▼ 와 같은 기준점=아래 가운데, 높이 1 로 만들어서 위치/글자 높이는 그대로 맞음)
+        public void SetArrowSprite(Sprite sprite)
+        {
+            if (arrowRenderer == null || sprite == null) return;
+            arrowRenderer.sprite = sprite;
+            arrowRenderer.color = Color.white;
+            // 새 보드 칸은 두께 있는 3D 모델이라 화살표가 칸/말에 묻혀 가려질 수 있음 → 항상 맨 위에 그림
+            Material overlayMat = GetOverlaySpriteMaterial(sprite);
+            if (overlayMat != null) arrowRenderer.sharedMaterial = overlayMat;
+        }
+
+        // 탈출(참먹이 통과) 표시: 화살표 대신 깃발 + "Escape / 결과" 두 줄 글자.
+        // (QA 10/23: 멈춤은 금색 화살표, 통과는 깃발로 구별. 탈출 UI 이미지가 나오면 깃발만 교체)
+        // flagSprite = 디자인 깃발 이미지 (Inspector Escape Flag Texture). 없으면 코드로 그린 임시 깃발.
+        public void SetEscapeMarker(Sprite flagSprite)
+        {
+            if (arrowRenderer == null) return;
+            arrowRenderer.sprite = flagSprite != null ? flagSprite : GetFlagSprite();
+            arrowRenderer.color = Color.white;
+            Material overlayMat = GetOverlaySpriteMaterial(arrowRenderer.sprite);
+            if (overlayMat != null) arrowRenderer.sharedMaterial = overlayMat;
+            // 깃발 자체가 "탈출" 표시라 글자는 결과 이름만 짧게 (탈출 깃발 여러 개가 촘촘히 서도 안 겹치게)
+            if (label != null) label.text = GetDisplayName(Result);
+        }
+
+        // 임시 탈출 깃발 (흰 깃대 + 빨간 제비꼬리 깃발). 기준점 = 깃대 아래 끝, 높이 1.
+        private static Sprite sharedFlagSprite;
+        private static Sprite GetFlagSprite()
+        {
+            if (sharedFlagSprite != null) return sharedFlagSprite;
+
+            const int w = 56, h = 64;
+            const int poleLeft = 6, poleRight = 10;
+            const int flagLeft = poleRight, flagRight = 52, flagTop = h - 4, flagBottom = h - 32;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var clear = new Color(1f, 1f, 1f, 0f);
+            var pole = new Color(0.96f, 0.96f, 0.96f, 1f);
+            var flag = new Color(0.9f, 0.18f, 0.16f, 1f);
+            var edge = new Color(0.15f, 0.05f, 0.05f, 1f);
+            float flagMidY = (flagTop + flagBottom) * 0.5f;
+            float notchDepth = 10f;
+
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                Color c = clear;
+                bool inPole = x >= poleLeft && x < poleRight && y < h - 2;
+                // 제비꼬리: 오른쪽 끝에서 가운데로 파인 홈
+                float notch = notchDepth * (1f - Mathf.Abs(y - flagMidY) / ((flagTop - flagBottom) * 0.5f));
+                bool inFlag = x >= flagLeft && y >= flagBottom && y < flagTop && x < flagRight - Mathf.Max(0f, notch);
+                if (inFlag)
+                {
+                    bool border = x < flagLeft + 2 || y < flagBottom + 2 || y >= flagTop - 2 ||
+                                  x >= flagRight - Mathf.Max(0f, notch) - 2;
+                    c = border ? edge : flag;
+                }
+                if (inPole) c = (x == poleLeft || x == poleRight - 1) ? edge : pole;
+                tex.SetPixel(x, y, c);
+            }
+            tex.Apply();
+            sharedFlagSprite = Sprite.Create(tex, new Rect(0, 0, w, h),
+                new Vector2((poleLeft + poleRight) * 0.5f / w, 0f), h);
+            sharedFlagSprite.name = "MoveMarkerEscapeFlag";
+            return sharedFlagSprite;
+        }
+
+        // 큰 칸(참먹이/모/뒷모/찌모/날모/방)인지 → Inspector 큰 칸 전용 크기 적용
+        public bool OutlineIsLarge { get; set; }
+
+        // 테두리 모양을 실시간으로 반영 (Play 중 Inspector 값으로 조절).
+        // 칸 모델 윤곽선이면 굵기만 쓰고, 예전 디버그 보드 네모 테두리면 크기/위치(offset)/각도를 쓴다.
+        public void SetOutlineShape(float size, Vector2 offset, float angleDeg, float thickness01)
+        {
+            if (Role != MoveMarkerRole.Destination) return;
+            if (outlineUsesTileHull)
+            {
+                SetTileHullThickness(thickness01);
+                return;
+            }
+            if (outlineRing == null) return;
+            frameBaseScale = Vector3.one * Mathf.Max(0.1f, size);
+            outlineRing.localScale = frameBaseScale;
+            outlineRing.localPosition = new Vector3(offset.x, offset.y, 0f);
+            if (Mathf.Approximately(outlineAngleDeg, angleDeg)) return;
+            outlineAngleDeg = angleDeg;
             ApplyOutlineRotation();
         }
 
@@ -224,16 +414,25 @@ namespace YutArena.InGame
         }
 
         // 깊이 테스트 무시(항상 위에 그림) 스프라이트 머티리얼. 솟아있는 꼭지점 칸 지오메트리에 안 가리게.
-        private static Material overlaySpriteMaterial;
-        private static Material GetOverlaySpriteMaterial()
+        // 버그 수정(10/24): 예전엔 화살표·깃발·테두리가 머티리얼 하나를 같이 써서, 깃발이 화면에 있으면
+        // 금색 화살표에 깃발 그림(빨간 사각형 + 흰 깃대)이 입혀져 "빨간 마름모"처럼 보였음.
+        // 그림(텍스처)마다 머티리얼을 따로 만들고 그림을 머티리얼에 직접 박아서 섞이지 않게 함.
+        private static readonly System.Collections.Generic.Dictionary<Texture, Material> overlayMaterialsByTexture =
+            new System.Collections.Generic.Dictionary<Texture, Material>();
+        private static Material GetOverlaySpriteMaterial(Sprite sprite)
         {
-            if (overlaySpriteMaterial != null) return overlaySpriteMaterial;
+            Texture texture = sprite != null ? sprite.texture : null;
+            if (texture == null) return null;
+            if (overlayMaterialsByTexture.TryGetValue(texture, out Material cached) && cached != null)
+                return cached;
+
             Shader shader = Shader.Find("UI/Default");
             if (shader == null) return null;   // 못 찾으면 기본 스프라이트 머티리얼 사용
-            overlaySpriteMaterial = new Material(shader) { name = "MoveMarkerOutlineOverlay" };
-            overlaySpriteMaterial.SetInt(
-                "unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
-            return overlaySpriteMaterial;
+            var material = new Material(shader) { name = "MoveMarkerOverlay_" + texture.name };
+            material.SetInt("unity_GUIZTestMode", (int)UnityEngine.Rendering.CompareFunction.Always);
+            material.mainTexture = texture;
+            overlayMaterialsByTexture[texture] = material;
+            return material;
         }
 
         public void SetHovered(bool hovered)
@@ -248,13 +447,15 @@ namespace YutArena.InGame
             bool show = hasPieceOnTile || isHovered;
             if (show == highlightOn) return;
             highlightOn = show;
-            Debug.Log($"[MoveMarker] {Result} 강조 {(show ? "ON" : "OFF")} (hover={isHovered}, ring={(outlineRing != null)})");
-            if (outlineRing != null) outlineRing.gameObject.SetActive(show);
+            Debug.Log($"[MoveMarker] {Result} 강조 {(show ? "ON" : "OFF")} (hover={isHovered}, hull={outlineUsesTileHull}, ring={(outlineRing != null)})");
+            if (outlineUsesTileHull) SetTileHullsActive(show);
+            else if (outlineRing != null) outlineRing.gameObject.SetActive(show);
         }
 
         private void OnDestroy()
         {
             if (outlineRing != null) Destroy(outlineRing.gameObject);
+            DestroyTileHulls();   // 칸 모델 아래에 붙여둔 윤곽선 복사본 정리
         }
 
         private void Update()
@@ -264,7 +465,17 @@ namespace YutArena.InGame
                 transform.position = CurrentFollowPosition();
 
             // 도착 칸 강조: 크기는 칸에 딱 맞게 항상 고정. 피드백은 색 밝기 + 알파 펄스만(삐져나옴 방지).
-            if (Role == MoveMarkerRole.Destination && highlightOn && outlineRingSr != null)
+            if (Role == MoveMarkerRole.Destination && highlightOn && outlineUsesTileHull)
+            {
+                // 칸 모델 윤곽선: 불투명이라 알파 대신 밝기로 펄스
+                float hullPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 6f);   // 0..1
+                Color hullGlow = OpaqueRingColor(isHovered ? outlineHoverColor : outlineBaseColor);
+                Color hullColor = Color.Lerp(hullGlow * (isHovered ? 0.85f : 0.65f), hullGlow, hullPulse);
+                hullColor.a = 1f;
+                foreach (Material material in tileHullMaterials)
+                    SetTileHullColor(material, hullColor);
+            }
+            else if (Role == MoveMarkerRole.Destination && highlightOn && outlineRingSr != null)
             {
                 float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 6f);   // 0..1
                 Color glow = isHovered ? outlineHoverColor : outlineBaseColor;

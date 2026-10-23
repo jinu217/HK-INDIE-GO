@@ -142,7 +142,10 @@ public sealed class PieceMovementManager : MonoBehaviour
             return false;
 
         landingTile = curr;
-        reachesFinish = !isBackward && inBoard && curr == BoardTileId.None;
+        // 버그 수정: 예전엔 참먹이에 "딱 멈추는" 경우도 완주로 알려줘서 네비게이팅에 탈출 표시가 떴음.
+        // 실제 이동(TryMovePiece)은 참먹이에 멈추면 판에 남고 지나가야 완주 → 미리보기도 똑같이 맞춤.
+        // (지나가서 완주하는 경우는 위 반복문 안에서 이미 reachesFinish = true 로 돌려줌)
+        reachesFinish = false;
         return true;
     }
 

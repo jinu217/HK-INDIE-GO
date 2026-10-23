@@ -182,8 +182,10 @@ namespace YutArena.Managers
                 if (MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i) != team) continue;
                 if (!playerManager.TryGetPlayer(i, out var player)) continue;
 
+                // 판 위 말만 내림 (클래식은 골인한 말이 Goal 로 남아야 해서 건드리지 않음)
                 foreach (var piece in player.RuntimeData.Pieces)
-                    piece.Reset();
+                    if (piece.State == PieceState.InBoard)
+                        piece.Reset();
             }
         }
         // 승리를 확정짓고 TurnManager, GameManager에 알리는 함수 (진짜로 게임이 끝날 때만 호출됨)
@@ -360,13 +362,15 @@ namespace YutArena.Managers
         public void HandleTimeLimitReached()
         {
             if (settings == null) return;
-            if (settings.gameMode != GameMode.Escape)
+            // 클래식도 이스케이프처럼 턴 수가 다 되면 순위 판정 (10/23 결정, 기획 확정 전 임시).
+            // 클래식 점수 = 골인한 말 개수 (클래식은 보너스 점수가 없어서 escapeCountByTeam 에 골인 수만 쌓임)
+            if (settings.gameMode != GameMode.Escape && settings.gameMode != GameMode.Classic)
             {
-                // Classic/KillTheKing은 아직 턴 제한 승부 없음
+                // KillTheKing은 아직 턴 제한 승부 없음
                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 턴 제한 승부 미구현");
                 return;
             }
-            Debug.Log("[승리조건2] 턴 수 도달, 순위 판정 시작"); // 확인용 로그
+            Debug.Log("[승리조건2] " + settings.gameMode + " 턴 수 도달, 순위 판정 시작"); // 확인용 로그
 
             // 버그 수정: 예전엔 타이브레이커를 시작해도 턴이 멈추지 않아서 바로 다음 턴이 시작됐음.
             // 순위가 다 정해질 때까지 턴 진행을 먼저 멈춤 (타이브레이커 결과가 나올 때까지 이 상태로 대기)

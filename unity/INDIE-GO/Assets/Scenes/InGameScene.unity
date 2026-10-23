@@ -7246,6 +7246,7 @@ MonoBehaviour:
   spSpacing: 3
   commonAvailablePiecesContainer: {fileID: 1566857690}
   commonAvailablePieceButtonTemplate: {fileID: 623045490}
+  moveDestinationSelector: {fileID: 0}
 --- !u!4 &920429098
 Transform:
   m_ObjectHideFlags: 0
@@ -16056,20 +16057,28 @@ MonoBehaviour:
   mapManager: {fileID: 0}
   pieceDebugController: {fileID: 0}
   finishMarkerAnchor: {fileID: 0}
+  startStopMarkerAnchor: {fileID: 0}
+  startStopArrowOffset: {x: -0.2, y: 0.1}
+  startTileEscapeOffset: {x: 0.38, y: -0.38}
   pieceArrowColor: {r: 0.45, g: 0.85, b: 1, a: 1}
   pieceArrowScale: 0.35
   pieceArrowHeight: 1.15
   destColor: {r: 1, g: 0.86, b: 0.35, a: 1}
   destScale: 0.45
+  destinationArrowTexture: {fileID: 2800000, guid: a44b780fb02977741bb5c8e7bcd9a869, type: 3}
+  escapeFlagTexture: {fileID: 2800000, guid: 11de2eb9aed36884ba217344e7dd81e2, type: 3}
   arrowHeightEmptyTile: 0.18
   arrowHeightAbovePiece: 0.12
   outlineTileSize: 1.25
+  outlineTileSizeLarge: 1.25
+  outlineOffset: {x: 0, y: 0}
   outlineAngleDeg: 0
   outlineAngleDegDiagonal: 45
   outlineThickness: 0.07
   outlineCornerRadius: 0.16
   outlineColor: {r: 0.95, g: 0.72, b: 0.28, a: 0.55}
   outlineHoverColor: {r: 1, g: 0.85, b: 0.4, a: 1}
+  avoidScreenEdgeUi: 0
   bottomUiPixels: 210
   topUiPixels: 140
   verboseLog: 1

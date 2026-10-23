@@ -313,6 +313,14 @@ namespace YutArena.Managers
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
                 return;
             }
+            // 수정: 잡기/스킬로 받은 보너스 던지기가 남아 있으면 이동하기 전에 마저 던짐.
+            // 가이드 "추가 던지기가 남아있으면 [윷 던지기]로 복귀, 없으면 다음 단계로"
+            // 예: 두 팀 말을 한 번에 잡아 보너스 2개 → 던지기, 던지기 → 이동, 이동 (예전엔 던지기 → 이동 → 던지기 → 이동)
+            if (pendingCaptureThrows > 0 || pendingSkillThrows > 0)
+            {
+                SetPhase(TurnPhase.WaitThrow);
+                return;
+            }
             SetPhase(TurnPhase.WaitAction);
             //  이동 단계로 넘어가도 타이머는 이미 계속 흐르고 있어서 따로 시작 안 함
             EndTurnIfNoUsableResult();
@@ -428,11 +436,17 @@ namespace YutArena.Managers
                 CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  잡기 보너스도 시간 더해줌
             }
-            // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저,
-            // 플레이어가 두 번째 화살표를 누를 때까지 기다림 (MoveDestinationSelector가 화살표 표시)
-            if (TryGetPendingForcedMove(out _))
+            // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저 처리.
+            // QA 수정(10/23): 예전엔 플레이어가 두 번째 화살표를 눌러야 움직였는데, 패시브라 자동으로 바로 1칸 이동함.
+            // 업혀서(리더 아님) 못 움직이면 이동 실패로 그냥 넘어감 → 추가 이동 화살표도 안 뜸.
+            // 추가 1칸으로 잡거나 탈출하면 아래에서 다시 ResolveAfterMove 로 똑같이 처리 (잡기 보너스 포함).
+            if (TryGetPendingForcedMove(out _, out CHAR_001_1_Status forcedMoveOwner))
             {
-                SetPhase(TurnPhase.WaitAction);
+                int finishedBeforeForcedMove = CountFinishedPieces(playerId);
+                SetPhase(TurnPhase.MovePiece);
+                if (!forcedMoveOwner.ExecutePendingForcedMove())
+                    Debug.Log("[턴] 윤누리 추가 1칸 이동 못 함 (업힘 등) → 건너뜀");
+                ResolveAfterMove(playerId, finishedBeforeForcedMove);
                 return;
             }
             // 아직 안 쓴 윷 결과가 남아있으면 -> 계속 말 이동시키는 단계로 돌아감
@@ -761,6 +775,17 @@ namespace YutArena.Managers
         {
             pendingSkillThrows++;
             AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
+
+            // QA 수정: 유가람 [한 번 더]처럼 이동 단계에서 던지기를 주는 스킬은 쓰는 즉시 던지기 단계로 돌아감.
+            // (가이드: "재던지기를 부여하는 스킬을 사용한 경우 → [윷 던지기] 단계로 복귀")
+            // 예전엔 남은 윷 결과를 다 써야 던질 수 있었음. 남은 결과는 그대로 두고, 다 던진 뒤 한꺼번에 이동.
+            // 윤누리 추가 1칸 이동이 대기 중이면 그걸 먼저 끝내야 해서 단계는 안 바꿈.
+            if (CurrentTurn != null && !CurrentTurn.isGameEnded &&
+                CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                !TryGetPendingForcedMove(out _))
+            {
+                SetPhase(TurnPhase.WaitThrow);
+            }
         }
 
         /// <summary>
@@ -777,12 +802,17 @@ namespace YutArena.Managers
             int captureBonusCount = ConsumeCaptureResults(
                 (int)CurrentTurn.currentPlayer,
                 includeMovingPlayer: true);
-            if (captureBonusCount == 0 || suppressExtraThrow)
-                return;
+            if (captureBonusCount > 0 && !suppressExtraThrow)
+            {
+                pendingCaptureThrows += captureBonusCount; // 잡은 팀 수만큼
+                CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
+                AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  스킬로 인한 잡기 보너스도 시간 더해줌
+            }
 
-            pendingCaptureThrows += captureBonusCount; // 잡은 팀 수만큼
-            CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
-            AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  스킬로 인한 잡기 보너스도 시간 더해줌
+            // 버그 수정: 스킬로 말이 움직이거나 잡혀도(예: 사무라이 일섬으로 개 → 모) 윷 결과/턴 단계가 안 바뀌어서
+            // 네비게이팅이 스킬 전 위치 기준 화살표(개+개 = 윷 자리)를 그대로 보여줬음.
+            // 남은 결과를 다시 방송해서 네비게이팅이 현재 위치 기준으로 말 선택부터 새로 계산하게 함.
+            OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
         }
 
         // 스킬의 SP/쿨다운과 결과 반영을 마친 뒤 현재 플레이어의 턴을 종료합니다.
