@@ -136,9 +136,12 @@ public static class CharacterSkillRegistry
 
     public static int ModifyMoveCount(CharacterMoveRequest request)
     {
-        return TryGet(request.PlayerId, request.PieceId, out CharacterStatusBehaviour behaviour)
-            ? behaviour.ModifyMoveCount(request)
-            : CcEffectService.ResolveMove(CcEffectService.GetPiece(request.PlayerId, request.PieceId), request);
+        if (!TryGet(request.PlayerId, request.PieceId, out CharacterStatusBehaviour behaviour))
+            return CcEffectService.ResolveMove(CcEffectService.GetPiece(request.PlayerId, request.PieceId), request);
+        // Waiting 재투입 직전 초기화: 완주 후 외부 턴 매니저가 Waiting으로 바꾼 경우도 포함.
+        // 첫 이동 예약을 세운 뒤 초기화하면 윤누리의 추가 이동이 지워지므로 반드시 먼저 처리합니다.
+        if (request.IsFirstBoardMove) behaviour.PrepareForBoardReentry();
+        return behaviour.ModifyMoveCount(request);
     }
 
     public static (YutResult, float)[] ModifyYutProbability(
@@ -184,7 +187,11 @@ public static class CharacterSkillRegistry
     public static void NotifyMoveCompleted(CharacterMoveRecord record)
     {
         if (TryGet(record.PlayerId, record.PieceId, out CharacterStatusBehaviour behaviour))
+        {
             behaviour.OnMoveCompleted(record);
+            if (CcEffectService.GetPiece(record.PlayerId, record.PieceId)?.State == PieceState.Goal)
+                behaviour.PrepareForBoardReentry();
+        }
 
         foreach (CharacterStatusBehaviour candidate in SnapshotBehaviours())
             candidate.OnAnyPieceMoveCompleted(record);
@@ -274,6 +281,13 @@ public static class CharacterSkillRegistry
         CcEffectService.ResolveActiveResult(request, result, finishedBefore);
         return result;
     }
+
+    // UI와 네비게이팅은 실행 없이 동일한 준비 조건을 조회합니다.
+    public static bool CanUseActive(int playerId, int pieceId) =>
+        TryGet(playerId, pieceId, out CharacterStatusBehaviour status) &&
+        status.IsActiveUsableInCurrentPhase() &&
+        GetRemainingActiveCooldown(playerId, status.Data) == 0 &&
+        GetSkillPoints(playerId) >= status.ActiveSkillPointCost;
 
     /// <summary>플레이어의 현재 SP를 반환합니다.</summary>
     public static int GetSkillPoints(int playerId)

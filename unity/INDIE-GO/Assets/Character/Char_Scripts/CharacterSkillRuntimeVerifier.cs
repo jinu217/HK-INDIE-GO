@@ -84,6 +84,17 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
 
         string request = File.ReadAllText(FlagPath).Trim();
         File.Delete(FlagPath);
+        if (request.StartsWith("ui:") && Array.IndexOf(CharacterIds, request.Substring(3)) >= 0)
+        {
+            // Runs from an unsaved direct InGameScene too, before TestRunner.Start initializes players.
+            var selected = AssetDatabase.LoadAssetAtPath<CharacterData>(
+                "Assets/Character/Char_Info/" + request.Substring(3) + "_SO.asset");
+            var opponent = AssetDatabase.LoadAssetAtPath<CharacterData>(
+                "Assets/Character/Char_Info/CHAR_004_SO.asset");
+            CharacterSelectionResult.Set(new[] { selected.char_ID, opponent.char_ID, opponent.char_ID, opponent.char_ID },
+                new[] { selected, opponent, opponent, opponent }, 4);
+            LocalSelectionInput.SelectSharedKeyboard();
+        }
         var verifier = new GameObject(nameof(CharacterSkillRuntimeVerifier))
             .AddComponent<CharacterSkillRuntimeVerifier>();
         if (request.StartsWith("ui:") && Array.IndexOf(CharacterIds, request.Substring(3)) >= 0)
@@ -125,14 +136,18 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
             first.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
             players.ActivePlayers[1].RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer03);
             turns.Settings.turnTimeMode = TurnTimeMode.Unlimited;
+            typeof(TestTurnManager).GetMethod("StopTurnTimer", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(turns, null);
             turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
-            turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+            turns.CurrentTurn.currentPhase = uiCharacterId == "CHAR_001_2" ||
+                uiCharacterId == "CHAR_001_1" || uiCharacterId == "CHAR_002"
+                    ? TurnPhase.WaitThrow : TurnPhase.WaitAction;
             CharacterSkillRegistry.RequestSkillPoint(1, 5);
             turns.OnTurnStarted?.Invoke(PlayerSlot.Player1);
             turns.OnTurnPhaseChanged?.Invoke(turns.CurrentTurn);
             var button = FindFirstObjectByType<ActiveSkillButtonController>();
             button?.RefreshForCurrentTurn();
-            Time.timeScale = 0f; // Freeze only this opt-in fixture's timers during input inspection.
+            // Unlimited turn timers keep the fixture stable without freezing throw/move animations.
             Debug.Log("[CharacterVerification][UI Ready] " + uiCharacterId);
             yield break;
         }
@@ -157,12 +172,21 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         var normalInput = FindFirstObjectByType<InGamePieceDebugController>();
         if (button == null) return;
         var piece = players.ActivePlayers[0].RuntimeData.Pieces[0];
+        var markers = FindObjectsByType<MoveMarker>(FindObjectsSortMode.None);
         string state = $"CasterSelection={button.IsSelectingCaster}, TargetSelection={button.IsSelectingTarget}, " +
             $"NormalInput={normalInput != null && normalInput.enabled}, " +
-            $"SP={CharacterSkillRegistry.GetSkillPoints(1)}, Clones={piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0}";
+            $"SP={CharacterSkillRegistry.GetSkillPoints(1)}, Clones={piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0}, " +
+            $"Phase={turns.CurrentTurn.currentPhase}, Pending={turns.PendingResults.Count}, " +
+            $"SkillThrows={GetPrivateInt(turns, "pendingSkillThrows")}, Caster={button.SelectedCasterPieceId}, " +
+            $"P1Piece0={piece.State}/{piece.CurrentTileId}, Hints={markers.Length}";
         if (state == lastUiState) return;
         lastUiState = state;
         Debug.Log("[CharacterVerification][UI State] " + state);
+        foreach (var marker in markers)
+            if (marker.Role == MoveMarkerRole.PieceSelect && Camera.main != null)
+                Debug.Log($"[CharacterVerification][Hint] Piece={marker.PieceId}, " +
+                    $"Screen={Camera.main.WorldToScreenPoint(marker.transform.position)}, " +
+                    $"World={marker.transform.position}");
     }
 
     private void OnDestroy()
@@ -312,7 +336,11 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         windSource.SetStackGroup(windGroup, 0); windAlly.SetStackGroup(windGroup, 0);
         bool windStackMoved = movement.TryMovePiece(1, 0, 1);
         CharacterSkillRegistry.NotifyOwnerTurnEnded(1);
-        var storedWind = windSource.Cc.Get(CcDefine.WindPath);
+        // The player-wide path is stored by one registered piece, whose registration order
+        // is not guaranteed by Unity. Verify the path rather than assuming piece 0 stores it.
+        CcState storedWind = null;
+        foreach (var candidate in first.RuntimeData.Pieces)
+            if (candidate.Cc.Get(CcDefine.WindPath) is CcState wind) storedWind = wind;
         Check("Runtime Wind stack retains both original and extra landing",
             windStackMoved && windSource.CurrentTileId == BoardTileId.Outer03 &&
             windAlly.CurrentTileId == BoardTileId.Outer03 && storedWind != null &&
@@ -354,6 +382,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         Type expectedType = Type.GetType(characterId + "_Status, Assembly-CSharp");
         foreach (PlayerController player in players.ActivePlayers)
         {
+            allRegistered &= player.GetComponentsInChildren<CharacterStatusBehaviour>(true).Length ==
+                             player.RuntimeData.Pieces.Count;
             for (int pieceId = 0; pieceId < player.RuntimeData.Pieces.Count; pieceId++)
             {
                 allRegistered &= CharacterSkillRegistry.TryGet(
@@ -363,6 +393,11 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
             }
         }
         Check(characterId + " registers four pieces for every player", allRegistered);
+        var data = AssetDatabase.LoadAssetAtPath<CharacterData>(
+            "Assets/Character/Char_Info/" + characterId + "_SO.asset");
+        Check(characterId + " visual is empty or a model, never a recursive gameplay prefab",
+            data != null && (data.visualModelPrefab == null ||
+                CharacterStatusBehaviour.IsVisualOnlyPrefab(data.visualModelPrefab)));
     }
 
     private void VerifyPassive(string characterId)
@@ -740,7 +775,9 @@ internal static class CcArchitectureVerifier
         }
         results.Clear();
         Scene previous = SceneManager.GetActiveScene();
-        Scene fixture = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+        Scene fixture = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,
+            Application.isBatchMode && string.IsNullOrEmpty(previous.path)
+                ? NewSceneMode.Single : NewSceneMode.Additive);
         var copies = new List<CharacterData>();
         try
         {
@@ -761,6 +798,17 @@ internal static class CcArchitectureVerifier
             var p2 = new GameObject("CC Test P2").AddComponent<PlayerController>();
             p1.Initialize(1, "Test 1", 4);
             p2.Initialize(2, "Test 2", 4);
+            var visualFixture = new GameObject("Visual-only validation fixture");
+            Check("Visual-only prefab is accepted", CharacterStatusBehaviour.IsVisualOnlyPrefab(visualFixture));
+            var nestedStatus = new GameObject("Inactive nested gameplay status");
+            nestedStatus.transform.SetParent(visualFixture.transform);
+            nestedStatus.SetActive(false);
+            nestedStatus.AddComponent<CHAR_002_Status>();
+            Check("Inactive nested Status is rejected before Instantiate",
+                !CharacterStatusBehaviour.IsVisualOnlyPrefab(visualFixture));
+            Check("Gameplay prefab root is rejected before Instantiate",
+                !CharacterStatusBehaviour.IsVisualOnlyPrefab(nestedStatus));
+            UnityEngine.Object.DestroyImmediate(visualFixture);
             var players = (List<PlayerController>)Get(manager, "activePlayers");
             players.Add(p1); players.Add(p2);
             var piece = p1.RuntimeData.Pieces[0];
@@ -808,6 +856,7 @@ internal static class CcArchitectureVerifier
                 Set(turns, "pendingSkillThrows", 0); Set(turns, "pendingCaptureThrows", 0);
                 ((List<YutThrowData>)Get(turns, "pendingResults")).Clear();
                 turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
+                turns.TurnOrder.currentIndex = turns.TurnOrder.order.IndexOf(PlayerSlot.Player1);
                 turns.CurrentTurn.currentPhase = id == "001_1" || id == "002"
                     ? TurnPhase.WaitThrow : TurnPhase.WaitAction;
                 YutThrowData earlierResult = null;
@@ -847,6 +896,7 @@ internal static class CcArchitectureVerifier
                 Check(id + " base turn SkillPoint gain",
                     CharacterSkillRegistry.GetSkillPoints(1) == expectedAfterTurn);
                 piece.MoveTo(BoardTileId.Outer01);
+                VerifySkillInputPhases(id, skill, turns, piece);
                 var enemy = p2.RuntimeData.Pieces[0];
                 enemy.MoveTo(id == "007" || id == "005" ? BoardTileId.Outer02 : BoardTileId.Outer01);
                 var previousComposition = turns.Settings.matchComposition;
@@ -1250,6 +1300,11 @@ internal static class CcArchitectureVerifier
                             piece.CurrentTileId == BoardTileId.Inner04);
                         break;
                 }
+                VerifyReusablePassive(id, skill, movement, p1, p2);
+                if (id == "001_2") VerifyImmediateExtraThrows(skill, turns, p1, p2);
+                if (id == "003" || id == "004") VerifyAnytimeActive(id, skill, turns, p1, p2);
+                if (id == "003" || id == "004" || id == "008")
+                    VerifyNavigationFlow(id, skill, manager, movement, turns, p1, p2);
                 CharacterSkillRegistry.Unregister(skill);
                 UnityEngine.Object.DestroyImmediate(host);
             }
@@ -1266,6 +1321,326 @@ internal static class CcArchitectureVerifier
                 $"{results.FindAll(line => line.StartsWith("FAIL")).Count} failed. {Report}");
         }
     }
+
+    // Run only in an isolated headless project, never by closing the user's editor.
+    public static void RunBatch()
+    {
+        Run();
+        if (File.Exists(Report)) File.Copy(Report, "CharacterVerificationReport.log", true);
+        EditorApplication.Exit(results.Count == 0 || results.Exists(line => line.StartsWith("FAIL")) ? 1 : 0);
+    }
+
+    private static void VerifySkillInputPhases(string id, CharacterStatusBehaviour skill,
+        TestTurnManager turns, PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        TurnPhase previous = turns.CurrentTurn.currentPhase;
+        foreach (TurnPhase phase in new[] { TurnPhase.WaitThrow, TurnPhase.WaitAction,
+            TurnPhase.Throwing, TurnPhase.MovePiece, TurnPhase.TurnEnd, TurnPhase.GameEnd })
+        {
+            turns.CurrentTurn.currentPhase = phase;
+            bool anytime = id == "001_2" || id == "003" || id == "004";
+            bool expected = anytime ? phase == TurnPhase.WaitThrow || phase == TurnPhase.WaitAction :
+                id == "001_1" || id == "002" ? phase == TurnPhase.WaitThrow : phase == TurnPhase.WaitAction;
+            Check(id + " input phase " + phase, skill.IsActiveUsableInCurrentPhase() == expected);
+        }
+        turns.CurrentTurn.currentPlayer = PlayerSlot.Player2;
+        turns.CurrentTurn.currentPhase = previous;
+        int points = CharacterSkillRegistry.GetSkillPoints(1);
+        Check(id + " rejects another player's turn without spending SP",
+            !CharacterSkillRegistry.CanUseActive(1, 0) &&
+            !CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded &&
+            CharacterSkillRegistry.GetSkillPoints(1) == points);
+        turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
+        turns.CurrentTurn.currentPhase = previous;
+    }
+
+    private static void PrepareActiveAttempt(TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        CcEffectService.EndOwnerTurn(1);
+        p1.RuntimeData.ResetPieces();
+        p2.RuntimeData.ResetPieces();
+        turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
+        // A previous Nak test really advances the turn. Keep the synthetic fixture's
+        // order cursor consistent when starting another independent Player1 case.
+        turns.TurnOrder.currentIndex = turns.TurnOrder.order.IndexOf(PlayerSlot.Player1);
+        turns.CurrentTurn.currentPhase = TurnPhase.WaitThrow;
+        turns.CurrentTurn.isGameEnded = false;
+        turns.CurrentTurn.extraThrowByYutMoCount = 0;
+        Set(turns, "pendingSkillThrows", 0);
+        Set(turns, "pendingCaptureThrows", 0);
+        Set(turns, "pendingRegularThrow", true);
+        ((List<YutThrowData>)Get(turns, "pendingResults")).Clear();
+        CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
+        CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
+        CharacterSkillRegistry.RequestSkillPoint(1, 10);
+    }
+
+    private static void VerifyAnytimeActive(string id, CharacterStatusBehaviour skill,
+        TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        foreach (TurnPhase phase in new[] { TurnPhase.WaitThrow, TurnPhase.WaitAction })
+        {
+            PrepareActiveAttempt(turns, p1, p2);
+            turns.CurrentTurn.currentPhase = phase;
+            Check(id + " no board caster disables skill during " + phase,
+                !CharacterSkillRegistry.CanUseActive(1, 0));
+            p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
+            Check(id + " selects a board caster before or after throwing " + phase,
+                CharacterSkillRegistry.CanUseActive(1, 0) &&
+                skill.GetNextInputStep(false, false, false) == CharacterSkillInputStep.Caster &&
+                skill.GetNextInputStep(false, true, false) == CharacterSkillInputStep.Confirm);
+            Check(id + " executes during " + phase,
+                CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded);
+            Check(id + " cooldown/SP disable navigation readiness",
+                !CharacterSkillRegistry.CanUseActive(1, 0));
+        }
+    }
+
+    private static void VerifyImmediateExtraThrows(CharacterStatusBehaviour skill,
+        TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        var rules = new GameObject("Deterministic skill throw rules").AddComponent<TestYutRuleManager>();
+        rules.ProbabilityTableProvider = _ => new[] { (YutResult.Gae, 100f) };
+        Set(turns, "yutRuleManager", rules);
+        var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+        LocalSelectionInput.SelectSharedKeyboard();
+        try
+        {
+            foreach (bool beforeFirstThrow in new[] { false, true })
+            {
+                PrepareActiveAttempt(turns, p1, p2);
+                var pending = (List<YutThrowData>)Get(turns, "pendingResults");
+                if (!beforeFirstThrow)
+                {
+                    pending.Add(new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Gae });
+                    turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+                    Set(turns, "pendingRegularThrow", false);
+                }
+                Check("001_2 active grants additional throw " + beforeFirstThrow,
+                    CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded &&
+                    turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow);
+                if (beforeFirstThrow)
+                {
+                    Check("001_2 before first throw grants immediately without replacing base throw",
+                        (int)Get(turns, "pendingSkillThrows") == 1 &&
+                        (bool)Get(turns, "pendingRegularThrow") &&
+                        !p1.RuntimeData.Pieces[0].Cc.Has(CcDefine.Get_throw));
+                    turns.RequestThrow();
+                    Check("001_2 first throw preserves one extra opportunity",
+                        turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow && pending.Count == 1 &&
+                        (int)Get(turns, "pendingSkillThrows") == 1);
+                }
+                turns.RequestThrow();
+                Check("001_2 can throw again without moving and retains both results " + beforeFirstThrow,
+                    pending.Count == 2 && turns.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                    (int)Get(turns, "pendingSkillThrows") == 0 &&
+                    turns.CurrentTurn.extraThrowByYutMoCount == 0 &&
+                    !p1.RuntimeData.Pieces[0].Cc.Has(CcDefine.Get_throw));
+            }
+            PrepareActiveAttempt(turns, p1, p2);
+            int roll = 0;
+            rules.ProbabilityTableProvider = _ => new[] { (roll++ == 0 ? YutResult.Yut : YutResult.Gae, 100f) };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            turns.RequestThrow();
+            turns.RequestThrow();
+            if (turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow) turns.RequestThrow();
+            Check("001_2 first Yut plus skill preserves base, natural bonus and skill throw",
+                turns.PendingResults.Count == 3 && turns.CurrentTurn.extraThrowByYutMoCount == 1,
+                $"Results={turns.PendingResults.Count}, Phase={turns.CurrentTurn.currentPhase}");
+
+            PrepareActiveAttempt(turns, p1, p2);
+            roll = 0;
+            rules.ProbabilityTableProvider = _ => new[] { (roll++ == 0 ? YutResult.Mo : YutResult.Gae, 100f) };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            for (int i = 0; i < 4 && turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow; i++) turns.RequestThrow();
+            Check("001_2 first Mo plus skill retains three throws",
+                turns.PendingResults.Count == 3 && turns.CurrentTurn.extraThrowByYutMoCount == 1);
+
+            PrepareActiveAttempt(turns, p1, p2);
+            roll = 0;
+            rules.ProbabilityTableProvider = _ =>
+            {
+                int index = roll++;
+                return new[] { (index == 0 ? YutResult.Yut : index == 1 ? YutResult.Mo : YutResult.Gae, 100f) };
+            };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            for (int i = 0; i < 5 && turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow; i++) turns.RequestThrow();
+            Check("001_2 chained Yut Mo plus skill retains four throws",
+                turns.PendingResults.Count == 4 && turns.CurrentTurn.extraThrowByYutMoCount == 2);
+
+            PrepareActiveAttempt(turns, p1, p2);
+            turns.CurrentTurn.extraThrowByYutMoCount = GameRuleDefine.MaxYutMoExtraThrowCount;
+            rules.ProbabilityTableProvider = _ => new[] { (YutResult.Yut, 100f) };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            for (int i = 0; i < 3 && turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow; i++) turns.RequestThrow();
+            Check("001_2 skill remains available beyond the natural extra-throw limit",
+                turns.PendingResults.Count == 2 && turns.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                turns.CurrentTurn.extraThrowByYutMoCount == GameRuleDefine.MaxYutMoExtraThrowCount);
+
+            PrepareActiveAttempt(turns, p1, p2);
+            turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+            Set(turns, "pendingRegularThrow", false);
+            Set(turns, "pendingCaptureThrows", 2);
+            ((List<YutThrowData>)Get(turns, "pendingResults")).Add(
+                new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Gae });
+            roll = 0;
+            rules.ProbabilityTableProvider = _ => new[] { (roll++ == 0 ? YutResult.Yut : YutResult.Gae, 100f) };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            for (int i = 0; i < 5 && turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow; i++) turns.RequestThrow();
+            int captureThrows = 0;
+            foreach (var result in turns.PendingResults) if (result.isBonusThrowFromCapture) captureThrows++;
+            Check("Capture, natural and skill throw credits are independent",
+                turns.PendingResults.Count == 5 && captureThrows == 2 &&
+                (int)Get(turns, "pendingSkillThrows") == 0 && (int)Get(turns, "pendingCaptureThrows") == 0);
+
+            PrepareActiveAttempt(turns, p1, p2);
+            rules.ProbabilityTableProvider = _ => new[] { (YutResult.Nak, 100f) };
+            CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            turns.RequestThrow();
+            Check("Nak ends the turn and discards unused skill throws",
+                turns.CurrentTurn.currentPlayer == PlayerSlot.Player2 &&
+                turns.PendingResults.Count == 0 && (int)Get(turns, "pendingSkillThrows") == 0 &&
+                (bool)Get(turns, "pendingRegularThrow"));
+        }
+        finally
+        {
+            UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
+            UnityEngine.Object.DestroyImmediate(rules.gameObject);
+        }
+    }
+
+    private static void VerifyReusablePassive(string id, CharacterStatusBehaviour skill,
+        PieceMovementManager movement, PlayerController p1, PlayerController p2)
+    {
+        if (!skill.ResetsPassiveOnBoardReentry) return;
+        foreach (string exit in new[] { "Capture", "Retire", "Goal", "WaitingReset" })
+        {
+            p1.RuntimeData.ResetPieces();
+            p2.RuntimeData.ResetPieces();
+            skill.OnPieceRetired();
+            var piece = p1.RuntimeData.Pieces[0];
+            var ally = p1.RuntimeData.Pieces[1];
+            if (id == "002") ally.MoveTo(BoardTileId.Outer03);
+            Check(id + " first passive applies before " + exit,
+                movement.TryMovePiece(1, 0, 1) && ProbeReusablePassive(id, skill, ally));
+            if (exit == "Goal")
+            {
+                piece.SetGoal();
+                CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 0,
+                    BoardTileId.Outer16, BoardTileId.None, new[] { BoardTileId.None }));
+                piece.State = PieceState.Waiting;
+            }
+            else if (exit == "WaitingReset") piece.Reset();
+            else CcEffectService.Apply(piece, exit == "Capture" ? CcDefine.Capture : CcDefine.Retire);
+            CcEffectService.Remove(ally, CcDefine.protect);
+            Check(id + " passive rearms after " + exit + " and reentry",
+                movement.TryMovePiece(1, 0, 1) && ProbeReusablePassive(id, skill, ally));
+        }
+    }
+
+    private static bool ProbeReusablePassive(string id, CharacterStatusBehaviour skill,
+        PlayerRuntimeData.PieceRuntimeData ally)
+    {
+        if (id == "001_1")
+        {
+            var yunnuri = (CHAR_001_1_Status)skill;
+            return yunnuri.HasPendingForcedMove && yunnuri.ExecutePendingForcedMove();
+        }
+        if (id == "002") return ally.Cc.Has(CcDefine.protect);
+        if (id == "004")
+        {
+            var capture = new CharacterCaptureRequest(2, 0, 1, 0, 1, true);
+            return skill.EvaluateIncomingCapture(capture) == CharacterCaptureDecision.Prevent &&
+                skill.EvaluateIncomingCapture(capture) == CharacterCaptureDecision.Proceed;
+        }
+        return false;
+    }
+
+    private static void VerifyNavigationFlow(string id, CharacterStatusBehaviour skill,
+        PlayerManager players, PieceMovementManager movement, TestTurnManager turns,
+        PlayerController p1, PlayerController p2)
+    {
+        PrepareActiveAttempt(turns, p1, p2);
+        turns.CurrentTurn.currentPhase = id == "008" ? TurnPhase.WaitAction : TurnPhase.WaitThrow;
+        p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
+        p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
+        var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+        LocalSelectionInput.SelectSharedKeyboard();
+        var map = new GameObject("Navigation test map").AddComponent<MapManager>();
+        var positions = (Dictionary<BoardTileId, Vector3>)Get(map, "tilePositions");
+        foreach (BoardTileId tile in Enum.GetValues(typeof(BoardTileId)))
+            positions[tile] = new Vector3((int)tile, 0f, 0f);
+        var ownedView = new GameObject("Navigation own piece").AddComponent<DebugPieceView>();
+        ownedView.Configure(1, 0);
+        var enemyView = new GameObject("Navigation enemy piece").AddComponent<DebugPieceView>();
+        enemyView.Configure(2, 0);
+        var ui = new GameObject("Navigation test skill button", typeof(RectTransform),
+            typeof(UnityEngine.UI.Button), typeof(CanvasGroup)).AddComponent<ActiveSkillButtonController>();
+        var view = new GameObject("Navigation test view").AddComponent<MoveDestinationSelector>();
+        Set(view, "playerManager", players);
+        Set(view, "mapManager", map);
+        var flow = view.gameObject.AddComponent<CharacterPieceInteractionController>();
+        try
+        {
+            if (Get(ui, "skillButton") == null)
+                typeof(ActiveSkillButtonController).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+            ui.RefreshForCurrentTurn();
+            flow.Initialize(view);
+            Check(id + " no yut result still shows an available active caster",
+                ((List<MoveMarker>)Get(view, "pieceArrows")).Count == 1 &&
+                ((List<MoveMarker>)Get(view, "destMarkers")).Count == 0);
+            int before = CharacterSkillRegistry.GetSkillPoints(1);
+            typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
+                BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+            Check(id + " active click with no piece enters caster selection without spending SP",
+                ui.IsSelectingCaster && CharacterSkillRegistry.GetSkillPoints(1) == before &&
+                ((List<MoveMarker>)Get(view, "pieceArrows")).Count == 1);
+            Set(ui, "casterSelectionStartedFrame", -1);
+            Check(id + " selectable navigation accepts explicit caster", ui.TrySelectSkillPiece(ownedView));
+            if (id == "008")
+            {
+                Check("008 caster selection switches navigation to legal enemy targets", ui.IsSelectingTarget);
+                Set(ui, "targetSelectionStartedFrame", -1);
+                Check("008 target can be selected through shared interaction flow", ui.TrySelectSkillPiece(enemyView));
+            }
+            typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
+                BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+            Check(id + " selected caster/target confirms once and spends SP once",
+                CharacterSkillRegistry.GetSkillPoints(1) == before - skill.ActiveSkillPointCost &&
+                !ui.IsSelectingCaster && !ui.IsSelectingTarget);
+
+            PrepareActiveAttempt(turns, p1, p2);
+            p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
+            turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+            ((List<YutThrowData>)Get(turns, "pendingResults")).Add(
+                new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Gae });
+            ui.RefreshForCurrentTurn();
+            Check(id + " HUD waiting piece selects destinations through preserved API",
+                view.CanSelectWaitingPiece(1, 1) && view.TrySelectWaitingPiece(1, 1) &&
+                flow.SelectedPieceId == 1 && ((List<MoveMarker>)Get(view, "destMarkers")).Count == 1);
+            typeof(CharacterPieceInteractionController).GetMethod("SelectPiece",
+                BindingFlags.Instance | BindingFlags.NonPublic).Invoke(flow, new object[] { 1, 0, ownedView });
+            flow.RefreshNavigation();
+            Check(id + " ordinary piece selection shows movement and active navigation together",
+                ui.SelectedCasterPieceId == 0 && ((List<MoveMarker>)Get(view, "destMarkers")).Count == 1 &&
+                ((List<MoveMarker>)Get(view, "pieceArrows")).Count == 1);
+            Check(id + " preselected piece bypasses a redundant caster selection",
+                skill.GetNextInputStep(false, true, false) ==
+                (id == "008" ? CharacterSkillInputStep.Target : CharacterSkillInputStep.Confirm));
+            Check(id + " navigation refresh never consumes movement results",
+                turns.PendingResults.Count == 1 && p1.RuntimeData.Pieces[0].CurrentTileId == BoardTileId.Outer01);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(view.gameObject);
+            UnityEngine.Object.DestroyImmediate(ui.gameObject);
+            UnityEngine.Object.DestroyImmediate(ownedView.gameObject);
+            UnityEngine.Object.DestroyImmediate(enemyView.gameObject);
+            UnityEngine.Object.DestroyImmediate(map.gameObject);
+            UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
+        }
+    }
+
     private static void Check(string name, bool passed, string detail = "") =>
         results.Add((passed ? "PASS " : "FAIL ") + name + " " + detail);
     private static object Get(object target, string field) => target.GetType()

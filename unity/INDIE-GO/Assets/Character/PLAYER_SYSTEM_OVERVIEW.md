@@ -3,6 +3,10 @@
 > 현재 경로는 `Assets/Character`다. 아래 Player 경로와 예전 파일 목록은 역사적 설명이며,
 > 현재 효과 ID/SO 설정/슬롯/부여·해제 계약은 `Char_Scripts/CC_ARCHITECTURE.md`를 따른다.
 > 효과 값은 CharacterData의 passive_Effects / active_Effects에서 읽고 Status가 발동 순서를 결정한다.
+> 현재 선택 흐름은 Char_Scripts/CharacterPieceInteractionController가 조정하고,
+> 외부 MoveDestinationSelector는 이동/스킬 판단 없이 전달받은 네비게이팅만 표시한다.
+> 유가람/홍길동/구미호의 액티브는 자신의 WaitThrow/WaitAction에서 사용 가능하다.
+> 재사용형 패시브는 완주·대기 복귀 후 재투입에도 초기화한다. 상세 계약은 CC_ARCHITECTURE를 따른다.
 
 이 문서는 `Assets/Scripts/Player` 아래에 구현된 시스템이 무엇을 담당하고,
 인게임에서 어떤 순서로 동작하며, 다른 시스템과 어디에서 연결되는지 설명한다.

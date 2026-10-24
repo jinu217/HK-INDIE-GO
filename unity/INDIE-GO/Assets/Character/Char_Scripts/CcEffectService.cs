@@ -192,8 +192,10 @@ namespace YutArena.InGame
             {
                 turnsManager = UnityEngine.Object.FindFirstObjectByType<TestTurnManager>();
                 if (turnsManager == null || turnsManager.CurrentTurn == null ||
+                    turnsManager.CurrentTurn.isGameEnded ||
                     (int)turnsManager.CurrentTurn.currentPlayer != owner.PlayerId ||
-                    turnsManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return false;
+                    (turnsManager.CurrentTurn.currentPhase != TurnPhase.WaitAction &&
+                     turnsManager.CurrentTurn.currentPhase != TurnPhase.WaitThrow)) return false;
             }
             if (type == CcDefine.Move_plus || IsPathMove(type))
             {

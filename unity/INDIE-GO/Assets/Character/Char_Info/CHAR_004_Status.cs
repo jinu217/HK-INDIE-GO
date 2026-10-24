@@ -1,8 +1,11 @@
 using YutArena.InGame;
+using YutArena.Common;
 
 public sealed class CHAR_004_Status : CharacterStatusBehaviour
 {
     private bool charmShieldAvailable = true;
+    public override bool ResetsPassiveOnBoardReentry => true;
+    protected override bool CanUseActiveDuringPhase(TurnPhase phase) => IsPlayerInputPhase(phase);
     public override CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
         var existing = base.EvaluateIncomingCapture(request);

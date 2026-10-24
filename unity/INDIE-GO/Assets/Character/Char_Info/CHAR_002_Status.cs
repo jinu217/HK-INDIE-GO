@@ -26,6 +26,7 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
 
     // 축지법은 시전자 말이 아닌 다음에 던진 윷 결과 한 개에 적용됩니다.
     public override bool RequiresCasterPieceSelection => false;
+    public override bool ResetsPassiveOnBoardReentry => true;
 
     [UnityEngine.RuntimeInitializeOnLoadMethod(
         UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -106,6 +107,13 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
         DoubleMoves.Remove(request.PlayerId);
         if (moveCount == 0 || !ApplyActiveEffect()) return moveCount;
         return base.ModifyMoveCount(request);
+    }
+
+    public override int PreviewMoveCount(int moveCount, YutThrowData result)
+    {
+        return observedTurns == Turns && DoubleMoves.TryGetValue(PlayerId, out var reservation) &&
+            ReferenceEquals(reservation.TargetResult, result) && ActiveEffect() != null
+            ? moveCount * ActiveEffect().amount : base.PreviewMoveCount(moveCount, result);
     }
 
     public override void OnOwnerTurnEnded()

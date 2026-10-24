@@ -12,6 +12,7 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
 
     //수정: 모 아니면 도는 특정 말이 아닌 플레이어의 다음 윷 결과에 적용됩니다.
     public override bool RequiresCasterPieceSelection => false;
+    public override bool ResetsPassiveOnBoardReentry => true;
 
     public override int ModifyMoveCount(CharacterMoveRequest request)
     {

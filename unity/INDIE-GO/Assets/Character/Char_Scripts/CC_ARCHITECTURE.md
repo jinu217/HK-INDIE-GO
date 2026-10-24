@@ -10,8 +10,10 @@ UI → CharacterSkillRegistry → Char_Info/*_Status → SO의 효과 설정 →
 - CharacterBoardUtility/CcBoardEffects: 기존 경로 규칙 조회, 경로 이동/업기/분신 표현. 분신 수 변경도 CcEffectService로 위임한다.
 - Registry: 기존 말 등록, 공통 SP/쿨다운, 턴/이동 이벤트 연결과 성공 결과 전달.
 - UI: 기존 선택·강조·확정과 표시. 효과 구현은 포함하지 않는다.
+- CharacterPieceInteractionController: 현재 턴/남은 결과/스킬 준비 상태를 읽고 말·시전자·대상 선택을 조정한다. 실제 이동과 턴 종료는 기존 턴 API에 요청한다.
+- 외부 MoveDestinationSelector/MoveMarker: 전달받은 말·목적지 힌트를 표시하고 화면 좌표/호버만 처리한다. 이동 실행, 스킬 효과, 턴 종료 또는 패시브 강제 실행은 담당하지 않는다.
 
-이번 이관은 Assets/Character 안에서만 수행한다. 씬/외부 매니저 수정, 폴더/스크립트 생성·삭제는 없다. Char_Scripts는 기존 7개 C# 파일을 유지한다.
+캐릭터 규칙은 Assets/Character에서 관리한다. 선택 흐름 분리를 위해 기존 Char_Scripts 폴더에 CharacterPieceInteractionController를 추가했고, 외부 네비게이팅의 MoveDestinationSelector를 표시 계층으로 변경했다. 추가 승인을 받아 TestTurnManager에는 기본/윷·모 던지기를 잡기·스킬 횟수와 별도로 소비하는 표시만 추가했다. 폴더를 추가/삭제하거나 씬/프리팹을 수정하지 않는다.
 
 기본 잡기는 그대로다. PieceMovementManager가 뒷도·도·개·걸을 Kill, 윷·모를 Retire로 판정하고 PieceRuntimeData.SetCaptured에 전달한다. TestTurnManager가 결과를 소비한다. 기본 잡기 판정과 턴 순서를 Character로 옮기지 않는다.
 
@@ -41,7 +43,7 @@ Status에서는 ApplyPassiveEffect(index, target, path, amount) / ApplyActiveEff
 | 캐릭터 | passive_Effects | active_Effects |
 |---|---|---|
 | 001_1 | Move_plus(1): 첫 착지 뒤 화살표/턴 종료 시 추가 이동 | MOorDO |
-| 001_2 | Get_point(1): 잡기/새 업기 | Get_throw(1) |
+| 001_2 | Get_point(1): 잡기/새 업기 | Get_throw(1): 자신의 WaitThrow/WaitAction에서 사용 가능 |
 | 002 | protect(1 tick, 무제한): 가까운 아군 한 말 | Move_scale(2): 다음에 던진 특정 결과를 사용할 때 적용 |
 | 003 | 비어 있음: 스택 전체의 잡기 소모 순서를 계획하는 방어 규칙 | Stack_fake(1) |
 | 004 | Charm(1회): 잡기만 방어 | Stealth(3 ticks) |
@@ -53,6 +55,21 @@ Status에서는 ApplyPassiveEffect(index, target, path, amount) / ApplyActiveEff
 | 010 | Move_plus(1): 업은 실제 말 수 × SO 수치, 원래 착지 후 추가 이동 | Peace_move(1): 실제 스택 수 × SO 수치만큼 후진 후 턴 종료 |
 
 003의 방어 계획, 002의 특정 윷 결과 예약, 첫 진입 여부, 패시브 준비 여부는 **발동 조건/실행 계획**이지 별도의 CC가 아니다. 이미 부여된 보호·은신·속박·스턴·분신·부품·바람길은 실제 말의 Cc에 저장된다. 003의 분신 소모와 업기 용량 보정은 ConsumeClones를 통해 공통 처리한다.
+
+## 사용 시점과 재투입
+
+- 유가람/홍길동/구미호는 자신의 던지기 대기(WaitThrow)와 행동 대기(WaitAction)에서 액티브를 사용할 수 있다. 계산/이동 처리 중인 중간 단계나 다른 플레이어 턴에는 입력하지 않는다.
+- Get_throw는 대기 단계에 관계없이 기존 GrantSkillExtraThrow에 즉시 전달한다. 기본/윷·모 던지기는 TestTurnManager의 pendingRegularThrow에서 먼저 소비하므로 스킬 기회를 대신 소모하지 않는다. 별도의 Character 예약/턴 복제는 없다.
+- 홍길동/구미호는 시전 가능한 보드 위 자기 말이 있어야 한다. 업힌 말/완주 말/기절·침묵·부품, 홍길동의 업기 정원 제한도 기존대로 검사한다.
+- 윤누리/전우치/구미호의 재사용 패시브는 리타이어·잡기뿐 아니라 완주·대기 복귀 후에도 새 투입에서 다시 적용한다. 재투입 초기화는 첫 이동 예약을 만들기 **전**에 수행한다.
+- CanUseActive 조회는 SP/쿨다운/턴/CC/시전자 조건을 실행 경로와 공유한다. 미리보기는 CC나 다음 던지기 예약을 소비하지 않는다.
+
+## 선택과 네비게이팅
+
+- 자기 말을 먼저 클릭하면 남은 결과의 이동 목적지와 사용 가능한 액티브 시전자 표시를 함께 보여 준다. 선택한 말은 스킬 버튼에도 전달한다.
+- 말 선택 없이 스킬 버튼을 누르면 Status.GetNextInputStep에 따라 시전자 선택, 대상 선택, 확정으로 진행한다. 시전자 없는 플레이어 공통 스킬은 즉시 실행한다.
+- 남은 결과가 없어도 사용할 수 있는 스킬의 말은 선택할 수 있다. 이동 목적지는 실제 남은 결과와 기존 이동 미리보기 API에서만 얻는다.
+- 표시 스크립트는 게임 진행을 바꾸지 않는다. 목적지 클릭은 Character의 선택 조정기를 통해 기존 RequestMovePiece로 전달한다.
 
 전우치는 필드 위 아군만 선택하며, 자신/업힌 말/부품/완주·대기 말/타일 없는 말은 제외한다. 이 조건은 CHAR_002_Status에 있으며 protect 자체에 전우치 전용 대상 제한을 넣지 않는다. 보호는 지정한 말에만 저장하고 다른 말에 복사하지 않는다.
 
@@ -103,4 +120,4 @@ protect는 잡기·직접 Retire·해로운 상태를 막는다. Charm은 잡기
 
 BOARD_TILE_RUNTIME_SKILL_GUIDE의 보드 설치 정보 API는 계속 사용할 수 있다. 현재 WindPath는 실제 말의 Cc에 설치 경로를 저장하는 기존 동작이며 타일 설치물/VFX 생성까지 추가한 것은 아니다.
 
-CharacterSkillRuntimeVerifier의 기존 검증과 전우치 대상 제외/보호 중첩 검증을 새 ID/설정에 맞게 갱신한다. 이번 작업에서는 PC 제어, Unity 실행, 실제 플레이/에디터 효과 실행 검증을 하지 않는다. C# 빌드 및 SO/참조/변경 범위 정적 검증과 실제 플레이 검증은 구분한다.
+CharacterSkillRuntimeVerifier는 11종의 스킬/CC/등록/쿨다운, 사용 단계, 재투입, 실제 턴 API를 통한 추가 던지기, 선택/네비게이팅 API를 검사한다. RunBatch는 원본 씬과 별개인 임시 프로젝트에서 headless Edit Mode로 실행할 수 있다. 이 검증은 실제 게임 화면의 클릭 좌표·애니메이션·시각 품질 검증과 구분한다.

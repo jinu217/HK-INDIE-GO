@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -41,10 +40,12 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     private int targetSelectionStartedFrame = -1;
     private DebugPieceView selectedCasterView;
     private DebugPieceView selectedTargetView;
-    private InGamePieceDebugController suspendedPieceController;
-    private bool suspendedPieceControllerWasEnabled;
 
     public event Action<CharacterActiveResult> SkillUseCompleted;
+    public event Action SelectionChanged;
+    public int SelectedCasterPieceId => preferredCasterPieceId;
+    public bool SelectionStartedThisFrame =>
+        Time.frameCount == casterSelectionStartedFrame || Time.frameCount == targetSelectionStartedFrame;
 
     public int CurrentCasterPieceId =>
         currentCharacter != null ? currentCharacter.PieceId : -1;
@@ -99,39 +100,17 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             return;
         }
 
-        if ((!isSelectingCaster && !isSelectingTarget) ||
-            (isSelectingCaster && Time.frameCount == casterSelectionStartedFrame) ||
-            (isSelectingTarget && Time.frameCount == targetSelectionStartedFrame))
-            return;
+    }
 
-        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
-        }
+    // Shared world input belongs to CharacterPieceInteractionController, not to two competing UI scripts.
+    public void CancelSkillSelection() =>
+        EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
 
-        if (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
-        {
-            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
-        }
-
-        if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
-            return;
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
-
-        if (Camera.main != null && !DebugPieceView.TryFindAtScreenPosition(
-                Camera.main, Mouse.current.position.ReadValue(), out _))
-        {
-            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
-            return;
-        }
-
-        if (isSelectingTarget)
-            TrySelectTargetAtPointer();
-        else
-            TrySelectCasterAtPointer();
+    public bool TrySelectSkillPiece(DebugPieceView view)
+    {
+        if (!LocalSelectionInput.SharedInputAvailable || view == null || SelectionStartedThisFrame) return false;
+        if (isSelectingTarget) return SelectTarget(view);
+        return isSelectingCaster && SelectCaster(view);
     }
 
     /// <summary>
@@ -142,6 +121,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         preferredCasterPieceId = pieceId;
         RefreshForCurrentTurn();
+        SelectionChanged?.Invoke();
     }
 
     public void ClearCasterPiece()
@@ -157,6 +137,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         targetPlayerId = playerId;
         targetPieceId = pieceId;
+        SelectionChanged?.Invoke();
     }
 
     public void ClearTarget()
@@ -367,7 +348,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
                 continue;
             }
 
-            if (CcEffectService.CanUseSkill(piece) && character.CanSelectAsActiveCaster(piece))
+            if (CharacterSkillRegistry.CanUseActive(currentPlayerId, character.PieceId))
                 return true;
         }
 
@@ -376,9 +357,11 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void HandleActiveSkillButtonClicked()
     {
-        if (currentCharacter == null) return;
+        if (currentCharacter == null || !LocalSelectionInput.SharedInputAvailable) return;
+        bool hasCaster = preferredCasterPieceId >= 0 && currentCharacter.PieceId == preferredCasterPieceId &&
+            CharacterSkillRegistry.CanUseActive(currentPlayerId, preferredCasterPieceId);
         switch (currentCharacter.GetNextInputStep(isSelectingCaster || isSelectingTarget,
-            preferredCasterPieceId >= 0, targetPieceId >= 0))
+            hasCaster, targetPieceId >= 0))
         {
             case CharacterSkillInputStep.Caster:
                 if (HasSelectableActiveCaster() && !isSelectingCaster) BeginCasterSelection();
@@ -444,16 +427,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         if (currentCharacter == null || skillButton == null || canvasGroup == null)
             return;
 
-        int remainingCooldown = CharacterSkillRegistry.GetRemainingActiveCooldown(
-            currentCharacter.PlayerId,
-            currentCharacter.Data);
-        int requiredSkillPoints = currentCharacter.ActiveSkillPointCost;
-        int currentSkillPoints = CharacterSkillRegistry.GetSkillPoints(
-            currentCharacter.PlayerId);
-        bool canUse = remainingCooldown <= 0 &&
-                      currentSkillPoints >= requiredSkillPoints &&
-                      currentCharacter.IsActiveUsableInCurrentPhase() &&
-                      (!currentCharacter.RequiresCasterPieceSelection || HasSelectableActiveCaster());
+        bool canUse = LocalSelectionInput.SharedInputAvailable && HasSelectableActiveCaster();
         canvasGroup.interactable = canUse;
         // 사용할 수 없는 상태에서도 Hover 상세 설명은 볼 수 있어야 합니다.
         canvasGroup.blocksRaycasts = true;
@@ -495,32 +469,17 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         targetSelectionStartedFrame = -1;
         isSelectingCaster = true;
         casterSelectionStartedFrame = Time.frameCount;
-        SuspendNormalPieceClickHandling();
         ClearAllSelectionHighlights();
+        SelectionChanged?.Invoke();
     }
 
-    private void TrySelectCasterAtPointer()
+    private bool SelectCaster(DebugPieceView view)
     {
-        Camera mainCamera = Camera.main;
-        if (mainCamera == null) return;
-
-        Vector2 screenPosition = Mouse.current.position.ReadValue();
-        if (!DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view) ||
-            view.PlayerId != currentPlayerId)
-            return;
+        if (view == null || view.PlayerId != currentPlayerId) return false;
         if (playerManager == null ||
             !playerManager.TryGetPlayer(currentPlayerId, out PlayerController player) ||
-            !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
-            piece.State == PieceState.Goal ||
-            !CharacterSkillRegistry.TryGet(
-                currentPlayerId,
-                view.PieceId,
-                out CharacterStatusBehaviour character) ||
-            !character.HasActiveSkill ||
-            (!CcEffectService.CanUseSkill(piece) || !character.CanSelectAsActiveCaster(piece)))
-        {
-            return;
-        }
+            !player.TryGetPieceData(view.PieceId, out var piece) ||
+            !CharacterSkillRegistry.CanUseActive(currentPlayerId, view.PieceId)) return false;
 
         ClearSelectedCasterHighlight();
         selectedCasterView = view;
@@ -530,6 +489,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         if (currentCharacter != null && currentCharacter.GetNextInputStep(true, true,
                 targetPieceId >= 0) == CharacterSkillInputStep.Target)
             BeginTargetSelection();
+        SelectionChanged?.Invoke();
+        return true;
     }
 
     private void BeginTargetSelection()
@@ -547,38 +508,26 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         casterSelectionStartedFrame = -1;
         isSelectingTarget = true;
         targetSelectionStartedFrame = Time.frameCount;
-        SuspendNormalPieceClickHandling();
+        SelectionChanged?.Invoke();
     }
 
-    private void TrySelectTargetAtPointer()
+    private bool SelectTarget(DebugPieceView view)
     {
-        Camera mainCamera = Camera.main;
-        if (mainCamera == null) return;
-
-        Vector2 screenPosition = Mouse.current.position.ReadValue();
-        if (!DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view) ||
-            view.PlayerId == currentPlayerId)
-            return;
-        if (playerManager == null ||
-            !playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
-            !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
-            piece.State != PieceState.InBoard ||
-            currentCharacter == null || !currentCharacter.CanSelectActiveTarget(view.PlayerId, view.PieceId))
-        {
-            return;
-        }
+        if (view == null || currentCharacter == null ||
+            !CharacterSkillRegistry.CanUseActive(currentPlayerId, currentCharacter.PieceId) ||
+            !currentCharacter.CanSelectActiveTarget(view.PlayerId, view.PieceId)) return false;
 
         ClearSelectedTargetHighlight();
         selectedTargetView = view;
         selectedTargetView.SetSelected(true);
         SetTarget(view.PlayerId, view.PieceId);
+        return true;
     }
 
     private void EndSkillSelection(bool clearCaster, bool clearTarget, bool refresh)
     {
         ClearSelectedCasterHighlight();
         ClearSelectedTargetHighlight();
-        RestoreNormalPieceClickHandling();
         isSelectingCaster = false;
         isSelectingTarget = false;
         casterSelectionStartedFrame = -1;
@@ -590,6 +539,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
         if (refresh && isActiveAndEnabled)
             RefreshForCurrentTurn();
+        SelectionChanged?.Invoke();
     }
 
     private void ClearSelectedCasterHighlight()
@@ -615,23 +565,5 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
             view.SetSelected(false);
     }
 
-    private void SuspendNormalPieceClickHandling()
-    {
-        if (suspendedPieceController != null) return;
 
-        suspendedPieceController = FindFirstObjectByType<InGamePieceDebugController>();
-        if (suspendedPieceController == null) return;
-
-        suspendedPieceControllerWasEnabled = suspendedPieceController.enabled;
-        suspendedPieceController.enabled = false;
-    }
-
-    private void RestoreNormalPieceClickHandling()
-    {
-        if (suspendedPieceController != null)
-            suspendedPieceController.enabled = suspendedPieceControllerWasEnabled;
-
-        suspendedPieceController = null;
-        suspendedPieceControllerWasEnabled = false;
-    }
 }

@@ -6,8 +6,10 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
     private int stackSizeBeforeMove;
     private bool observingOwnMove;
 
-    //수정: 한번 더는 특정 말이 아닌 현재 플레이어의 턴에 추가 던지기를 예약합니다.
+    // 현재 플레이어에게 추가 던지기를 부여하며 특정 말을 선택하지 않습니다.
     public override bool RequiresCasterPieceSelection => false;
+
+    protected override bool CanUseActiveDuringPhase(TurnPhase phase) => IsPlayerInputPhase(phase);
 
     public override int ModifyMoveCount(CharacterMoveRequest request)
     {
@@ -61,9 +63,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("TestTurnManager is not available.");
         if ((int)Turns.CurrentTurn.currentPlayer != PlayerId)
             return CharacterActiveResult.Failure("The active skill can be used only during its owner's turn.");
-        if (Turns.CurrentTurn.currentPhase != TurnPhase.WaitAction)
-            return CharacterActiveResult.Failure("Use Once More after throwing yut and before moving a piece.");
-
         if (!ApplyActiveEffect())
             return CharacterActiveResult.Failure("The extra throw effect could not be applied.");
         UnityEngine.Debug.Log(

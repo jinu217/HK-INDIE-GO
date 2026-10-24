@@ -104,6 +104,7 @@ public class CharacterData : ScriptableObject
     [Header("# Modelling")]
     [Tooltip("이 챔피언을 선택한 플레이어의 모든 말에 생성할 직업 말 프리팹입니다.")]
     public GameObject piecePrefab;
+    [Tooltip("말 프리팹이 아닌 외형 전용 모델입니다. CharacterStatusBehaviour가 포함된 프리팹은 사용할 수 없습니다.")]
     public GameObject visualModelPrefab;
 
     public bool HasPassiveStatus => passive_Status != CharacterSkillStatus.None;

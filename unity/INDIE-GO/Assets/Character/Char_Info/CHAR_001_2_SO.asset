@@ -25,9 +25,7 @@ MonoBehaviour:
     \uC5C5\uD790\uC2DC SP 1\uAC1C \uD68D\uB4DD"
   active_Icon: {fileID: 777477511868451966, guid: d5b67d61d3b1f8242b4b9532f05ee8bc, type: 3}
   active_Name: "\uD55C\uBC88 \uB354"
-  active_Desc: "3\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5, \uC737\uC744 \uB358\uC9C4
-    \uD6C4 \uD55C \uBC88 \uB354 \uB358\uC9C8 \uAE30\uD68C \uBD80\uC5EC (\uCD94\uAC00
-    \uB358\uC9C0\uAE30\uC5D0 \uC601\uD5A5 \uC5C6\uC74C)"
+  active_Desc: "자신의 턴 중 던지기 전후 언제든 사용할 수 있으며, 사용 즉시 추가 던지기 1회를 획득한다. 윷·모의 추가 던지기 제한 횟수에는 영향을 주지 않는다."
   active_CooldownTurns: 3
   active_SkillPointCost: 3
   passive_CooldownTurns: 0

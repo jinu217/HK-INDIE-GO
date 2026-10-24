@@ -4,6 +4,7 @@ using UnityEngine;
 using YutArena.Common;
 using YutArena.InGame;
 using YutArena.Managers;
+using YutArena.Managers.GameProgress;
 
 /// <summary>
 /// 캐릭터 말 프리팹의 공통 스킬 기반 클래스입니다.
@@ -46,6 +47,14 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     //수정: 플레이어 전체 규칙에 적용되는 액티브는 UI에서 사용자 말을 선택하지 않아도 됩니다.
     public virtual bool RequiresCasterPieceSelection => true;
     public virtual bool RequiresTargetPieceSelection => false;
+    public virtual bool ResetsPassiveOnBoardReentry => false;
+
+    internal void PrepareForBoardReentry()
+    {
+        if (!ResetsPassiveOnBoardReentry) return;
+        ResetPassiveCooldown();
+        OnPieceRetired();
+    }
 
     public virtual bool CanSelectAsActiveCaster(
         PlayerRuntimeData.PieceRuntimeData piece)
@@ -135,6 +144,13 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         return TryGetPiece(out var piece) ? CcEffectService.ResolveMove(piece, request) : request.MoveCount;
     }
 
+    // Preview must never consume a CC, first-move flag or next-throw reservation.
+    public virtual int PreviewMoveCount(int moveCount, YutThrowData result)
+    {
+        return TryGetPiece(out var piece) && piece.Cc.Get(CcDefine.Move_scale) is CcState scale
+            ? moveCount * scale.Value : moveCount;
+    }
+
     public virtual (YutResult, float)[] ModifyYutProbability(
         (YutResult, float)[] currentTable)
     {
@@ -176,7 +192,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
             return CharacterActiveResult.Failure("Active request does not match this character piece.");
         if (Turns == null)
             return CharacterActiveResult.Failure("Turn manager is not available.");
-        if (Turns.CurrentTurn == null || (int)Turns.CurrentTurn.currentPlayer != PlayerId)
+        if (Turns.CurrentTurn == null || Turns.CurrentTurn.isGameEnded ||
+            (int)Turns.CurrentTurn.currentPlayer != PlayerId)
             return CharacterActiveResult.Failure("The active skill can be used only during its owner's turn.");
         if (!CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase))
             return CharacterActiveResult.Failure(
@@ -203,11 +220,15 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public bool IsActiveUsableInCurrentPhase()
     {
         return isRegistered &&
+               HasActiveSkill &&
                Turns != null &&
                Turns.CurrentTurn != null &&
+               !Turns.CurrentTurn.isGameEnded &&
                (int)Turns.CurrentTurn.currentPlayer == PlayerId &&
                CanUseActiveDuringPhase(Turns.CurrentTurn.currentPhase) &&
-               TryGetPiece(out var piece) && CcEffectService.CanUseSkill(piece);
+               TryGetPiece(out var piece) && CanSelectAsActiveCaster(piece) &&
+               characterData.active_Effects != null && characterData.active_Effects.Length > 0 &&
+               Array.TrueForAll(characterData.active_Effects, effect => effect != null && effect.IsValid);
     }
 
     /// <summary>
@@ -236,6 +257,9 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     {
         return phase == TurnPhase.WaitAction;
     }
+
+    protected static bool IsPlayerInputPhase(TurnPhase phase) =>
+        phase == TurnPhase.WaitThrow || phase == TurnPhase.WaitAction;
 
     protected bool TryStartPassiveCooldown()
     {
@@ -342,7 +366,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public virtual CharacterSkillInputStep GetNextInputStep(bool selectionStarted,
         bool hasCaster, bool hasTarget)
     {
-        if (RequiresCasterPieceSelection && (!selectionStarted || !hasCaster))
+        if (RequiresCasterPieceSelection && !hasCaster)
             return CharacterSkillInputStep.Caster;
         if (RequiresTargetPieceSelection && !hasTarget)
             return CharacterSkillInputStep.Target;
@@ -394,16 +418,22 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         }
     }
 
+    internal static bool IsVisualOnlyPrefab(GameObject prefab) =>
+        prefab != null && prefab.GetComponentInChildren<CharacterStatusBehaviour>(true) == null;
+
     private void EnsureVisualModel()
     {
         if (characterData == null || characterData.visualModelPrefab == null || spawnedVisualModel != null)
             return;
 
-        // 자기 자신을 외형 프리팹으로 지정하면 무한 재귀 생성이 발생하므로 차단합니다.
-        if (characterData.visualModelPrefab == gameObject)
+        // 에셋 프리팹과 런타임 인스턴스는 서로 다른 객체입니다.
+        // Instantiate가 자식의 Awake를 실행하기 전에 Status가 포함된 말 프리팹을 차단합니다.
+        // 외형에는 메시/렌더러만 사용하고 스킬 컴포넌트는 원래 말 하나에만 둡니다.
+        if (!IsVisualOnlyPrefab(characterData.visualModelPrefab))
         {
             Debug.LogError(
-                $"{GetType().Name}: visualModelPrefab cannot reference its owner GameObject.",
+                $"{GetType().Name}: {characterData.name}.visualModelPrefab references a character piece " +
+                $"({characterData.visualModelPrefab.name}). Assign a visual model without CharacterStatusBehaviour.",
                 this);
             return;
         }

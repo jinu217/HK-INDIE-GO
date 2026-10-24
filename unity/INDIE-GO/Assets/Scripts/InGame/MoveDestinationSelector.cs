@@ -1,26 +1,20 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using YutArena.Common;
 using YutArena.Managers;
-using YutArena.Managers.GameProgress;
 
 namespace YutArena.InGame
 {
     /// <summary>
-    /// 이동 선택 3단계 흐름 (WaitAction 단계). 마커는 MoveMarker 하나로 역할만 다르게 쓴다.
-    /// 1) 윷을 다 던지면 → 보드 위 말은 직접 클릭, 대기 말은 공용 HUD의 말 버튼으로 선택.
-    /// 2) 화살표 클릭 → 그 말이 남은 결과(모/개…)로 갈 수 있는 보드 칸에 노란 핀(MoveMarker.Destination, 안에 결과 이름).
-    /// 3) 노란 핀 클릭 → 그 결과로 이동. 결과가 소비되면 다시 1단계(말 선택)로.
+    /// Navigation view only. CharacterPieceInteractionController supplies legal
+    /// piece/destination hints and owns selection, input and move requests.
+    /// This component creates, positions, hovers and clears visual markers.
     /// </summary>
     public sealed class MoveDestinationSelector : MonoBehaviour
     {
         [Header("Dependencies (비우면 씬에서 자동 검색)")]
-        [SerializeField] private TestTurnManager turnManager;
         [SerializeField] private PlayerManager playerManager;
-        [SerializeField] private PieceMovementManager pieceMovementManager;
         [SerializeField] private MapManager mapManager;
         [SerializeField] private InGamePieceDebugController pieceDebugController;
 
@@ -37,6 +31,7 @@ namespace YutArena.InGame
 
         [Header("말 선택 화살표 (1단계)")]
         [SerializeField] private Color pieceArrowColor = new Color(0.45f, 0.85f, 1f, 1f);
+        [SerializeField] private Color skillArrowColor = new Color(0.55f, 1f, 0.65f, 1f);
         [SerializeField, Min(0.01f)] private float pieceArrowScale = 0.35f;
         [Tooltip("말 원점에서 ▼ 촉까지 고정 높이 (모든 말 화살표 동일). 캐릭터 정수리 살짝 위가 되게 조정.")]
         [SerializeField] private float pieceArrowHeight = 1.15f;
@@ -88,230 +83,92 @@ namespace YutArena.InGame
 
         private readonly List<MoveMarker> pieceArrows = new List<MoveMarker>();
         private readonly List<MoveMarker> destMarkers = new List<MoveMarker>();
-        private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
-        private int selectedPieceId = -1;
-        // 윤누리 첫 이동 +1 대기 중: 그 말의 추가 1칸 화살표만 띄우고, 빈 곳 클릭으로 취소 불가
-        private bool forcedMoveActive;
-        private bool subscribed;
-        private MoveMarker lastHoverLogged;
+        private readonly Dictionary<MoveMarker, DebugPieceView> markerPieces =
+            new Dictionary<MoveMarker, DebugPieceView>();
+        private Func<int, int, bool> canSelectWaiting;
+        private Func<int, int, bool> selectWaiting;
 
-        private void Start() => StartCoroutine(InitializeAfterGameStarts());
-
-        private IEnumerator InitializeAfterGameStarts()
+        public readonly struct PieceHint
         {
-            yield return null;
+            public readonly DebugPieceView View;
+            public readonly bool IsSkill;
+            public PieceHint(DebugPieceView view, bool isSkill) { View = view; IsSkill = isSkill; }
+        }
 
-            if (turnManager == null) turnManager = FindFirstObjectByType<TestTurnManager>();
+        public readonly struct DestinationHint
+        {
+            public readonly int PieceId;
+            public readonly YutResult Result;
+            public readonly BoardTileId Tile;
+            public readonly bool ReachesFinish;
+            public DestinationHint(int pieceId, YutResult result, BoardTileId tile, bool reachesFinish)
+            { PieceId = pieceId; Result = result; Tile = tile; ReachesFinish = reachesFinish; }
+        }
+
+        private void Start()
+        {
             if (playerManager == null) playerManager = FindFirstObjectByType<PlayerManager>();
-            if (pieceMovementManager == null) pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
             if (mapManager == null) mapManager = FindFirstObjectByType<MapManager>();
             if (pieceDebugController == null) pieceDebugController = FindFirstObjectByType<InGamePieceDebugController>();
-
-            if (turnManager == null || playerManager == null || pieceMovementManager == null)
-            {
-                Debug.LogError("MoveDestinationSelector: 필수 매니저 참조를 찾지 못했습니다.", this);
-                yield break;
-            }
-
-            turnManager.OnPendingResultsChanged += HandlePendingResultsChanged;
-            turnManager.OnTurnPhaseChanged += HandleTurnPhaseChanged;
-            turnManager.OnTurnEnded += HandleTurnEnded;
-            subscribed = true;
-
-            pendingResults.Clear();
-            pendingResults.AddRange(turnManager.PendingResults);
-            RefreshForCurrentState();
+            if (!TryGetComponent<CharacterPieceInteractionController>(out var flow))
+                flow = gameObject.AddComponent<CharacterPieceInteractionController>();
+            flow.Initialize(this);
         }
+
+        private void OnEnable()
+        {
+            if (TryGetComponent<CharacterPieceInteractionController>(out var flow)) flow.InvalidateNavigation();
+        }
+
+        private void OnDisable() => ClearAll();
 
         private void OnDestroy()
         {
-            if (!subscribed || turnManager == null) return;
-            turnManager.OnPendingResultsChanged -= HandlePendingResultsChanged;
-            turnManager.OnTurnPhaseChanged -= HandleTurnPhaseChanged;
-            turnManager.OnTurnEnded -= HandleTurnEnded;
+            ClearAll();
+            canSelectWaiting = null;
+            selectWaiting = null;
+            if (destinationArrowSprite != null) Destroy(destinationArrowSprite);
+            if (escapeFlagSprite != null) Destroy(escapeFlagSprite);
         }
 
-        private void HandlePendingResultsChanged(List<YutThrowData> results)
-        {
-            pendingResults.Clear();
-            if (results != null)
-                pendingResults.AddRange(results);
-            // 던졌거나 결과를 하나 소비함 → 말 선택 단계로 되돌린다(이동마다 말 재선택).
-            selectedPieceId = -1;
-            RefreshForCurrentState();
-        }
+        public void BindWaitingPieceSelection(Func<int, int, bool> canSelect, Func<int, int, bool> select)
+        { canSelectWaiting = canSelect; selectWaiting = select; }
 
-        private void HandleTurnPhaseChanged(TurnContext context)
-        {
-            if (context == null || context.currentPhase != TurnPhase.WaitAction)
-            {
-                ClearAll();
-                return;
-            }
-            RefreshForCurrentState();
-        }
+        // Existing HUD bindings remain intact; all eligibility/selection belongs to Character.
+        public bool CanSelectWaitingPiece(int playerId, int pieceId) =>
+            isActiveAndEnabled && (canSelectWaiting?.Invoke(playerId, pieceId) ?? false);
+        public bool TrySelectWaitingPiece(int playerId, int pieceId) =>
+            isActiveAndEnabled && (selectWaiting?.Invoke(playerId, pieceId) ?? false);
 
-        private void HandleTurnEnded(PlayerSlot _) => ClearAll();
-
-        /// <summary>공용 HUD의 대기 말 버튼이 지금 출루 선택에 사용 가능한지 검사합니다.</summary>
-        public bool CanSelectWaitingPiece(int playerId, int pieceId)
-        {
-            if (!isActiveAndEnabled || !subscribed || turnManager == null ||
-                playerManager == null || pieceMovementManager == null ||
-                turnManager.CurrentTurn == null || turnManager.CurrentTurn.isGameEnded ||
-                turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction ||
-                (int)turnManager.CurrentTurn.currentPlayer != playerId ||
-                turnManager.TryGetPendingForcedMove(out _) ||
-                !playerManager.TryGetPlayer(playerId, out PlayerController player) ||
-                !player.TryGetPieceData(pieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
-                piece.State != PieceState.Waiting || !CanMovePiece(piece))
-            {
-                return false;
-            }
-
-            foreach (YutThrowData result in turnManager.PendingResults)
-            {
-                if (YutResultRule.GetMoveCount(result.result) > 0)
-                    return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>대기 말은 즉시 이동시키지 않고, 선택한 말의 출루 목적지만 표시합니다.</summary>
-        public bool TrySelectWaitingPiece(int playerId, int pieceId)
-        {
-            if (!CanSelectWaitingPiece(playerId, pieceId))
-                return false;
-
-            pendingResults.Clear();
-            pendingResults.AddRange(turnManager.PendingResults);
-            selectedPieceId = pieceId;
-            BuildDestinationMarkers();
-            return selectedPieceId == pieceId && destMarkers.Count > 0;
-        }
-
-        private void Update()
-        {
-            if (turnManager == null || Mouse.current == null) return;
-            if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
-
-            Camera cam = Camera.main;
-            if (cam == null) return;
-
-            Vector2 screenPosition = Mouse.current.position.ReadValue();
-
-            // 매 프레임: 목적지 칸 위에 커서 있으면 그 칸 강조 (이동 가능 칸만).
-            if (selectedPieceId >= 0 && destMarkers.Count > 0)
-            {
-                bool found = MoveMarker.TryFindAtScreenPosition(cam, screenPosition, MoveMarkerRole.Destination, out MoveMarker hoveredMarker);
-                if (verboseLog && found && hoveredMarker != lastHoverLogged)
-                {
-                    Debug.Log($"[MoveSelector] hover 감지: {hoveredMarker.Result}", this);
-                    lastHoverLogged = hoveredMarker;
-                }
-                if (!found) lastHoverLogged = null;
-                foreach (MoveMarker m in destMarkers)
-                {
-                    if (m == null) continue;
-                    m.SetHovered(m == hoveredMarker);
-                    // Inspector 크기/위치/각도 실시간 반영 (큰 칸·대각선 칸은 전용 값).
-                    ApplyOutlineShape(m);
-                }
-            }
-
-            if (!Mouse.current.leftButton.wasPressedThisFrame) return;
-            // 대기 말 버튼 등 UI를 누른 클릭이 보드까지 전달되어 선택을 취소/실행하지 않도록 합니다.
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
-
-            if (forcedMoveActive)
-            {
-                if (MoveMarker.TryFindAtScreenPosition(cam, screenPosition, MoveMarkerRole.Destination, out MoveMarker _))
-                {
-                    if (verboseLog) Debug.Log($"[MoveSelector] 윤누리 추가 1칸 칸 클릭 → RequestForcedMove(piece={selectedPieceId})", this);
-                    turnManager.RequestForcedMove();
-                }
-                return;
-            }
-
-            if (selectedPieceId < 0)
-            {
-                // 1단계: "말"을 직접 클릭해서 선택. 파란 ▼ 는 어떤 말이 선택 가능한지 보여주는 표시일 뿐.
-                int playerId = (int)turnManager.CurrentTurn.currentPlayer;
-                int pickedId = -1;
-
-                if (TryFindSelectablePieceAtScreenPosition(cam, screenPosition, playerId, out DebugPieceView pieceView))
-                {
-                    pickedId = pieceView.PieceId;
-                }
-                else if (MoveMarker.TryFindAtScreenPosition(
-                             cam, screenPosition, MoveMarkerRole.PieceSelect, out MoveMarker pick))
-                {
-                    pickedId = pick.PieceId;   // ▼ 를 직접 눌러도 선택되게 (보조)
-                }
-
-                if (pickedId >= 0)
-                {
-                    selectedPieceId = pickedId;
-                    if (verboseLog)
-                    {
-                        string st = playerManager.TryGetPlayer(playerId, out PlayerController pc) &&
-                                    pc.TryGetPieceData(selectedPieceId, out PlayerRuntimeData.PieceRuntimeData pd)
-                            ? pd.State.ToString() : "?";
-                        Debug.Log($"[MoveSelector] 말 선택: piece{selectedPieceId} (state={st})", this);
-                    }
-                    BuildDestinationMarkers();
-                }
-                return;
-            }
-
-            // 3단계: 목적지 "칸" 클릭 → 이동 (콜라이더가 칸 바닥~▼ 까지라 칸을 눌러도 잡힘)
-            if (MoveMarker.TryFindAtScreenPosition(cam, screenPosition, MoveMarkerRole.Destination, out MoveMarker dest))
-            {
-                if (verboseLog) Debug.Log($"[MoveSelector] 목적지 칸 클릭 → RequestMovePiece(piece={selectedPieceId}, {dest.Result})", this);
-                turnManager.RequestMovePiece(selectedPieceId, dest.Result);
-                // 이동 성공 시 OnPendingResultsChanged 가 selectedPieceId 를 -1 로 되돌린다.
-                // 아직 >=0 이면 이동이 거부된 것 → 선택 풀고 1단계로 복구 (말이 고정되는 버그 방지).
-                if (selectedPieceId >= 0)
-                {
-                    if (verboseLog) Debug.Log("[MoveSelector] 이동 거부됨 → 선택 해제", this);
-                    selectedPieceId = -1;
-                    RefreshForCurrentState();
-                }
-                return;
-            }
-
-            // 빈 곳 클릭 → 말 선택 취소, 다시 1단계
-            if (verboseLog) Debug.Log("[MoveSelector] 선택 취소 → 말 선택 단계로", this);
-            selectedPieceId = -1;
-            RefreshForCurrentState();
-        }
-
-        private void RefreshForCurrentState()
+        public void ShowNavigation(IReadOnlyList<PieceHint> pieces, IReadOnlyList<DestinationHint> destinations)
         {
             ClearAll();
+            foreach (var hint in pieces) CreatePieceMarker(hint);
+            escapeFlagCount = 0;
+            var placed = new List<Vector3>();
+            foreach (var destination in destinations) TryCreateDestinationMarker(destination, placed);
+        }
 
-            if (turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction) return;
+        public bool TryPickPieceMarker(Camera camera, Vector2 screenPosition, out DebugPieceView piece)
+        {
+            piece = null;
+            return MoveMarker.TryFindAtScreenPosition(camera, screenPosition, MoveMarkerRole.PieceSelect, out var marker) &&
+                markerPieces.TryGetValue(marker, out piece) && piece != null;
+        }
 
-            if (turnManager.TryGetPendingForcedMove(out int forcedPieceId))
+        public bool TryPickDestination(Camera camera, Vector2 screenPosition, out MoveMarker destination) =>
+            MoveMarker.TryFindAtScreenPosition(camera, screenPosition, MoveMarkerRole.Destination, out destination) &&
+            destMarkers.Contains(destination);
+
+        public void HoverAt(Camera camera, Vector2 screenPosition)
+        {
+            TryPickDestination(camera, screenPosition, out var hovered);
+            foreach (var marker in destMarkers)
             {
-                forcedMoveActive = true;
-                selectedPieceId = forcedPieceId;
-                BuildForcedMoveMarker();
-                return;
+                if (marker == null) continue;
+                marker.SetHovered(marker == hovered);
+                ApplyOutlineShape(marker);
             }
-            if (forcedMoveActive)
-            {
-                forcedMoveActive = false;
-                selectedPieceId = -1; // 추가 이동 끝남 → 남은 결과는 다시 말 선택부터
-            }
-
-            if (pendingResults.Count == 0) return;
-
-            if (selectedPieceId < 0)
-                BuildPieceSelectArrows();
-            else
-                BuildDestinationMarkers();
         }
 
         // 큰 칸: 참먹이(Start) + 모/뒷모/찌모/날모(Corner01~04) + 방(Center). 새 보드에서 일반 칸보다 커서 테두리 크기를 따로 준다.
@@ -378,139 +235,26 @@ namespace YutArena.InGame
                    (tile >= BoardTileId.Inner01 && tile <= BoardTileId.Inner08);
         }
 
-        // 이 말이 이번에 선택 가능한 말인지 (= 파란 ▼ 가 떠 있는 말인지).
-        // BuildPieceSelectArrows 가 CanMovePiece/onlyBackDo 판정을 이미 했으므로 그 결과를 재사용한다.
-        private bool IsSelectablePiece(int pieceId)
+        private void CreatePieceMarker(PieceHint hint)
         {
-            foreach (MoveMarker m in pieceArrows)
-                if (m != null && m.PieceId == pieceId) return true;
-            return false;
+            if (hint.View == null) return;
+            var obj = new GameObject(hint.IsSkill ? "SkillPieceHint" : "MovePieceHint");
+            obj.transform.SetParent(transform, false);
+            var marker = obj.AddComponent<MoveMarker>();
+            marker.ConfigureAsPieceSelect(hint.View.PieceId, hint.View.transform,
+                pieceArrowHeight, hint.IsSkill ? skillArrowColor : pieceArrowColor, pieceArrowScale, null);
+            Sprite customArrow = GetDestinationArrowSprite();
+            if (customArrow != null) marker.SetArrowSprite(customArrow);
+            pieceArrows.Add(marker);
+            markerPieces.Add(marker, hint.View);
         }
 
-        // 업힌 말끼리 겹쳐 있을 때 말 클릭 판정. DebugPieceView.TryFindAtScreenPosition은
-        // "카메라에 가장 가까운 말"을 그냥 골라서, 그게 선택 불가능한(업힌) 말이면 조용히
-        // 실패한다 (그럼 사용자 입장에선 ▼만 눌러야 선택되는 것처럼 보임). 그래서 여기선
-        // "이 플레이어의 선택 가능한(=▼ 뜬) 말"만 후보로 두고 직접 레이캐스트한다.
-        private bool TryFindSelectablePieceAtScreenPosition(
-            Camera cam, Vector2 screenPosition, int playerId, out DebugPieceView found)
+        private bool TryCreateDestinationMarker(DestinationHint destination, List<Vector3> placed)
         {
-            found = null;
-            if (cam == null) return false;
-
-            Ray ray = cam.ScreenPointToRay(screenPosition);
-            float nearest = float.PositiveInfinity;
-            foreach (DebugPieceView view in FindObjectsByType<DebugPieceView>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-            {
-                if (view.PlayerId != playerId || !IsSelectablePiece(view.PieceId)) continue;
-
-                foreach (Collider col in view.GetComponentsInChildren<Collider>(false))
-                {
-                    if (!col.enabled ||
-                        !col.Raycast(ray, out RaycastHit hit, cam.farClipPlane) ||
-                        hit.distance >= nearest) continue;
-                    nearest = hit.distance;
-                    found = view;
-                }
-            }
-            return found != null;
-        }
-
-        // 1단계: 보드 위의 움직일 수 있는 현재 플레이어 말마다 화살표.
-        // Waiting 상태의 말은 공용 HUD 버튼으로만 출루 선택합니다.
-        // 화살표는 각 말 정수리 바로 위에 뜬다.
-        private void BuildPieceSelectArrows()
-        {
-            int playerId = (int)turnManager.CurrentTurn.currentPlayer;
-            int count = 0;
-            foreach (DebugPieceView view in FindObjectsByType<DebugPieceView>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-            {
-                if (view.PlayerId != playerId) continue;
-                if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
-                    !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece))
-                    continue;
-                if (piece.State != PieceState.InBoard || !CanMovePiece(piece)) continue;
-
-                var obj = new GameObject("PieceSelectArrow");
-                obj.transform.SetParent(transform, false);
-                var marker = obj.AddComponent<MoveMarker>();
-                // 파란 화살표는 화면 UI 회피(ClampToScreenSafeArea) 안 씀 → null. (말마다 튕기는 것 방지)
-                marker.ConfigureAsPieceSelect(view.PieceId, view.transform,
-                    pieceArrowHeight, pieceArrowColor, pieceArrowScale, null);
-                Sprite customArrow = GetDestinationArrowSprite();
-                if (customArrow != null) marker.SetArrowSprite(customArrow);   // 말 선택 화살표도 같은 디자인 화살표
-                pieceArrows.Add(marker);
-                count++;
-            }
-
-            if (verboseLog) Debug.Log($"[MoveSelector] 말 선택 화살표 {count}개 (P{playerId})", this);
-        }
-
-        // 2단계: 선택한 말이 남은 결과별로 갈 수 있는 보드 칸에 마커.
-        private void BuildDestinationMarkers()
-        {
-            ClearAll(); // 1단계 말 선택 화살표도 같이 치운다
-
-            int playerId = (int)turnManager.CurrentTurn.currentPlayer;
-            if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
-                !player.TryGetPieceData(selectedPieceId, out PlayerRuntimeData.PieceRuntimeData _))
-            {
-                selectedPieceId = -1;
-                return;
-            }
-
-            var seen = new HashSet<YutResult>();
-            var placed = new List<Vector3>();
-            escapeFlagCount = 0;
-            // 작은 결과부터 처리 → 탈출 가능한 결과가 여러 개면 가장 작은 결과가 탈출 깃발을 차지함
-            var orderedResults = new List<YutThrowData>(pendingResults);
-            orderedResults.Sort((a, b) =>
-                YutResultRule.GetMoveCount(a.result).CompareTo(YutResultRule.GetMoveCount(b.result)));
-            foreach (YutThrowData throwData in orderedResults)
-            {
-                YutResult result = throwData.result;
-                if (!seen.Add(result)) continue;
-
-                int moveCount = YutResultRule.GetMoveCount(result);
-                if (moveCount == 0) continue;
-
-                TryCreateDestinationMarker(playerId, result, moveCount, placed);
-            }
-
-            if (destMarkers.Count == 0)
-            {
-                if (verboseLog) Debug.Log($"[MoveSelector] piece{selectedPieceId} 로 갈 수 있는 곳 없음 → 말 선택으로", this);
-                selectedPieceId = -1;
-                RefreshForCurrentState();
-            }
-        }
-
-        // 윤누리 첫 이동 +1: 말이 이미 첫 착지 칸에 서 있으므로 "여기서 새로 1칸"을 미리보기.
-        // 실제 추가 이동도 새 이동이라, 모서리에서는 똑같이 안쪽(지름길)으로 꺾인다.
-        private void BuildForcedMoveMarker()
-        {
-            int playerId = (int)turnManager.CurrentTurn.currentPlayer;
-            if (verboseLog) Debug.Log($"[MoveSelector] 윤누리 추가 1칸 대기: piece{selectedPieceId}", this);
-            escapeFlagCount = 0;
-            if (!TryCreateDestinationMarker(playerId, YutResult.Do, 1, new List<Vector3>()))
-            {
-                // 갈 곳이 없으면(정상적으론 없음) 대기를 풀어야 턴이 멈추지 않음
-                Debug.LogWarning("[MoveSelector] 윤누리 추가 1칸 목적지를 못 찾아 바로 실행합니다.", this);
-                turnManager.RequestForcedMove();
-            }
-        }
-
-        private bool TryCreateDestinationMarker(int playerId, YutResult result, int moveCount, List<Vector3> placed)
-        {
-            if (!pieceMovementManager.TryPreviewLanding(
-                    playerId, selectedPieceId, moveCount,
-                    out BoardTileId landingTile, out bool reachesFinish))
-            {
-                if (verboseLog) Debug.Log($"[MoveSelector]   {result}: 목적지 없음", this);
-                return false;
-            }
-
+            int selectedPieceId = destination.PieceId;
+            YutResult result = destination.Result;
+            BoardTileId landingTile = destination.Tile;
+            bool reachesFinish = destination.ReachesFinish;
             if (!TryResolveWorldPosition(landingTile, reachesFinish, out Vector3 tilePos))
             {
                 if (verboseLog) Debug.LogWarning($"[MoveSelector]   {result}: {landingTile} 좌표 해석 실패", this);
@@ -757,29 +501,30 @@ namespace YutArena.InGame
             return Mathf.Max(0f, maxY - pieceTransform.position.y);
         }
 
-        private bool CanMovePiece(PlayerRuntimeData.PieceRuntimeData piece)
-        {
-            if (piece.State == PieceState.Goal) return false;   // 완주한 말은 더 이상 이동 대상 아님
-            if (!CcEffectService.CanMove(piece)) return false;
-            if (piece.IsStacked && piece.PieceId != piece.StackLeaderPieceId) return false; // 업힌 말
-            return true;
-        }
-
         private void ClearPieceArrows()
         {
             foreach (MoveMarker m in pieceArrows)
-                if (m != null) Destroy(m.gameObject);
+                DestroyOwnedMarker(m);
             pieceArrows.Clear();
+            markerPieces.Clear();
         }
 
         private void ClearDestMarkers()
         {
             foreach (MoveMarker m in destMarkers)
-                if (m != null) Destroy(m.gameObject);
+                DestroyOwnedMarker(m);
             destMarkers.Clear();
         }
 
-        private void ClearAll()
+        private static void DestroyOwnedMarker(MoveMarker marker)
+        {
+            if (marker == null) return;
+            marker.gameObject.SetActive(false);
+            if (Application.isPlaying) Destroy(marker.gameObject);
+            else DestroyImmediate(marker.gameObject);
+        }
+
+        public void ClearAll()
         {
             ClearPieceArrows();
             ClearDestMarkers();

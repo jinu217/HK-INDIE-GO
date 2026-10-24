@@ -37,6 +37,8 @@ namespace YutArena.Managers
         // 잡기(pendingCaptureThrows)랑 따로 관리하는 이유: 나중에 "왜 추가 던지기가 생겼는지"
         // (잡아서인지 스킬 때문인지) UI에서 구분해서 보여줘야 할 수도 있어서.
         private int pendingSkillThrows = 0;
+        //수정: 기본/윷·모로 이미 확보한 던지기는 잡기·스킬 보너스와 별도로 소비합니다.
+        private bool pendingRegularThrow = true;
         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
         private GameStartSettings settings;
@@ -188,6 +190,7 @@ namespace YutArena.Managers
             pendingResults.Clear();
             pendingCaptureThrows = 0;
             pendingSkillThrows = 0; // 새 턴 시작이니 스킬 보너스 던지기도 초기화
+            pendingRegularThrow = true;
             throwCountInTurn = 0;
             CurrentTurn.extraThrowByYutMoCount = 0;
             CurrentTurn.extraThrowByCaptureCount = 0;
@@ -267,9 +270,9 @@ namespace YutArena.Managers
                 return;
             }
             // 통합 타이머 : 턴 시작할 때 한 번 켜지면 계속 흐르고, 턴이 끝날 때만 멈춤
-            // 잡기 보너스를 먼저 소비하고, 없으면 스킬 보너스를 소비함 
-            bool isCaptureBonusThrow = pendingCaptureThrows > 0;
-            bool isSkillBonusThrow = !isCaptureBonusThrow && pendingSkillThrows > 0;
+            // 기본/윷·모 기회를 먼저 소비한 뒤, 잡기 → 스킬 보너스 순서로 소비함
+            bool isCaptureBonusThrow = !pendingRegularThrow && pendingCaptureThrows > 0;
+            bool isSkillBonusThrow = !pendingRegularThrow && !isCaptureBonusThrow && pendingSkillThrows > 0;
             SetPhase(TurnPhase.Throwing);
             YutResult result = yutRuleManager.Throw(CurrentTurn.currentPlayer);
             Debug.Log("[던지기] " + CurrentTurn.currentPlayer + " → " + result); // 던진 결과 확인용
@@ -281,7 +284,9 @@ namespace YutArena.Managers
                 EndTurn();
                 return;
             }
-            if (isCaptureBonusThrow)
+            if (pendingRegularThrow)
+                pendingRegularThrow = false;
+            else if (isCaptureBonusThrow)
                 pendingCaptureThrows--;
             else if (isSkillBonusThrow)
                 pendingSkillThrows--;
@@ -308,6 +313,7 @@ namespace YutArena.Managers
             if (grantsExtraThrow)
             {
                 CurrentTurn.extraThrowByYutMoCount++;
+                pendingRegularThrow = true;
                 SetPhase(TurnPhase.WaitThrow);
                 //  타이머를 재시작하지 않고, 남은 시간에 보너스만 더함(추가 던지기 보너스 시간)
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);

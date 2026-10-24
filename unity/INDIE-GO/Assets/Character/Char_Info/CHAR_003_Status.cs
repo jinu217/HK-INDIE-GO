@@ -14,6 +14,8 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
     private int plannedCloneLoss;
     private CharacterCaptureDecision plannedDecision;
 
+    protected override bool CanUseActiveDuringPhase(TurnPhase phase) => IsPlayerInputPhase(phase);
+
     public override bool CanSelectAsActiveCaster(PlayerRuntimeData.PieceRuntimeData piece) =>
         base.CanSelectAsActiveCaster(piece) && CcBoardEffects.CountStackUnits(Owner, piece) < 4;
 
