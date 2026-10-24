@@ -7,6 +7,13 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
 {
     public override bool RequiresTargetPieceSelection => true;
 
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        if (!TryGetComponent<ElfWindPathVisuals>(out _))
+            gameObject.AddComponent<ElfWindPathVisuals>();
+    }
+
     private static readonly Dictionary<int, IReadOnlyList<BoardTileId>> PendingLastPaths =
         new Dictionary<int, IReadOnlyList<BoardTileId>>();
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

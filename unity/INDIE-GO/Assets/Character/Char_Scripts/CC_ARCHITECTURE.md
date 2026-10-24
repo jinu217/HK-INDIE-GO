@@ -134,6 +134,6 @@ protect는 잡기·직접 Retire·해로운 상태를 막는다. Charm은 잡기
 
 ## 설치형 효과와 검증
 
-BOARD_TILE_RUNTIME_SKILL_GUIDE의 보드 설치 정보 API는 계속 사용할 수 있다. 현재 WindPath는 실제 말의 Cc에 설치 경로를 저장하는 기존 동작이며 타일 설치물/VFX 생성까지 추가한 것은 아니다.
+BOARD_TILE_RUNTIME_SKILL_GUIDE의 보드 설치 정보 API는 계속 사용할 수 있다. WindPath는 실제 말의 Cc에 설치 경로를 저장한다. 엘프에 자동으로 붙는 ElfWindPathVisuals가 이 상태를 읽고 해당 타일에 청록색 회전 바람 이펙트를 표시한다. 텍스트·디버그 라벨·콜라이더는 생성하지 않는다. 경로 교체·효과 제거·업기 리더 변경·비활성화 시 표시도 갱신하며, Classic 등 스킬 비활성 모드에서는 표시하지 않는다. 색·반경·회전 속도·표시 여부는 런타임 컴포넌트 Inspector에서 조정할 수 있다.
 
 CharacterSkillRuntimeVerifier는 11종의 스킬/CC/등록/쿨다운, 사용 단계, 재투입, 실제 턴 API를 통한 추가 던지기, 선택/네비게이팅 API를 검사한다. RunBatch는 원본 씬과 별개인 임시 프로젝트에서 headless Edit Mode로 실행할 수 있다. 이 검증은 실제 게임 화면의 클릭 좌표·애니메이션·시각 품질 검증과 구분한다.
