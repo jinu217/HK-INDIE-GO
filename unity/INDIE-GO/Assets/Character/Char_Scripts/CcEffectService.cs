@@ -175,7 +175,7 @@ namespace YutArena.InGame
                  type == CcDefine.Robot_part) && ConsumeGuard(piece, CcDefine.protect))
                 return false;
 
-            if (type == CcDefine.Retire && owner != null &&
+            if (type == CcDefine.Retire && owner != null && CharacterSkillRegistry.AreSkillsEnabled &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var targetStatus) &&
                 targetStatus.TryReplaceRetire(piece))
                 return true;
@@ -450,7 +450,8 @@ namespace YutArena.InGame
             if (movedOwner != null && movedPiece != null)
                 CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
 
-            if (record.IsSimpleMove || IsResolvingWindMove || movedPiece == null ||
+            if (!CharacterSkillRegistry.AreSkillsEnabled ||
+                record.IsSimpleMove || IsResolvingWindMove || movedPiece == null ||
                 movedPiece.State != PieceState.InBoard || movedPiece.CurrentTileId != record.To ||
                 record.Path.Count == 0 || record.Path[record.Path.Count - 1] != record.To) return;
             var movedLeader = movedPiece.IsStacked

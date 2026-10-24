@@ -17,6 +17,13 @@ UI → CharacterSkillRegistry → Char_Info/*_Status → SO의 효과 설정 →
 
 기본 잡기는 그대로다. PieceMovementManager가 뒷도·도·개·걸을 Kill, 윷·모를 Retire로 판정하고 PieceRuntimeData.SetCaptured에 전달한다. TestTurnManager가 결과를 소비한다. 기본 잡기 판정과 턴 순서를 Character로 옮기지 않는다.
 
+## 모드별 캐릭터 스킬 활성화
+
+- `CharacterSkillRegistry.AreSkillsEnabled`가 현재 턴 매니저의 Settings를 읽고, 초기화 전에는 GameStartSettingsHolder.Current를 참조한다. 설정이 없으면 비활성화한다.
+- Classic은 `useSkill`이 true여도 모든 캐릭터 패시브·액티브를 비활성화한다. 그 밖의 모드는 `useSkill` 설정을 따른다.
+- 이동/확률/잡기 보정, 입장·이동·잡기·턴 이벤트, 면역·부품 전환·바람길, SP 지급과 액티브 실행을 같은 조건으로 차단한다. 액티브 버튼과 스킬 대상 힌트도 표시하지 않는다.
+- 캐릭터 말의 등록과 외형, 일반 이동·업기·잡기·완주, 공용 CC API 및 이동 완료 알림은 유지한다. 아이템/타일/승리/턴 규칙이나 외부 매니저의 설정은 변경하지 않는다.
+
 ## SO에서 관리할 값
 
 CharacterData의 passive_Effects / active_Effects는 CharacterEffectDefinition 목록이다.

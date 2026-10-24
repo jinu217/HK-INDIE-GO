@@ -85,6 +85,13 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void Update()
     {
+        if (!CharacterSkillRegistry.AreSkillsEnabled)
+        {
+            if (currentCharacter != null || isSelectingCaster || isSelectingTarget)
+                ResetTurnSelection();
+            SetButtonVisible(false);
+            return;
+        }
         // 말 프리팹 생성이 UI 초기화보다 늦는 경우에도, 현재 턴의 활성 스킬 UI를 놓치지 않도록 재탐색한다.
         if (currentCharacter == null)
         {
@@ -108,7 +115,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     public bool TrySelectSkillPiece(DebugPieceView view)
     {
-        if (!LocalSelectionInput.SharedInputAvailable || view == null || SelectionStartedThisFrame) return false;
+        if (!CharacterSkillRegistry.AreSkillsEnabled ||
+            !LocalSelectionInput.SharedInputAvailable || view == null || SelectionStartedThisFrame) return false;
         if (isSelectingTarget) return SelectTarget(view);
         return isSelectingCaster && SelectCaster(view);
     }
@@ -160,8 +168,9 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     {
         ResolveDependencies();
 
-        if (turnManager == null)
+        if (!CharacterSkillRegistry.AreSkillsEnabled || turnManager == null)
         {
+            ResetTurnSelection();
             SetButtonVisible(false);
             return;
         }
@@ -271,7 +280,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         currentCharacter = null;
         SetButtonVisible(false);
 
-        if (playerManager == null ||
+        if (!CharacterSkillRegistry.AreSkillsEnabled || playerManager == null ||
             !playerManager.TryGetPlayer(playerId, out PlayerController player) ||
             player.RuntimeData == null)
         {
@@ -357,7 +366,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void HandleActiveSkillButtonClicked()
     {
-        if (currentCharacter == null || !LocalSelectionInput.SharedInputAvailable) return;
+        if (!CharacterSkillRegistry.AreSkillsEnabled ||
+            currentCharacter == null || !LocalSelectionInput.SharedInputAvailable) return;
         bool hasCaster = preferredCasterPieceId >= 0 && currentCharacter.PieceId == preferredCasterPieceId &&
             CharacterSkillRegistry.CanUseActive(currentPlayerId, preferredCasterPieceId);
         switch (currentCharacter.GetNextInputStep(isSelectingCaster || isSelectingTarget,
@@ -424,6 +434,11 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
 
     private void UpdateButtonCooldownState()
     {
+        if (!CharacterSkillRegistry.AreSkillsEnabled)
+        {
+            SetButtonVisible(false);
+            return;
+        }
         if (currentCharacter == null || skillButton == null || canvasGroup == null)
             return;
 

@@ -667,6 +667,7 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
         };
         game.OnGameEnded += handler;
         EnsureClassicRuleForVerification();
+        turns.Initialize(settings);
         wins.Initialize(settings);
 
         PlayerController p1 = players.ActivePlayers[0];
@@ -790,6 +791,8 @@ internal static class CcArchitectureVerifier
             Set(turns, "pieceMovementManager", movement);
             turns.Initialize(new GameStartSettings
             {
+                gameMode = GameMode.Escape,
+                useSkill = true,
                 playerCount = 2,
                 pieceCountPerPlayer = 4,
                 turnTimeMode = TurnTimeMode.Unlimited
@@ -888,6 +891,7 @@ internal static class CcArchitectureVerifier
                 copies.Add(data); skill.Initialize(data);
                 typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(skill, null);
+                VerifyDisabledCharacterSkills(id, skill, movement, turns, p1, p2);
                 int pointsBeforeTurn = CharacterSkillRegistry.GetSkillPoints(1);
                 CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
                 int expectedAfterTurn = id == "007"
@@ -1330,6 +1334,88 @@ internal static class CcArchitectureVerifier
         EditorApplication.Exit(results.Count == 0 || results.Exists(line => line.StartsWith("FAIL")) ? 1 : 0);
     }
 
+    private static void VerifyDisabledCharacterSkills(string id, CharacterStatusBehaviour skill,
+        PieceMovementManager movement, TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        GameMode previousMode = turns.Settings.gameMode;
+        bool previousUseSkill = turns.Settings.useSkill;
+        TurnPhase previousPhase = turns.CurrentTurn.currentPhase;
+        try
+        {
+            foreach (var setting in new[] { (GameMode.Classic, false), (GameMode.Classic, true),
+                (GameMode.Escape, false), (GameMode.KillTheKing, false) })
+            {
+                turns.Settings.gameMode = setting.Item1;
+                turns.Settings.useSkill = setting.Item2;
+                turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+                p1.RuntimeData.ResetPieces();
+                p2.RuntimeData.ResetPieces();
+                var piece = p1.RuntimeData.Pieces[0];
+                var enemy = p2.RuntimeData.Pieces[0];
+                string label = id + " " + setting.Item1 + " useSkill=" + setting.Item2;
+                Check(label + " preserves character registration while disabling skills",
+                    !CharacterSkillRegistry.AreSkillsEnabled &&
+                    CharacterSkillRegistry.TryGet(1, 0, out var registered) && registered == skill &&
+                    skill.isActiveAndEnabled && !skill.IsPassiveReady);
+
+                CharacterSkillRegistry.NotifyOwnerTurnStarted(1);
+                CharacterSkillRegistry.RequestSkillPoint(1, 10);
+                piece.MoveTo(BoardTileId.Outer01);
+                enemy.MoveTo(BoardTileId.Outer02);
+                Check(label + " rejects UI and direct active requests without SP/cooldown",
+                    !CharacterSkillRegistry.CanUseActive(1, 0) && !skill.IsActiveUsableInCurrentPhase() &&
+                    !CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0, 2, 0)).Succeeded &&
+                    !skill.TryUseActive(new CharacterActiveRequest(1, 0, 2, 0)).Succeeded &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == 0 &&
+                    CharacterSkillRegistry.GetMaxSkillPoints(1) == 0 &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == 0);
+
+                p1.RuntimeData.ResetPieces();
+                p2.RuntimeData.ResetPieces();
+                bool entered = movement.TryMovePiece(1, 0, 1);
+                CharacterSkillRegistry.NotifyOwnerTurnEnded(1);
+                Check(label + " ordinary entry has no extra movement, CC or turn-end passive",
+                    entered && piece.CurrentTileId == BoardTileId.Outer01 &&
+                    piece.Cc.Effects.Count == 0 && CharacterSkillRegistry.GetSkillPoints(1) == 0 &&
+                    (!(skill is CHAR_001_1_Status yunnuri) || !yunnuri.HasPendingForcedMove));
+
+                var table = new[] { (YutResult.BackDo, 25f), (YutResult.Do, 75f) };
+                Check(label + " preserves yut probabilities and default bonus throws",
+                    ReferenceEquals(CharacterSkillRegistry.ModifyYutProbability(1, table), table) &&
+                    CharacterSkillRegistry.ShouldGrantExtraThrow(1, YutResult.Yut, true) &&
+                    !CharacterSkillRegistry.ShouldGrantExtraThrow(1, YutResult.Do, false));
+
+                piece.MoveTo(BoardTileId.Outer02);
+                enemy.MoveTo(BoardTileId.Outer01);
+                bool captured = movement.TryMovePiece(2, 0, 1);
+                Check(label + " ordinary capture ignores character shields, clones and parts",
+                    captured && piece.State == PieceState.Waiting &&
+                    !piece.Cc.Has(CcDefine.Robot_part) && CcEffectService.ConsumeCapture(piece) &&
+                    !CcEffectService.ConsumeCapture(piece));
+
+                piece.MoveTo(BoardTileId.Outer03);
+                bool stunned = CcEffectService.Apply(piece, CcDefine.Sturn, 2);
+                Check(label + " generic CC remains available without character immunity",
+                    !skill.IsImmuneToEffect(CcDefine.Sturn) && stunned && !CcEffectService.CanMove(piece));
+                CcEffectService.Remove(piece, CcDefine.Sturn);
+                CcEffectService.Apply(piece, CcDefine.Retire);
+                Check(label + " generic retirement does not activate Robot passive",
+                    piece.State == PieceState.Waiting && piece.Cc.Has(CcDefine.Retire) &&
+                    !piece.Cc.Has(CcDefine.Robot_part) && !CcEffectService.ConsumeCapture(piece));
+            }
+        }
+        finally
+        {
+            turns.Settings.gameMode = previousMode;
+            turns.Settings.useSkill = previousUseSkill;
+            turns.CurrentTurn.currentPhase = previousPhase;
+            p1.RuntimeData.ResetPieces();
+            p2.RuntimeData.ResetPieces();
+        }
+        Check(id + " Escape skills remain enabled after Classic verification",
+            CharacterSkillRegistry.AreSkillsEnabled);
+    }
+
     private static void VerifySkillInputPhases(string id, CharacterStatusBehaviour skill,
         TestTurnManager turns, PlayerRuntimeData.PieceRuntimeData piece)
     {
@@ -1629,6 +1715,22 @@ internal static class CcArchitectureVerifier
                 (id == "008" ? CharacterSkillInputStep.Target : CharacterSkillInputStep.Confirm));
             Check(id + " navigation refresh never consumes movement results",
                 turns.PendingResults.Count == 1 && p1.RuntimeData.Pieces[0].CurrentTileId == BoardTileId.Outer01);
+
+            GameMode previousMode = turns.Settings.gameMode;
+            try
+            {
+                turns.Settings.gameMode = GameMode.Classic;
+                ui.RefreshForCurrentTurn();
+                flow.RefreshNavigation();
+                var canvas = ui.GetComponent<CanvasGroup>();
+                Check(id + " Classic hides skill UI and clears caster/target selection",
+                    canvas.alpha == 0f && !canvas.interactable && !canvas.blocksRaycasts &&
+                    !ui.IsSelectingCaster && !ui.IsSelectingTarget);
+                Check(id + " Classic preserves ordinary waiting-piece navigation",
+                    view.CanSelectWaitingPiece(1, 1) && view.TrySelectWaitingPiece(1, 1) &&
+                    flow.SelectedPieceId == 1 && ((List<MoveMarker>)Get(view, "destMarkers")).Count == 1);
+            }
+            finally { turns.Settings.gameMode = previousMode; }
         }
         finally
         {

@@ -207,7 +207,8 @@ public sealed class CharacterPieceInteractionController : MonoBehaviour
     private int PreviewMoveCount(PlayerRuntimeData.PieceRuntimeData piece, YutThrowData result)
     {
         int count = YutResultRule.GetMoveCount(result.result);
-        if (CharacterSkillRegistry.TryGet((int)turns.CurrentTurn.currentPlayer, piece.PieceId, out var status))
+        if (CharacterSkillRegistry.AreSkillsEnabled &&
+            CharacterSkillRegistry.TryGet((int)turns.CurrentTurn.currentPlayer, piece.PieceId, out var status))
             return status.PreviewMoveCount(count, result);
         var scale = piece.Cc.Get(CcDefine.Move_scale);
         return scale != null ? count * scale.Value : count;

@@ -65,6 +65,23 @@ public static class CharacterSkillRegistry
     private static readonly Dictionary<(int playerId, CharacterData character), int>
         ActiveCooldowns = new Dictionary<(int, CharacterData), int>();
     private static readonly Dictionary<int, int> SkillPoints = new Dictionary<int, int>();
+    private static TestTurnManager settingsOwner;
+
+    /// <summary>
+    /// Classic은 useSkill 값과 관계없이 캐릭터 스킬을 사용하지 않습니다.
+    /// 말 등록/외형과 공용 CC는 유지하고 캐릭터 규칙만 이 조건을 따릅니다.
+    /// </summary>
+    public static bool AreSkillsEnabled
+    {
+        get
+        {
+            if (settingsOwner == null)
+                settingsOwner = UnityEngine.Object.FindFirstObjectByType<TestTurnManager>();
+            GameStartSettings settings = settingsOwner != null ? settingsOwner.Settings : null;
+            settings = settings ?? GameStartSettingsHolder.Current;
+            return settings != null && settings.gameMode != GameMode.Classic && settings.useSkill;
+        }
+    }
 
     /// <summary>
     /// SP가 변경됐을 때 UI나 별도 플레이어 시스템에 변경량을 전달합니다.
@@ -83,6 +100,7 @@ public static class CharacterSkillRegistry
         BridgedTurnManagers.Clear();
         ActiveCooldowns.Clear();
         SkillPoints.Clear();
+        settingsOwner = null;
         SkillPointRequested = null;
         SkillPointChanged = null;
         MoveCompleted = null;
@@ -136,7 +154,8 @@ public static class CharacterSkillRegistry
 
     public static int ModifyMoveCount(CharacterMoveRequest request)
     {
-        if (!TryGet(request.PlayerId, request.PieceId, out CharacterStatusBehaviour behaviour))
+        if (!AreSkillsEnabled ||
+            !TryGet(request.PlayerId, request.PieceId, out CharacterStatusBehaviour behaviour))
             return CcEffectService.ResolveMove(CcEffectService.GetPiece(request.PlayerId, request.PieceId), request);
         // Waiting 재투입 직전 초기화: 완주 후 외부 턴 매니저가 Waiting으로 바꾼 경우도 포함.
         // 첫 이동 예약을 세운 뒤 초기화하면 윤누리의 추가 이동이 지워지므로 반드시 먼저 처리합니다.
@@ -148,6 +167,7 @@ public static class CharacterSkillRegistry
         int playerId,
         (YutResult, float)[] currentTable)
     {
+        if (!AreSkillsEnabled) return CcEffectService.ResolveProbability(playerId, currentTable);
         CharacterStatusBehaviour behaviour = FindFirstForPlayer(playerId);
         return behaviour != null
             ? behaviour.ModifyYutProbability(currentTable)
@@ -159,6 +179,7 @@ public static class CharacterSkillRegistry
         YutResult result,
         bool defaultValue)
     {
+        if (!AreSkillsEnabled) return defaultValue;
         CharacterStatusBehaviour behaviour = FindFirstForPlayer(playerId);
         return behaviour != null
             ? behaviour.ShouldGrantExtraThrow(result, defaultValue)
@@ -167,34 +188,36 @@ public static class CharacterSkillRegistry
 
     public static CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        return TryGet(request.TargetPlayerId, request.TargetPieceId, out CharacterStatusBehaviour target)
+        return AreSkillsEnabled &&
+            TryGet(request.TargetPlayerId, request.TargetPieceId, out CharacterStatusBehaviour target)
             ? target.EvaluateIncomingCapture(request)
             : CcEffectService.ResolveCapture(CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId), request);
     }
 
     public static void NotifyPieceEnteredBoard(int playerId, int pieceId)
     {
-        if (TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
+        if (AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
             behaviour.OnPieceEnteredBoard();
     }
 
     public static void NotifyPieceRetired(int playerId, int pieceId)
     {
-        if (TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
+        if (AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
             behaviour.OnPieceRetired();
     }
 
     public static void NotifyMoveCompleted(CharacterMoveRecord record)
     {
-        if (TryGet(record.PlayerId, record.PieceId, out CharacterStatusBehaviour behaviour))
+        if (AreSkillsEnabled && TryGet(record.PlayerId, record.PieceId, out CharacterStatusBehaviour behaviour))
         {
             behaviour.OnMoveCompleted(record);
             if (CcEffectService.GetPiece(record.PlayerId, record.PieceId)?.State == PieceState.Goal)
                 behaviour.PrepareForBoardReentry();
         }
 
-        foreach (CharacterStatusBehaviour candidate in SnapshotBehaviours())
-            candidate.OnAnyPieceMoveCompleted(record);
+        if (AreSkillsEnabled)
+            foreach (CharacterStatusBehaviour candidate in SnapshotBehaviours())
+                candidate.OnAnyPieceMoveCompleted(record);
 
         CcEffectService.OnMoveCompleted(record);
         MoveCompleted?.Invoke(record);
@@ -202,6 +225,7 @@ public static class CharacterSkillRegistry
 
     public static void NotifyCaptureCompleted(CharacterCaptureRequest request)
     {
+        if (!AreSkillsEnabled) return;
         PlayerRuntimeData.PieceRuntimeData targetPiece =
             CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId);
         if (targetPiece == null || targetPiece.State != PieceState.Waiting)
@@ -212,6 +236,7 @@ public static class CharacterSkillRegistry
 
     public static void NotifyOwnerTurnStarted(int playerId)
     {
+        if (!AreSkillsEnabled) return;
         TickActiveCooldowns(playerId);
         GrantBaseTurnSkillPoint(playerId);
 
@@ -221,13 +246,16 @@ public static class CharacterSkillRegistry
 
     public static void NotifyOwnerTurnEnded(int playerId)
     {
-        foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
-            behaviour.OnOwnerTurnEnded();
+        if (AreSkillsEnabled)
+            foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
+                behaviour.OnOwnerTurnEnded();
         CcEffectService.EndOwnerTurn(playerId);
     }
 
     public static CharacterActiveResult TryUseActive(CharacterActiveRequest request)
     {
+        if (!AreSkillsEnabled)
+            return CharacterActiveResult.Failure("Character skills are disabled for the current game settings.");
         if (!TryGet(request.PlayerId, request.CasterPieceId, out CharacterStatusBehaviour behaviour))
             return CharacterActiveResult.Failure(
                 $"No character skill is registered for Player {request.PlayerId}, Piece {request.CasterPieceId}.");
@@ -284,7 +312,7 @@ public static class CharacterSkillRegistry
 
     // UI와 네비게이팅은 실행 없이 동일한 준비 조건을 조회합니다.
     public static bool CanUseActive(int playerId, int pieceId) =>
-        TryGet(playerId, pieceId, out CharacterStatusBehaviour status) &&
+        AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour status) &&
         status.IsActiveUsableInCurrentPhase() &&
         GetRemainingActiveCooldown(playerId, status.Data) == 0 &&
         GetSkillPoints(playerId) >= status.ActiveSkillPointCost;
@@ -292,7 +320,7 @@ public static class CharacterSkillRegistry
     /// <summary>플레이어의 현재 SP를 반환합니다.</summary>
     public static int GetSkillPoints(int playerId)
     {
-        if (playerId <= 0) return 0;
+        if (!AreSkillsEnabled || playerId <= 0) return 0;
         if (!SkillPoints.TryGetValue(playerId, out int points)) return 0;
 
         return Math.Min(Math.Max(0, points), GetMaxSkillPoints(playerId));
@@ -301,7 +329,7 @@ public static class CharacterSkillRegistry
     /// <summary>현재 캐릭터의 액티브 필요 SP를 최대 SP로 반환합니다.</summary>
     public static int GetMaxSkillPoints(int playerId)
     {
-        if (playerId <= 0) return 0;
+        if (!AreSkillsEnabled || playerId <= 0) return 0;
 
         int maximum = 0;
         foreach (KeyValuePair<(int playerId, int pieceId), CharacterStatusBehaviour> entry in Behaviours)
@@ -324,7 +352,7 @@ public static class CharacterSkillRegistry
 
     public static bool IsTargetable(int playerId, int pieceId)
     {
-        return TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour)
+        return AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour)
             ? behaviour.IsTargetable
             : CcEffectService.IsTargetable(CcEffectService.GetPiece(playerId, pieceId));
     }
@@ -336,6 +364,7 @@ public static class CharacterSkillRegistry
     {
         if (playerId <= 0) throw new ArgumentOutOfRangeException(nameof(playerId));
         if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        if (!AreSkillsEnabled) return;
 
         int current = GetSkillPoints(playerId);
         int maximum = GetMaxSkillPoints(playerId);
@@ -355,6 +384,7 @@ public static class CharacterSkillRegistry
         TestYutRuleManager yutRules,
         TestTurnManager turns)
     {
+        if (turns != null) settingsOwner = turns;
         if (yutRules != null && BridgedYutManagers.Add(yutRules))
         {
             Func<YutArena.Common.PlayerSlot, (YutResult, float)[]> previous =

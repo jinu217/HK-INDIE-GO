@@ -35,11 +35,12 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public int PassiveCooldownTurns =>
         characterData != null ? Mathf.Max(0, characterData.passive_CooldownTurns) : 0;
     public int RemainingPassiveCooldownTurns => remainingPassiveCooldownTurns;
-    public bool IsPassiveReady => remainingPassiveCooldownTurns <= 0;
+    public bool IsPassiveReady => CharacterSkillRegistry.AreSkillsEnabled && remainingPassiveCooldownTurns <= 0;
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
     public virtual bool IsTargetable => TryGetPiece(out var piece) && CcEffectService.IsTargetable(piece);
     public virtual bool IsImmuneToEffect(CcDefine type) =>
+        CharacterSkillRegistry.AreSkillsEnabled &&
         characterData != null && characterData.passive_Immunities != null &&
         Array.IndexOf(characterData.passive_Immunities, type) >= 0;
     internal virtual bool TryReplaceRetire(PlayerRuntimeData.PieceRuntimeData piece) => false;
@@ -186,6 +187,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public CharacterActiveResult TryUseActive(CharacterActiveRequest request)
     {
+        if (!CharacterSkillRegistry.AreSkillsEnabled)
+            return CharacterActiveResult.Failure("Character skills are disabled for the current game settings.");
         if (!isRegistered)
             return CharacterActiveResult.Failure("Character skill runtime is not registered.");
         if (request.PlayerId != PlayerId || request.CasterPieceId != PieceId)
@@ -219,7 +222,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     public bool IsActiveUsableInCurrentPhase()
     {
-        return isRegistered &&
+        return CharacterSkillRegistry.AreSkillsEnabled && isRegistered &&
                HasActiveSkill &&
                Turns != null &&
                Turns.CurrentTurn != null &&
@@ -358,7 +361,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     private bool ApplyConfiguredEffect(CharacterEffectDefinition effect,
         PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount) =>
-        effect != null && effect.IsValid &&
+        CharacterSkillRegistry.AreSkillsEnabled && effect != null && effect.IsValid &&
         CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
             PlayerId, PieceId, path, effect.isSimpleMove, effect.charges, effect.ignoresInstalledItems);
 
