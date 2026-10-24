@@ -15,16 +15,16 @@ MonoBehaviour:
   char_ID: 9
   char_Name: "SF \uB85C\uBD07"
   char_Desc: 
-  char_Icon: {fileID: -8044974086161588717, guid: 3b3669508d4b4ef48a94e83d7d027d28, type: 3}
+  char_Icon: {fileID: 21300000, guid: 44d51720a6d08e044b38c32761822e6a, type: 3}
   panelViewImage: {fileID: 0}
-  illustrationImage: {fileID: -270286072080164570, guid: 6176d6bb7a1749049afe4dba424e2117, type: 3}
-  pieceImage: {fileID: 0}
-  passive_Icon: {fileID: 0}
+  illustrationImage: {fileID: 21300000, guid: 9acb14dcdda35b0438b8e692560005db, type: 3}
+  pieceImage: {fileID: 21300000, guid: 2774f64974ca9354f94fbb0c6eb08dba, type: 3}
+  passive_Icon: {fileID: -956382761825317569, guid: 9a4eb3a52f15f58458c30cda97916654, type: 3}
   passive_Name: "\uC7AC\uC870\uB9BD"
   passive_Desc: "\uB9AC\uD0C0\uC774\uC5B4\uB418\uBA74 \uC6D0\uB798 \uCE78\uC5D0 2\uD134\uAC04
     \uBD80\uD488\uC73C\uB85C \uB0A8\uB294\uB2E4. \uC544\uAD70\uC774 \uADF8 \uCE78\uC5D0
     \uBA48\uCD94\uBA74 \uBD80\uD65C\uD574 \uC544\uAD70 \uB9D0 \uC544\uB798 \uC5C5\uD78C\uB2E4."
-  active_Icon: {fileID: 0}
+  active_Icon: {fileID: 7117181193109998261, guid: b22175aa7e5d73c41a2b81518d8c0724, type: 3}
   active_Name: "\uC790\uD3ED"
   active_Desc: "\uD604\uC7AC \uCE78\uACFC \uACBD\uB85C\uC0C1 \uC55E\uB4A4 1\uCE78\uC758
     \uBAA8\uB4E0 \uB9D0\uC744 \uB9AC\uD0C0\uC774\uC5B4\uC2DC\uD0A8\uB2E4. \uC544\uAD70\uACFC

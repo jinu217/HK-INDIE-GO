@@ -19,13 +19,17 @@ MonoBehaviour:
   panelViewImage: {fileID: 21300000, guid: a82eb827c20ca9147a14640f82da0773, type: 3}
   illustrationImage: {fileID: -3104489130957607661, guid: effdcf4f174a3ad4293eab981aa77b90, type: 3}
   pieceImage: {fileID: 852584885093406124, guid: 861dcf15220b0654b9e67fe6faa08e43, type: 3}
-  passive_Icon: {fileID: 0}
+  passive_Icon: {fileID: 650617045567175180, guid: 8413eb1342d2ef44e8bb46723546c74f, type: 3}
   passive_Name: "\uBD84\uC704\uAE30 \uD0C0\uAE30"
   passive_Desc: "\uC7A1\uAE30 \uC131\uACF5 \uD639\uC740 \uC790\uC2E0\uC758 \uB9D0\uC5D0
     \uC5C5\uD790\uC2DC SP 1\uAC1C \uD68D\uB4DD"
   active_Icon: {fileID: 777477511868451966, guid: d5b67d61d3b1f8242b4b9532f05ee8bc, type: 3}
   active_Name: "\uD55C\uBC88 \uB354"
-  active_Desc: "자신의 턴 중 던지기 전후 언제든 사용할 수 있으며, 사용 즉시 추가 던지기 1회를 획득한다. 윷·모의 추가 던지기 제한 횟수에는 영향을 주지 않는다."
+  active_Desc: "\uC790\uC2E0\uC758 \uD134 \uC911 \uB358\uC9C0\uAE30 \uC804\uD6C4
+    \uC5B8\uC81C\uB4E0 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC73C\uBA70, \uC0AC\uC6A9
+    \uC989\uC2DC \uCD94\uAC00 \uB358\uC9C0\uAE30 1\uD68C\uB97C \uD68D\uB4DD\uD55C\uB2E4.
+    \uC737\xB7\uBAA8\uC758 \uCD94\uAC00 \uB358\uC9C0\uAE30 \uC81C\uD55C \uD69F\uC218\uC5D0\uB294
+    \uC601\uD5A5\uC744 \uC8FC\uC9C0 \uC54A\uB294\uB2E4."
   active_CooldownTurns: 3
   active_SkillPointCost: 3
   passive_CooldownTurns: 0
