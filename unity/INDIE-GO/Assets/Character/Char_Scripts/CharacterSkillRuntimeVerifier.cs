@@ -1997,7 +1997,7 @@ internal static class CcArchitectureVerifier
         PlayerController p1, PlayerController p2)
     {
         PrepareActiveAttempt(turns, p1, p2);
-        turns.CurrentTurn.currentPhase = id == "008" ? TurnPhase.WaitAction : TurnPhase.WaitThrow;
+        turns.CurrentTurn.currentPhase = TurnPhase.WaitThrow;
         p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
         p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
         var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
@@ -2037,16 +2037,41 @@ internal static class CcArchitectureVerifier
             {
                 Check("008 caster selection switches navigation to legal enemy targets", ui.IsSelectingTarget);
                 Set(ui, "targetSelectionStartedFrame", -1);
-                Check("008 target can be selected through shared interaction flow", ui.TrySelectSkillPiece(enemyView));
+                int completed = 0;
+                ui.SkillUseCompleted += result => { if (result.Succeeded) completed++; };
+                Check("008 target selection rejects an allied piece without spending SP",
+                    !ui.TrySelectSkillPiece(ownedView) && ui.IsSelectingTarget &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before);
+                p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer10);
+                Check("008 target selection rejects an enemy outside active range",
+                    !ui.TrySelectSkillPiece(enemyView) && ui.IsSelectingTarget &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before);
+                p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
+                CcEffectService.Apply(p2.RuntimeData.Pieces[0], CcDefine.Stealth, 3);
+                Check("008 target selection rejects an untargetable enemy",
+                    !ui.TrySelectSkillPiece(enemyView) && ui.IsSelectingTarget &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before);
+                CcEffectService.Remove(p2.RuntimeData.Pieces[0], CcDefine.Stealth);
+                Check("008 button-first flow casts immediately when enemy is selected before throwing",
+                    ui.TrySelectSkillPiece(enemyView) && p2.RuntimeData.Pieces[0].Cc.Has(CcDefine.Binding) &&
+                    !ui.IsSelectingCaster && !ui.IsSelectingTarget && completed == 1 &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before - skill.ActiveSkillPointCost &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == skill.ActiveCooldownTurns &&
+                    turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow && turns.PendingResults.Count == 0);
+                Check("008 repeated enemy click cannot cast or spend twice",
+                    !ui.TrySelectSkillPiece(enemyView) && completed == 1 &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before - skill.ActiveSkillPointCost);
             }
-            typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
-                BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+            else
+                typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
+                    BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
             Check(id + " selected caster/target confirms once and spends SP once",
                 CharacterSkillRegistry.GetSkillPoints(1) == before - skill.ActiveSkillPointCost &&
                 !ui.IsSelectingCaster && !ui.IsSelectingTarget);
 
             PrepareActiveAttempt(turns, p1, p2);
             p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
+            p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
             turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
             ((List<YutThrowData>)Get(turns, "pendingResults")).Add(
                 new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Gae });
@@ -2065,6 +2090,24 @@ internal static class CcArchitectureVerifier
                 (id == "008" ? CharacterSkillInputStep.Target : CharacterSkillInputStep.Confirm));
             Check(id + " navigation refresh never consumes movement results",
                 turns.PendingResults.Count == 1 && p1.RuntimeData.Pieces[0].CurrentTileId == BoardTileId.Outer01);
+            if (id == "008")
+            {
+                int beforePreselected = CharacterSkillRegistry.GetSkillPoints(1);
+                typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
+                    BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+                Check("008 preselected ally starts enemy selection directly without spending SP",
+                    ui.IsSelectingTarget && !ui.IsSelectingCaster &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == beforePreselected);
+                Set(ui, "targetSelectionStartedFrame", -1);
+                Check("008 ally-first flow casts immediately on enemy selection after throwing",
+                    ui.TrySelectSkillPiece(enemyView) && p2.RuntimeData.Pieces[0].Cc.Has(CcDefine.Binding) &&
+                    !ui.IsSelectingCaster && !ui.IsSelectingTarget && ui.SelectedCasterPieceId == -1 &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == beforePreselected - skill.ActiveSkillPointCost);
+                Check("008 immediate cast preserves the pending movement result and clears movement selection",
+                    turns.PendingResults.Count == 1 && turns.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                    p1.RuntimeData.Pieces[0].CurrentTileId == BoardTileId.Outer01 && flow.SelectedPieceId == -1);
+                VerifyElfBlockedTargetFlow(skill, ui, flow, ownedView, enemyView, turns, p1, p2);
+            }
 
             GameMode previousMode = turns.Settings.gameMode;
             try
@@ -2090,6 +2133,98 @@ internal static class CcArchitectureVerifier
             UnityEngine.Object.DestroyImmediate(enemyView.gameObject);
             UnityEngine.Object.DestroyImmediate(map.gameObject);
             UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
+        }
+    }
+
+    private static void VerifyElfBlockedTargetFlow(CharacterStatusBehaviour skill, ActiveSkillButtonController ui,
+        CharacterPieceInteractionController flow, DebugPieceView ownedView, DebugPieceView enemyView,
+        TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        foreach (bool preselected in new[] { false, true })
+        foreach (string defense in new[] { "OneCharge", "StackTwoCharges", "Duration", "Immunity" })
+        {
+            PrepareActiveAttempt(turns, p1, p2);
+            var caster = p1.RuntimeData.Pieces[0]; caster.MoveTo(BoardTileId.Outer01);
+            var enemy = p2.RuntimeData.Pieces[0]; enemy.MoveTo(BoardTileId.Outer02);
+            if (preselected)
+            {
+                turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+                Set(turns, "pendingRegularThrow", false);
+                ((List<YutThrowData>)Get(turns, "pendingResults")).Add(
+                    new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Gae });
+            }
+            CharacterStatusBehaviour defender = null;
+            CharacterData defenderData = null;
+            try
+            {
+                if (defense == "Immunity")
+                {
+                    var host = new GameObject("Immune arrow target"); host.transform.SetParent(p2.transform);
+                    defender = host.AddComponent<CHAR_006_Status>();
+                    defenderData = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<CharacterData>(
+                        "Assets/Character/Char_Info/CHAR_006_SO.asset"));
+                    defenderData.visualModelPrefab = null; defender.Initialize(defenderData);
+                    typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(defender, null);
+                }
+                else
+                {
+                    if (defense == "StackTwoCharges")
+                    {
+                        var cargo = p2.RuntimeData.Pieces[1]; cargo.MoveTo(enemy.CurrentTileId);
+                        int group = p2.RuntimeData.CreateStackGroupId();
+                        enemy.SetStackGroup(group, 0); cargo.SetStackGroup(group, 0);
+                    }
+                    CcEffectService.Apply(enemy, CcDefine.protect, turns: 2,
+                        charges: defense == "Duration" ? -1 : defense == "StackTwoCharges" ? 2 : 1);
+                }
+                string label = $"008 protected/resisted target {defense}, preselected={preselected}";
+                ui.CancelSkillSelection();
+                ui.RefreshForCurrentTurn();
+                if (preselected)
+                    typeof(CharacterPieceInteractionController).GetMethod("SelectPiece", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(flow, new object[] { 1, 0, ownedView });
+                typeof(ActiveSkillButtonController).GetMethod("HandleActiveSkillButtonClicked",
+                    BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+                if (!preselected)
+                {
+                    Set(ui, "casterSelectionStartedFrame", -1);
+                    Check(label + " accepts caster", ui.TrySelectSkillPiece(ownedView));
+                }
+                Set(ui, "targetSelectionStartedFrame", -1);
+                int points = CharacterSkillRegistry.GetSkillPoints(1);
+                Check(label + " remains a valid selectable enemy", ui.IsSelectingTarget && skill.CanSelectActiveTarget(2, 0));
+                Check(label + " completes the cast without applying Binding",
+                    ui.TrySelectSkillPiece(enemyView) && !enemy.Cc.Has(CcDefine.Binding) &&
+                    !ui.IsSelectingCaster && !ui.IsSelectingTarget && ui.SelectedCasterPieceId == -1);
+                Check(label + " spends SP and starts cooldown once",
+                    CharacterSkillRegistry.GetSkillPoints(1) == points - skill.ActiveSkillPointCost &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == skill.ActiveCooldownTurns);
+                if (defense == "OneCharge")
+                    Check(label + " intentionally removes the one-hit protection", !enemy.Cc.Has(CcDefine.protect));
+                else if (defense == "StackTwoCharges")
+                    Check(label + " consumes one shared stack protection charge",
+                        enemy.Cc.Get(CcDefine.protect)?.Charges == 1 &&
+                        ReferenceEquals(enemy.Cc.Get(CcDefine.protect), p2.RuntimeData.Pieces[1].Cc.Get(CcDefine.protect)));
+                else if (defense == "Duration")
+                    Check(label + " preserves duration-based protection until expiry",
+                        enemy.Cc.Get(CcDefine.protect)?.Charges == -1 && enemy.Cc.Get(CcDefine.protect)?.RemainingOwnerTurns == 2);
+                else
+                    Check(label + " preserves the defender's immunity", defender.IsImmuneToEffect(CcDefine.Binding));
+                Check(label + " cannot spend twice or consume a movement result",
+                    !ui.TrySelectSkillPiece(enemyView) && CharacterSkillRegistry.GetSkillPoints(1) == points - skill.ActiveSkillPointCost &&
+                    turns.PendingResults.Count == (preselected ? 1 : 0) && caster.CurrentTileId == BoardTileId.Outer01 &&
+                    turns.CurrentTurn.currentPhase == (preselected ? TurnPhase.WaitAction : TurnPhase.WaitThrow));
+            }
+            finally
+            {
+                if (defender != null)
+                {
+                    CharacterSkillRegistry.Unregister(defender);
+                    UnityEngine.Object.DestroyImmediate(defender.gameObject);
+                }
+                if (defenderData != null) UnityEngine.Object.DestroyImmediate(defenderData);
+            }
         }
     }
 

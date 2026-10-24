@@ -96,14 +96,17 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
                 ActiveRange))
             return CharacterActiveResult.Failure($"The selected enemy is farther than {ActiveRange} tiles.");
 
-        if (!ApplyActiveEffect(target: CcEffectService.StackLeader(target.Piece)))
-            return CharacterActiveResult.Failure("The selected enemy resisted Binding.");
+        // 유효한 대상에게 쏜 화살은 보호/면역에 막혀도 정상 시전입니다.
+        // 보호 소비와 속박 적용 여부는 공통 CC 처리기가 결정합니다.
+        bool applied = ApplyActiveEffect(target: CcEffectService.StackLeader(target.Piece));
         UnityEngine.Debug.Log(
             $"[CharacterSkill][Active] {nameof(CHAR_008_Status)} activated against " +
             $"Player={target.Player.PlayerId}, Piece={target.Piece.PieceId}. " +
-            $"Owner={PlayerId}, Piece={PieceId}",
+            $"Owner={PlayerId}, Piece={PieceId}, Applied={applied}",
             this);
-        return CharacterActiveResult.Success($"Binding applied for {ActiveEffect().ownerTurnTicks} owner-turn ticks.");
+        return CharacterActiveResult.Success(applied
+            ? $"Binding applied for {ActiveEffect().ownerTurnTicks} owner-turn ticks."
+            : "Spirit Arrow was used, but the target blocked or resisted Binding.");
     }
 
     private bool TryFindAutomaticTarget(

@@ -536,7 +536,19 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         selectedTargetView = view;
         selectedTargetView.SetSelected(true);
         SetTarget(view.PlayerId, view.PieceId);
-        return true;
+
+        // 상대 말 선택이 마지막 입력입니다. 추가 버튼 클릭 없이 공통 실행 경로로 확정합니다.
+        if (UseCurrentActiveSkill())
+        {
+            EndSkillSelection(clearCaster: true, clearTarget: true, refresh: true);
+            return true;
+        }
+
+        // 선택 후 턴/시전자 등 사용 조건이 바뀌어 거절되면 대상을 다시 선택할 수 있게 합니다.
+        ClearTarget();
+        ClearSelectedTargetHighlight();
+        SelectionChanged?.Invoke();
+        return false;
     }
 
     private void EndSkillSelection(bool clearCaster, bool clearTarget, bool refresh)
