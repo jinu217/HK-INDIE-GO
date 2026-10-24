@@ -1314,7 +1314,11 @@ internal static class CcArchitectureVerifier
                     VerifyNavigationFlow(id, skill, manager, movement, turns, p1, p2);
                 if (id == "002" || id == "003" || id == "004" || id == "006" || id == "009")
                     VerifyStackCharacter(id, skill, movement, p1, p2);
-                if (id == "009") VerifyRobotPartsLifecycle(skill, movement, turns, p1, p2);
+                if (id == "009")
+                {
+                    VerifyRobotSelfDestructRange(skill, turns, p1, p2);
+                    VerifyRobotPartsLifecycle(skill, movement, turns, p1, p2);
+                }
                 CharacterSkillRegistry.Unregister(skill);
                 UnityEngine.Object.DestroyImmediate(host);
             }
@@ -1564,6 +1568,63 @@ internal static class CcArchitectureVerifier
             UnityEngine.Object.DestroyImmediate(host);
             owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
         }
+    }
+
+    private static void VerifyRobotSelfDestructRange(CharacterStatusBehaviour skill, TestTurnManager turns,
+        PlayerController owner, PlayerController opponent)
+    {
+        // 기대 범위는 이동 경로/거리 API와 독립적으로 명시해 분기 누락을 검출합니다.
+        var cases = new[]
+        {
+            (origin: BoardTileId.Outer02, incoming: BoardTileId.Outer01,
+                adjacent: new[] { BoardTileId.Outer01, BoardTileId.Outer03 }),
+            (origin: BoardTileId.Corner01, incoming: BoardTileId.Outer04,
+                adjacent: new[] { BoardTileId.Outer04, BoardTileId.Outer05, BoardTileId.Inner01 }),
+            (origin: BoardTileId.Corner02, incoming: BoardTileId.Outer08,
+                adjacent: new[] { BoardTileId.Outer08, BoardTileId.Outer09, BoardTileId.Inner05 }),
+            (origin: BoardTileId.Corner03, incoming: BoardTileId.Outer12,
+                adjacent: new[] { BoardTileId.Outer12, BoardTileId.Outer13, BoardTileId.Inner04 }),
+            (origin: BoardTileId.Corner03, incoming: BoardTileId.Inner04,
+                adjacent: new[] { BoardTileId.Outer12, BoardTileId.Outer13, BoardTileId.Inner04 }),
+            (origin: BoardTileId.Center, incoming: BoardTileId.Inner02,
+                adjacent: new[] { BoardTileId.Inner02, BoardTileId.Inner03, BoardTileId.Inner06, BoardTileId.Inner07 }),
+            (origin: BoardTileId.Center, incoming: BoardTileId.Inner06,
+                adjacent: new[] { BoardTileId.Inner02, BoardTileId.Inner03, BoardTileId.Inner06, BoardTileId.Inner07 }),
+            // 실제 런타임에서 참먹이에 멈춘 말은 InBoard + None을 사용합니다.
+            (origin: BoardTileId.None, incoming: BoardTileId.Outer16,
+                adjacent: new[] { BoardTileId.Outer01, BoardTileId.Outer16, BoardTileId.Inner08 })
+        };
+        foreach (var test in cases)
+        {
+            PrepareActiveAttempt(turns, owner, opponent);
+            skill.OnPieceRetired();
+            var robot = owner.RuntimeData.Pieces[0];
+            robot.MoveTo(test.incoming);
+            robot.MoveTo(test.origin);
+            for (int i = 0; i < test.adjacent.Length; i++)
+                opponent.RuntimeData.Pieces[i].MoveTo(test.adjacent[i]);
+            var nearAlly = owner.RuntimeData.Pieces[1]; nearAlly.MoveTo(test.adjacent[0]);
+            var outsideAlly = owner.RuntimeData.Pieces[2]; outsideAlly.MoveTo(BoardTileId.Outer07);
+            int points = CharacterSkillRegistry.GetSkillPoints(1);
+            var result = CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0));
+            string label = $"Robot self-destruct at {test.origin}, entered from {test.incoming}";
+            Check(label + " casts once through Registry",
+                result.Succeeded && result.SuppressExtraThrow &&
+                CharacterSkillRegistry.GetSkillPoints(1) == points - skill.ActiveSkillPointCost &&
+                CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == skill.ActiveCooldownTurns);
+            for (int i = 0; i < test.adjacent.Length; i++)
+                Check(label + " reaches adjacent enemy at " + test.adjacent[i],
+                    opponent.RuntimeData.Pieces[i].State == PieceState.Waiting);
+            Check(label + " affects an unprotected ally in range", nearAlly.State == PieceState.Waiting);
+            Check(label + " leaves the outside ally unchanged",
+                outsideAlly.State == PieceState.InBoard && outsideAlly.CurrentTileId == BoardTileId.Outer07 &&
+                outsideAlly.Cc.Effects.Count == 0);
+            Check(label + " triggers its own retirement passive at the original tile",
+                robot.State == PieceState.InBoard && robot.CurrentTileId == test.origin &&
+                robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 3);
+        }
+        owner.RuntimeData.ResetPieces(); opponent.RuntimeData.ResetPieces();
+        skill.OnPieceRetired();
     }
 
     private static void VerifyRobotPartsLifecycle(CharacterStatusBehaviour skill, PieceMovementManager movement,

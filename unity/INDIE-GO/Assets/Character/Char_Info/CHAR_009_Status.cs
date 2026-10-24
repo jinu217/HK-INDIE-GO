@@ -37,18 +37,13 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("Self Destruct requires a piece on the board.");
 
         BoardTileId origin = caster.CurrentTileId;
-        var affectedTiles = new HashSet<BoardTileId>
-        {
-            origin,
-            CharacterBoardUtility.GetNextForwardTile(origin, caster.PreviousTileId, true),
-            CharacterBoardUtility.GetNextBackwardTile(origin, caster.PreviousTileId)
-        };
         List<CharacterPieceReference> pieces = CharacterBoardUtility.GetPiecesOnBoard(Players);
         int retiredCount = 0;
 
         foreach (CharacterPieceReference reference in pieces)
         {
-            if (!affectedTiles.Contains(reference.Piece.CurrentTileId))
+            // 코너/중앙의 모든 분기를 포함하며 진입 경로에 영향을 받지 않습니다.
+            if (!CharacterBoardUtility.IsWithinDistance(origin, reference.Piece.CurrentTileId, 1))
                 continue;
 
             int realPieceCount = CcEffectService.StackMembers(reference.Piece).Count;
@@ -61,7 +56,7 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             $"{retiredCount} piece(s). Player={PlayerId}, Piece={PieceId}",
             this);
         return CharacterActiveResult.Success(
-            $"Self Destruct retired {retiredCount} piece(s) on this tile and its adjacent route tiles.",
+            $"Self Destruct retired {retiredCount} piece(s) on this tile and all connected adjacent tiles.",
             suppressExtraThrow: true);
     }
 

@@ -26,9 +26,7 @@ MonoBehaviour:
     \uBA48\uCD94\uBA74 \uBD80\uD65C\uD574 \uC544\uAD70 \uB9D0 \uC704\uC5D0 \uC5C5\uD78C\uB2E4."
   active_Icon: {fileID: 7117181193109998261, guid: b22175aa7e5d73c41a2b81518d8c0724, type: 3}
   active_Name: "\uC790\uD3ED"
-  active_Desc: "\uD604\uC7AC \uCE78\uACFC \uACBD\uB85C\uC0C1 \uC55E\uB4A4 1\uCE78\uC758
-    \uBAA8\uB4E0 \uB9D0\uC744 \uB9AC\uD0C0\uC774\uC5B4\uC2DC\uD0A8\uB2E4. \uC544\uAD70\uACFC
-    \uC790\uC2E0\uB3C4 \uC601\uD5A5\uC744 \uBC1B\uB294\uB2E4."
+  active_Desc: "현재 칸과 연결된 주변 1칸의 모든 말을 리타이어시킨다. 아군과 자신도 영향을 받는다."
   active_CooldownTurns: 3
   active_SkillPointCost: 3
   passive_CooldownTurns: 0

@@ -58,7 +58,7 @@ Status에서는 ApplyPassiveEffect(index, target, path, amount) / ApplyActiveEff
 | 006 | 비어 있음: passive_Immunities에 Sturn/Binding/Silence | Retire, Get_throw: 실제 퇴장한 적 수 × SO 지급량 |
 | 007 | Get_point(1) | Move_end(설치물 무시), Sturn(2 ticks) |
 | 008 | WindPath(수집 경로), Peace_move(1): 바람길 발동 시 이동 | Binding(2 ticks) |
-| 009 | Robot_part(3 ticks): Retire 대체 | Retire: 범위의 자신/아군/적 |
+| 009 | Robot_part(3 ticks): Retire 대체 | Retire: 자기 칸 및 연결된 모든 인접 칸의 자신/아군/적. 주변은 일반 2칸·코너 3칸·중앙 4칸이며 진입 경로와 무관 |
 | 010 | Move_plus(1): 업은 실제 말 수 × SO 수치, 원래 착지 후 추가 이동 | Peace_move(1): 실제 스택 수 × SO 수치만큼 후진 후 턴 종료 |
 
 003의 수적 방어 조건, 002의 특정 윷 결과 예약, 첫 진입 여부, 패시브 준비 여부는 **발동 조건/실행 계획**이지 별도의 CC가 아니다. 이미 부여된 보호·은신·속박·스턴·분신·부품·바람길은 리더 말의 Cc에 저장된다. 003의 분신 소모와 업기 용량 보정은 ConsumeClones를 통해 공통 처리한다. 분신은 공격 말 수만큼 먼저 소모할 수 있지만 실제 업힌 말 일부만 퇴장시키지 않는다.
