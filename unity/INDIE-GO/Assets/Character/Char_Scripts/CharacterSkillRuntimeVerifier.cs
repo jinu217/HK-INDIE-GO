@@ -471,10 +471,9 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 bool formedDefendingStack = movement.TryMovePiece(1, ally.PieceId, 2) &&
                                             caster.IsStacked && ally.IsStacked &&
                                             caster.StackLeaderPieceId == caster.PieceId;
-                bool capturedCargo = movement.TryMovePiece(2, enemy.PieceId, 1) &&
+                bool defendedStack = movement.TryMovePiece(2, enemy.PieceId, 1) &&
                                      caster.State == PieceState.InBoard &&
-                                     ally.State == PieceState.Waiting &&
-                                     ally.CurrentCc == CcDefine.Retire;
+                                     ally.State == PieceState.InBoard && ally.IsStacked;
 
                 ResetBoard();
                 caster.MoveTo(BoardTileId.Outer03);
@@ -485,11 +484,10 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 bool formedBothStacks = movement.TryMovePiece(1, ally.PieceId, 2) &&
                                         movement.TryMovePiece(2, secondAttacker.PieceId, 1);
                 bool clonedLeader = CcEffectService.Apply(caster, CcDefine.Stack_fake);
-                bool cloneAndCargoCaptured = movement.TryMovePiece(2, enemy.PieceId, 1) &&
+                bool cloneConsumedStackDefended = movement.TryMovePiece(2, enemy.PieceId, 1) &&
                                              !caster.Cc.Has(CcDefine.Stack_fake) &&
                                              caster.State == PieceState.InBoard &&
-                                             ally.State == PieceState.Waiting &&
-                                             ally.CurrentCc == CcDefine.Retire;
+                                             ally.State == PieceState.InBoard && ally.IsStacked;
 
                 ResetBoard();
                 caster.MoveTo(BoardTileId.Outer03);
@@ -503,12 +501,12 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                                        ally.State == PieceState.Waiting &&
                                        caster.CurrentCc == CcDefine.Kill &&
                                        ally.CurrentCc == CcDefine.Retire;
-                ok = soloCaptureProceeds && formedDefendingStack && capturedCargo &&
-                     formedBothStacks && clonedLeader && cloneAndCargoCaptured &&
+                ok = soloCaptureProceeds && formedDefendingStack && defendedStack &&
+                     formedBothStacks && clonedLeader && cloneConsumedStackDefended &&
                      equalStacks && ordinaryCapture;
                 detail = $"solo={soloCaptureProceeds}, firstStack={formedDefendingStack}, " +
-                         $"cargo={capturedCargo}, bothStacks={formedBothStacks}, " +
-                         $"clone={clonedLeader}, cloneAndCargo={cloneAndCargoCaptured}, " +
+                         $"wholeStack={defendedStack}, bothStacks={formedBothStacks}, " +
+                         $"clone={clonedLeader}, cloneConsumedStackDefended={cloneConsumedStackDefended}, " +
                          $"equalStacks={equalStacks}, ordinary={ordinaryCapture}";
                 break;
             case "CHAR_004":
@@ -844,10 +842,14 @@ internal static class CcArchitectureVerifier
             var carried = p1.RuntimeData.Pieces[1]; carried.MoveTo(BoardTileId.Outer01);
             piece.SetStackGroup(50, 0); carried.SetStackGroup(50, 0);
             CcEffectService.Apply(piece, CcDefine.Robot_part, 3);
-            Check("Parts leader detaches without stranding ally", !piece.IsStacked && !carried.IsStacked);
+            Check("Parts keeps the entire stack disabled", piece.IsStacked && carried.IsStacked &&
+                ReferenceEquals(piece.Cc.Get(CcDefine.Robot_part), carried.Cc.Get(CcDefine.Robot_part)) &&
+                !CcEffectService.CanMove(carried) && !CcEffectService.CanUseSkill(carried));
             piece.ClearCc(); piece.SetStackGroup(51, 0); carried.SetStackGroup(51, 0);
             CcEffectService.Apply(piece, CcDefine.Retire);
-            Check("Retired leader does not strand surviving ally", !carried.IsStacked && CcEffectService.CanUseSkill(carried));
+            Check("Retiring a leader retires every real member", !carried.IsStacked &&
+                piece.State == PieceState.Waiting && carried.State == PieceState.Waiting);
+            VerifyStackState(p1, p2, movement);
 
             string[] ids = { "001_1", "001_2", "002", "003", "004", "005", "006",
                 "007", "008", "009", "010" };
@@ -1125,12 +1127,12 @@ internal static class CcArchitectureVerifier
                         Check("Talisman does not protect its own source", !piece.Cc.Has(CcDefine.protect));
                         var joiningAlly = p1.RuntimeData.Pieces[2];
                         joiningAlly.MoveTo(BoardTileId.Outer02);
-                        Check("Talisman does not spread to an ally joining the stack",
+                        Check("Joining cargo reads the leader's talisman",
                             movement.TryMovePiece(1, 2, 1) &&
-                            !joiningAlly.Cc.Has(CcDefine.protect) &&
-                            passiveAlly.Cc.Has(CcDefine.protect));
-                        Check("Talisman rejects direct application to a carried piece",
-                            !skill.TryApplyPassiveEffect(joiningAlly));
+                            passiveAlly.Cc.Has(CcDefine.protect) &&
+                            ReferenceEquals(joiningAlly.Cc.Get(CcDefine.protect), passiveAlly.Cc.Get(CcDefine.protect)));
+                        Check("Talisman application to cargo redirects to its leader",
+                            skill.TryApplyPassiveEffect(joiningAlly));
                         Check("Talisman protects for the whole turn", CharacterSkillRegistry.EvaluateIncomingCapture(
                             new CharacterCaptureRequest(2, 0, 1, 1, 1, true)) == CharacterCaptureDecision.Prevent &&
                             CharacterSkillRegistry.EvaluateIncomingCapture(
@@ -1148,11 +1150,11 @@ internal static class CcArchitectureVerifier
                         p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
                         skill.OnPieceRetired();
                         passiveAlly.MoveTo(BoardTileId.Outer01);
-                        Check("First entry onto an ally grants only that ally a talisman",
+                        Check("First entry onto an ally protects both leader and cargo",
                             movement.TryMovePiece(1, 0, 1) && piece.IsStacked &&
                             piece.StackLeaderPieceId == passiveAlly.PieceId &&
                             passiveAlly.Cc.Has(CcDefine.protect) &&
-                            !piece.Cc.Has(CcDefine.protect));
+                            ReferenceEquals(piece.Cc.Get(CcDefine.protect), passiveAlly.Cc.Get(CcDefine.protect)));
 
                         p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
                         skill.OnPieceRetired();
@@ -1165,7 +1167,7 @@ internal static class CcArchitectureVerifier
                         skill.OnPieceEnteredBoard();
                         Check("Nearest selection skips cargo and chooses the nearby leader",
                             joiningAlly.Cc.Has(CcDefine.protect) &&
-                            !passiveAlly.Cc.Has(CcDefine.protect) &&
+                            ReferenceEquals(passiveAlly.Cc.Get(CcDefine.protect), joiningAlly.Cc.Get(CcDefine.protect)) &&
                             !p1.RuntimeData.Pieces[3].Cc.Has(CcDefine.protect) &&
                             !piece.Cc.Has(CcDefine.protect));
 
@@ -1306,9 +1308,12 @@ internal static class CcArchitectureVerifier
                 }
                 VerifyReusablePassive(id, skill, movement, p1, p2);
                 if (id == "001_2") VerifyImmediateExtraThrows(skill, turns, p1, p2);
-                if (id == "003" || id == "004") VerifyAnytimeActive(id, skill, turns, p1, p2);
+                VerifyAnytimeActive(id, skill, turns, p1, p2);
+                if (id == "003" || id == "010") VerifyRequestedTurnSequence(id, skill, turns, p1, p2);
                 if (id == "003" || id == "004" || id == "008")
                     VerifyNavigationFlow(id, skill, manager, movement, turns, p1, p2);
+                if (id == "002" || id == "003" || id == "004" || id == "006" || id == "009")
+                    VerifyStackCharacter(id, skill, movement, p1, p2);
                 CharacterSkillRegistry.Unregister(skill);
                 UnityEngine.Object.DestroyImmediate(host);
             }
@@ -1332,6 +1337,232 @@ internal static class CcArchitectureVerifier
         Run();
         if (File.Exists(Report)) File.Copy(Report, "CharacterVerificationReport.log", true);
         EditorApplication.Exit(results.Count == 0 || results.Exists(line => line.StartsWith("FAIL")) ? 1 : 0);
+    }
+
+    private static void VerifyStackState(PlayerController owner, PlayerController attacker,
+        PieceMovementManager movement)
+    {
+        foreach (int leaderId in new[] { 0, 1 })
+        {
+            foreach (CcDefine guard in new[] { CcDefine.protect, CcDefine.Charm })
+            {
+                owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+                var leader = owner.RuntimeData.Pieces[leaderId];
+                var cargo = owner.RuntimeData.Pieces[1 - leaderId];
+                leader.MoveTo(BoardTileId.Outer03); cargo.MoveTo(BoardTileId.Outer03);
+                int group = owner.RuntimeData.CreateStackGroupId();
+                leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
+                CcEffectService.Apply(cargo, guard, turns: 3, charges: 1);
+                string label = $"Stack leader={leaderId} guard={guard}";
+                Check(label + " cargo applies one shared state", leader.Cc.Has(guard) &&
+                    ReferenceEquals(leader.Cc.Get(guard), cargo.Cc.Get(guard)));
+                attacker.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
+                Check(label + " one charge defends every member of the same attack",
+                    movement.TryMovePiece(2, 0, 1) && leader.State == PieceState.InBoard &&
+                    cargo.State == PieceState.InBoard && !leader.Cc.Has(guard) && !cargo.Cc.Has(guard));
+                attacker.RuntimeData.Pieces[1].MoveTo(BoardTileId.Outer02);
+                Check(label + " next attack captures every member",
+                    movement.TryMovePiece(2, 1, 1) && leader.State == PieceState.Waiting &&
+                    cargo.State == PieceState.Waiting && !leader.IsStacked && !cargo.IsStacked);
+                Check(label + " cargo-first iteration still grants exactly one capture marker",
+                    CcEffectService.ConsumeCapture(leader) && !CcEffectService.ConsumeCapture(cargo) &&
+                    !CcEffectService.ConsumeCapture(leader));
+            }
+
+            owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+            var timedLeader = owner.RuntimeData.Pieces[leaderId];
+            var timedCargo = owner.RuntimeData.Pieces[1 - leaderId];
+            timedLeader.MoveTo(BoardTileId.Outer03); timedCargo.MoveTo(BoardTileId.Outer03);
+            CcEffectService.Apply(timedCargo, CcDefine.Silence, 9);
+            int timedGroup = owner.RuntimeData.CreateStackGroupId();
+            timedLeader.SetStackGroup(timedGroup, leaderId); timedCargo.SetStackGroup(timedGroup, leaderId);
+            Check($"Stack {leaderId} ignores cargo's former independent status",
+                !timedLeader.Cc.Has(CcDefine.Silence) && !timedCargo.Cc.Has(CcDefine.Silence));
+            CcEffectService.Apply(timedCargo, CcDefine.Binding, 2);
+            CcEffectService.TickOwnerTurn(owner);
+            Check($"Stack {leaderId} duration ticks once for all real members",
+                timedLeader.Cc.Get(CcDefine.Binding)?.RemainingOwnerTurns == 1 &&
+                ReferenceEquals(timedLeader.Cc.Get(CcDefine.Binding), timedCargo.Cc.Get(CcDefine.Binding)));
+            CcEffectService.TickOwnerTurn(owner);
+            Check($"Stack {leaderId} expires its shared state together",
+                !timedLeader.Cc.Has(CcDefine.Binding) && !timedCargo.Cc.Has(CcDefine.Binding));
+            CcEffectService.Apply(timedCargo, CcDefine.Sturn, 2);
+            CcEffectService.Remove(timedCargo, CcDefine.Sturn);
+            Check($"Stack {leaderId} removing through cargo clears the leader's state",
+                !timedLeader.Cc.Has(CcDefine.Sturn) && !timedCargo.Cc.Has(CcDefine.Sturn));
+            CcEffectService.Apply(timedCargo, CcDefine.Retire);
+            Check($"Stack {leaderId} direct cargo retirement retires the full group without bonus",
+                timedLeader.State == PieceState.Waiting && timedCargo.State == PieceState.Waiting &&
+                !CcEffectService.ConsumeCapture(timedLeader) && !CcEffectService.ConsumeCapture(timedCargo));
+
+            owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+            timedLeader.MoveTo(BoardTileId.Outer04); timedCargo.MoveTo(BoardTileId.Outer04);
+            timedLeader.SetStackGroup(timedGroup, leaderId); timedCargo.SetStackGroup(timedGroup, leaderId);
+            Check($"Stack {leaderId} Yut capture retires all real members without capture bonus",
+                movement.TryMovePiece(2, 0, 4) && timedLeader.State == PieceState.Waiting &&
+                timedCargo.State == PieceState.Waiting && !CcEffectService.ConsumeCapture(timedLeader) &&
+                !CcEffectService.ConsumeCapture(timedCargo));
+
+            owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+            timedLeader.MoveTo(BoardTileId.Outer03); timedCargo.MoveTo(BoardTileId.Outer03);
+            timedLeader.SetStackGroup(timedGroup, leaderId); timedCargo.SetStackGroup(timedGroup, leaderId);
+            CcEffectService.Apply(timedLeader, CcDefine.protect, charges: 1);
+            var target = new CharacterPieceReference(owner, timedCargo);
+            Check($"Stack {leaderId} direct capture API shares leader protection",
+                !CcBoardEffects.TryCapture(2, 0, target, 1, true, out var defended) &&
+                defended == CharacterCaptureDecision.Prevent && timedLeader.State == PieceState.InBoard &&
+                timedCargo.State == PieceState.InBoard);
+            Check($"Stack {leaderId} direct capture API later retires the whole group with one marker",
+                CcBoardEffects.TryCapture(2, 0, target, 1, true, out var captured) &&
+                captured == CharacterCaptureDecision.Proceed && timedLeader.State == PieceState.Waiting &&
+                timedCargo.State == PieceState.Waiting && CcEffectService.ConsumeCapture(timedLeader) &&
+                !CcEffectService.ConsumeCapture(timedCargo));
+        }
+    }
+
+    private static void VerifyStackCharacter(string id, CharacterStatusBehaviour first,
+        PieceMovementManager movement, PlayerController owner, PlayerController attacker)
+    {
+        var host = new GameObject("Stack regression companion " + id);
+        host.transform.SetParent(owner.transform);
+        var second = (CharacterStatusBehaviour)host.AddComponent(first.GetType());
+        second.Initialize(first.Data);
+        typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(second, null);
+        try
+        {
+            foreach (int leaderId in new[] { 0, 1 })
+            {
+                owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+                first.OnPieceRetired(); second.OnPieceRetired();
+                var leader = owner.RuntimeData.Pieces[leaderId];
+                var cargo = owner.RuntimeData.Pieces[1 - leaderId];
+                string label = $"CHAR_{id} stack leader={leaderId}";
+                if (id == "002")
+                {
+                    bool entered = movement.TryMovePiece(1, leaderId, 1) &&
+                        movement.TryMovePiece(1, cargo.PieceId, 1);
+                    Check(label + " two Do entries share the leader's talisman", entered &&
+                        leader.StackLeaderPieceId == leaderId && leader.Cc.Has(CcDefine.protect) &&
+                        ReferenceEquals(leader.Cc.Get(CcDefine.protect), cargo.Cc.Get(CcDefine.protect)));
+                    Check(label + " enemy landing leaves both real pieces alive",
+                        movement.TryMovePiece(2, 0, 1) && leader.State == PieceState.InBoard &&
+                        cargo.State == PieceState.InBoard && leader.StackGroupId == cargo.StackGroupId);
+                    CcEffectService.TickOwnerTurn(owner);
+                    Check(label + " talisman expires for the whole stack",
+                        !leader.Cc.Has(CcDefine.protect) && !cargo.Cc.Has(CcDefine.protect));
+                    continue;
+                }
+
+                leader.MoveTo(BoardTileId.Outer03); cargo.MoveTo(BoardTileId.Outer03);
+                int group = owner.RuntimeData.CreateStackGroupId();
+                leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
+                attacker.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
+                if (id == "003")
+                {
+                    Check(label + " numerical defense saves the entire real stack",
+                        movement.TryMovePiece(2, 0, 1) && leader.State == PieceState.InBoard &&
+                        cargo.State == PieceState.InBoard);
+                    attacker.RuntimeData.ResetPieces();
+                    CcEffectService.Apply(leader, CcDefine.Stack_fake);
+                    var enemyLeader = attacker.RuntimeData.Pieces[1];
+                    var enemyCargo = attacker.RuntimeData.Pieces[2];
+                    enemyLeader.MoveTo(BoardTileId.Outer02); enemyCargo.MoveTo(BoardTileId.Outer02);
+                    int enemyGroup = attacker.RuntimeData.CreateStackGroupId();
+                    enemyLeader.SetStackGroup(enemyGroup, 1); enemyCargo.SetStackGroup(enemyGroup, 1);
+                    Check(label + " consumes clones while keeping every real member alive",
+                        movement.TryMovePiece(2, 1, 1) && !leader.Cc.Has(CcDefine.Stack_fake) &&
+                        leader.State == PieceState.InBoard && cargo.State == PieceState.InBoard);
+                    enemyLeader.MoveTo(BoardTileId.Outer02); enemyCargo.MoveTo(BoardTileId.Outer02);
+                    Check(label + " equal real stacks are captured together",
+                        movement.TryMovePiece(2, 1, 1) && leader.State == PieceState.Waiting &&
+                        cargo.State == PieceState.Waiting);
+                }
+                else if (id == "004")
+                {
+                    Check(label + " leader charm protects every real member",
+                        movement.TryMovePiece(2, 0, 1) && leader.State == PieceState.InBoard && cargo.State == PieceState.InBoard);
+                    attacker.RuntimeData.Pieces[1].MoveTo(BoardTileId.Outer02);
+                    Check(label + " cargo cannot independently reactivate charm",
+                        movement.TryMovePiece(2, 1, 1) && leader.State == PieceState.Waiting && cargo.State == PieceState.Waiting);
+                }
+                else if (id == "006")
+                {
+                    Check(label + " leader immunity protects the whole stack",
+                        !CcEffectService.Apply(cargo, CcDefine.Binding, 2) &&
+                        !leader.Cc.Has(CcDefine.Binding) && !cargo.Cc.Has(CcDefine.Binding));
+                    var leaderStatus = leaderId == 0 ? first : second;
+                    var noImmunity = UnityEngine.Object.Instantiate(leaderStatus.Data);
+                    noImmunity.passive_Immunities = Array.Empty<CcDefine>();
+                    var originalData = leaderStatus.Data;
+                    leaderStatus.Initialize(noImmunity);
+                    Check(label + " cargo immunity cannot override its unprotected leader",
+                        CcEffectService.Apply(cargo, CcDefine.Binding, 2) &&
+                        leader.Cc.Has(CcDefine.Binding) && cargo.Cc.Has(CcDefine.Binding));
+                    CcEffectService.Remove(leader, CcDefine.Binding);
+                    leaderStatus.Initialize(originalData);
+                    UnityEngine.Object.DestroyImmediate(noImmunity);
+
+                    attacker.RuntimeData.ResetPieces();
+                    var enemyLeader = attacker.RuntimeData.Pieces[0];
+                    var enemyCargo = attacker.RuntimeData.Pieces[1];
+                    enemyLeader.MoveTo(BoardTileId.Outer04); enemyCargo.MoveTo(BoardTileId.Outer04);
+                    int enemyGroup = attacker.RuntimeData.CreateStackGroupId();
+                    enemyLeader.SetStackGroup(enemyGroup, 0); enemyCargo.SetStackGroup(enemyGroup, 0);
+                    var turns = UnityEngine.Object.FindFirstObjectByType<TestTurnManager>();
+                    turns.CurrentTurn.currentPlayer = PlayerSlot.Player1;
+                    turns.CurrentTurn.currentPhase = TurnPhase.WaitAction;
+                    Set(turns, "pendingSkillThrows", 0);
+                    CcEffectService.Apply(enemyLeader, CcDefine.protect, charges: 1);
+                    typeof(CHAR_006_Status).GetMethod("ExecuteActive", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(leaderStatus, new object[] { new CharacterActiveRequest(1, leaderId), leader });
+                    Check(label + " one area hit consumes one guard for the entire enemy stack",
+                        enemyLeader.State == PieceState.InBoard && enemyCargo.State == PieceState.InBoard &&
+                        !enemyLeader.Cc.Has(CcDefine.protect) && (int)Get(turns, "pendingSkillThrows") == 0);
+                    typeof(CHAR_006_Status).GetMethod("ExecuteActive", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(leaderStatus, new object[] { new CharacterActiveRequest(1, leaderId), leader });
+                    Check(label + " area retirement counts actual real members for its reward",
+                        enemyLeader.State == PieceState.Waiting && enemyCargo.State == PieceState.Waiting &&
+                        (int)Get(turns, "pendingSkillThrows") == 2);
+                }
+                else if (id == "009")
+                {
+                    CcEffectService.Apply(cargo, CcDefine.Retire);
+                    CcEffectService.TickOwnerTurn(owner);
+                    Check(label + " retirement converts the entire group to Parts",
+                        leader.State == PieceState.InBoard && cargo.State == PieceState.InBoard &&
+                        leader.IsStacked && leader.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 2 &&
+                        ReferenceEquals(leader.Cc.Get(CcDefine.Robot_part), cargo.Cc.Get(CcDefine.Robot_part)));
+                    var rescuer = owner.RuntimeData.Pieces[2]; rescuer.MoveTo(BoardTileId.Outer02);
+                    Check(label + " ally rescues every member into its own stack",
+                        movement.TryMovePiece(1, 2, 1) && leader.StackLeaderPieceId == 2 && cargo.StackLeaderPieceId == 2 &&
+                        !leader.Cc.Has(CcDefine.Robot_part) && !cargo.Cc.Has(CcDefine.Robot_part) &&
+                        CcBoardEffects.CountStackUnits(owner, rescuer) == 3);
+                    owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+                    first.OnPieceRetired(); second.OnPieceRetired();
+                    leader.MoveTo(BoardTileId.Outer04); cargo.MoveTo(BoardTileId.Outer04);
+                    leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
+                    Check(label + " Yut capture converts every member without a second retirement",
+                        movement.TryMovePiece(2, 0, 4) && leader.State == PieceState.InBoard &&
+                        cargo.State == PieceState.InBoard && leader.Cc.Has(CcDefine.Robot_part) &&
+                        cargo.Cc.Has(CcDefine.Robot_part) && !leader.Cc.Has(CcDefine.Kill));
+                    owner.RuntimeData.ResetPieces(); first.OnPieceRetired(); second.OnPieceRetired();
+                    leader.MoveTo(BoardTileId.Outer03); cargo.MoveTo(BoardTileId.Outer03);
+                    leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
+                    CcEffectService.Apply(cargo, CcDefine.Retire);
+                    for (int tick = 0; tick < 3; tick++) CcEffectService.TickOwnerTurn(owner);
+                    Check(label + " Parts expiration retires all members without reconversion",
+                        leader.State == PieceState.Waiting && cargo.State == PieceState.Waiting &&
+                        !leader.Cc.Has(CcDefine.Robot_part) && !cargo.Cc.Has(CcDefine.Robot_part));
+                }
+            }
+        }
+        finally
+        {
+            CharacterSkillRegistry.Unregister(second);
+            UnityEngine.Object.DestroyImmediate(host);
+            owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+        }
     }
 
     private static void VerifyDisabledCharacterSkills(string id, CharacterStatusBehaviour skill,
@@ -1420,14 +1651,19 @@ internal static class CcArchitectureVerifier
         TestTurnManager turns, PlayerRuntimeData.PieceRuntimeData piece)
     {
         TurnPhase previous = turns.CurrentTurn.currentPhase;
-        foreach (TurnPhase phase in new[] { TurnPhase.WaitThrow, TurnPhase.WaitAction,
-            TurnPhase.Throwing, TurnPhase.MovePiece, TurnPhase.TurnEnd, TurnPhase.GameEnd })
+        foreach (TurnPhase phase in Enum.GetValues(typeof(TurnPhase)))
         {
             turns.CurrentTurn.currentPhase = phase;
-            bool anytime = id == "001_2" || id == "003" || id == "004";
-            bool expected = anytime ? phase == TurnPhase.WaitThrow || phase == TurnPhase.WaitAction :
-                id == "001_1" || id == "002" ? phase == TurnPhase.WaitThrow : phase == TurnPhase.WaitAction;
+            bool expected = phase == TurnPhase.WaitThrow || phase == TurnPhase.WaitAction;
             Check(id + " input phase " + phase, skill.IsActiveUsableInCurrentPhase() == expected);
+            if (!expected)
+            {
+                int before = CharacterSkillRegistry.GetSkillPoints(1);
+                Check(id + " rejects active execution during " + phase,
+                    !CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0, 2, 0)).Succeeded &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == before &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == 0);
+            }
         }
         turns.CurrentTurn.currentPlayer = PlayerSlot.Player2;
         turns.CurrentTurn.currentPhase = previous;
@@ -1464,21 +1700,135 @@ internal static class CcArchitectureVerifier
     private static void VerifyAnytimeActive(string id, CharacterStatusBehaviour skill,
         TestTurnManager turns, PlayerController p1, PlayerController p2)
     {
-        foreach (TurnPhase phase in new[] { TurnPhase.WaitThrow, TurnPhase.WaitAction })
+        var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+        LocalSelectionInput.SelectSharedKeyboard();
+        var ui = new GameObject("Anytime skill button " + id, typeof(RectTransform),
+            typeof(UnityEngine.UI.Button), typeof(CanvasGroup)).AddComponent<ActiveSkillButtonController>();
+        try
+        {
+            if (Get(ui, "skillButton") == null)
+                typeof(ActiveSkillButtonController).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(ui, null);
+            typeof(ActiveSkillButtonController).GetMethod("SubscribeToTurnEvents", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(ui, null);
+            foreach (TurnPhase phase in new[] { TurnPhase.WaitThrow, TurnPhase.WaitAction })
+            {
+                PrepareActiveAttempt(turns, p1, p2);
+                skill.OnPieceRetired();
+                turns.CurrentTurn.currentPhase = phase;
+                ui.RefreshForCurrentTurn();
+                Check(id + " preserves board-caster requirement during " + phase,
+                    CharacterSkillRegistry.CanUseActive(1, 0) == !skill.RequiresCasterPieceSelection &&
+                    ui.GetComponent<UnityEngine.UI.Button>().interactable == !skill.RequiresCasterPieceSelection);
+
+                var piece = p1.RuntimeData.Pieces[0]; piece.MoveTo(BoardTileId.Outer02);
+                p2.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer03);
+                typeof(TestTurnManager).GetMethod("BeginTurnFor", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(turns, new object[] { PlayerSlot.Player1 });
+                Check(id + " turn-start event enables button before the first throw",
+                    turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow && turns.PendingResults.Count == 0 &&
+                    CharacterSkillRegistry.CanUseActive(1, 0) && ui.GetComponent<UnityEngine.UI.Button>().interactable);
+                var pending = (List<YutThrowData>)Get(turns, "pendingResults");
+                if (phase == TurnPhase.WaitAction)
+                {
+                    turns.CurrentTurn.currentPhase = phase;
+                    Set(turns, "pendingRegularThrow", false);
+                    pending.Add(new YutThrowData { player = PlayerSlot.Player1, result = YutResult.Geol });
+                }
+                ui.RefreshForCurrentTurn();
+                ui.SetCasterPiece(0);
+                ui.SetTarget(2, 0);
+                int before = CharacterSkillRegistry.GetSkillPoints(1);
+                Check(id + " button and registry agree during " + phase,
+                    ui.GetComponent<UnityEngine.UI.Button>().interactable && CharacterSkillRegistry.CanUseActive(1, 0));
+                bool succeeded = (bool)typeof(ActiveSkillButtonController).GetMethod("UseCurrentActiveSkill",
+                    BindingFlags.Instance | BindingFlags.NonPublic).Invoke(ui, null);
+                Check(id + " button executes and spends SP exactly once during " + phase,
+                    succeeded && CharacterSkillRegistry.GetSkillPoints(1) == before - skill.ActiveSkillPointCost &&
+                    CharacterSkillRegistry.GetRemainingActiveCooldown(1, skill.Data) == skill.ActiveCooldownTurns);
+                Check(id + " cooldown/SP disable navigation readiness during " + phase,
+                    !CharacterSkillRegistry.CanUseActive(1, 0));
+                if (id == "010")
+                    Check(id + " retreat ends turn during " + phase,
+                        piece.CurrentTileId == BoardTileId.Outer01 && turns.CurrentTurn.currentPlayer == PlayerSlot.Player2 &&
+                        turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow && pending.Count == 0 &&
+                        (bool)Get(turns, "pendingRegularThrow"));
+                else
+                    Check(id + " skill preserves unused throws/results during " + phase,
+                        turns.CurrentTurn.currentPlayer == PlayerSlot.Player1 &&
+                        pending.Count == (phase == TurnPhase.WaitAction ? 1 : 0) &&
+                        (bool)Get(turns, "pendingRegularThrow") == (phase == TurnPhase.WaitThrow));
+            }
+        }
+        finally
+        {
+            typeof(ActiveSkillButtonController).GetMethod("UnsubscribeFromTurnEvents", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(ui, null);
+            UnityEngine.Object.DestroyImmediate(ui.gameObject);
+            UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
+        }
+    }
+
+    private static void VerifyRequestedTurnSequence(string id, CharacterStatusBehaviour skill,
+        TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        var keyboard = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+        LocalSelectionInput.SelectSharedKeyboard();
+        var rules = new GameObject("Requested turn sequence rules " + id).AddComponent<TestYutRuleManager>();
+        var wins = new GameObject("Requested turn sequence wins " + id).AddComponent<TestWinConditionManager>();
+        object previousRules = Get(turns, "yutRuleManager");
+        object previousWins = Get(turns, "winConditionManager");
+        Set(turns, "yutRuleManager", rules); Set(turns, "winConditionManager", wins);
+        wins.Initialize(turns.Settings);
+        try
         {
             PrepareActiveAttempt(turns, p1, p2);
-            turns.CurrentTurn.currentPhase = phase;
-            Check(id + " no board caster disables skill during " + phase,
-                !CharacterSkillRegistry.CanUseActive(1, 0));
-            p1.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer01);
-            Check(id + " selects a board caster before or after throwing " + phase,
-                CharacterSkillRegistry.CanUseActive(1, 0) &&
-                skill.GetNextInputStep(false, false, false) == CharacterSkillInputStep.Caster &&
-                skill.GetNextInputStep(false, true, false) == CharacterSkillInputStep.Confirm);
-            Check(id + " executes during " + phase,
-                CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded);
-            Check(id + " cooldown/SP disable navigation readiness",
-                !CharacterSkillRegistry.CanUseActive(1, 0));
+            skill.OnPieceRetired();
+            var piece = p1.RuntimeData.Pieces[0]; piece.MoveTo(BoardTileId.Outer02);
+            if (id == "003")
+            {
+                rules.ProbabilityTableProvider = _ => new[] { (YutResult.Gae, 100f) };
+                Check("Hong turn starts with an available clone skill and no thrown result",
+                    turns.PendingResults.Count == 0 && CharacterSkillRegistry.CanUseActive(1, 0));
+                Check("Hong clones before throwing while preserving the base throw",
+                    CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded &&
+                    piece.Cc.Get(CcDefine.Stack_fake)?.Value == 1 && turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow &&
+                    (bool)Get(turns, "pendingRegularThrow") && turns.PendingResults.Count == 0);
+                turns.RequestThrow();
+                Check("Hong can throw normally after using Clone Technique",
+                    turns.CurrentTurn.currentPhase == TurnPhase.WaitAction && turns.PendingResults.Count == 1 &&
+                    turns.PendingResults[0].result == YutResult.Gae && piece.Cc.Get(CcDefine.Stack_fake)?.Value == 1);
+            }
+            else
+            {
+                int roll = 0;
+                rules.ProbabilityTableProvider = _ => new[] { (roll++ == 0 ? YutResult.Yut : YutResult.Geol, 100f) };
+                Check("Soldier skill is available before throwing Yut and Geol", CharacterSkillRegistry.CanUseActive(1, 0));
+                turns.RequestThrow(); turns.RequestThrow();
+                Check("Soldier can still use skill after Yut and Geol are stored",
+                    turns.PendingResults.Count == 2 && turns.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                    CharacterSkillRegistry.CanUseActive(1, 0));
+                turns.RequestMovePiece(0, YutResult.Yut);
+                Check("Soldier can use retreat after moving Yut while Geol remains",
+                    turns.CurrentTurn.currentPlayer == PlayerSlot.Player1 && turns.CurrentTurn.currentPhase == TurnPhase.WaitAction &&
+                    turns.PendingResults.Count == 1 && turns.PendingResults[0].result == YutResult.Geol &&
+                    CharacterSkillRegistry.CanUseActive(1, 0));
+                var before = piece.CurrentTileId;
+                int points = CharacterSkillRegistry.GetSkillPoints(1);
+                Check("Soldier retreat discards remaining Geol and advances the turn once",
+                    CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0)).Succeeded &&
+                    piece.CurrentTileId != before && turns.CurrentTurn.currentPlayer == PlayerSlot.Player2 &&
+                    turns.CurrentTurn.currentPhase == TurnPhase.WaitThrow && turns.PendingResults.Count == 0 &&
+                    CharacterSkillRegistry.GetSkillPoints(1) == points - skill.ActiveSkillPointCost &&
+                    (int)Get(turns, "pendingSkillThrows") == 0 && (int)Get(turns, "pendingCaptureThrows") == 0);
+            }
+        }
+        finally
+        {
+            Set(turns, "yutRuleManager", previousRules); Set(turns, "winConditionManager", previousWins);
+            UnityEngine.Object.DestroyImmediate(wins.gameObject);
+            UnityEngine.Object.DestroyImmediate(rules.gameObject);
+            UnityEngine.InputSystem.InputSystem.RemoveDevice(keyboard);
         }
     }
 

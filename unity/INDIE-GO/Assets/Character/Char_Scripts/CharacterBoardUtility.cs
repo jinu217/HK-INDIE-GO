@@ -41,7 +41,8 @@ public static class CharacterBoardUtility
 
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
-                if (piece.State == PieceState.InBoard)
+                if (piece.State == PieceState.InBoard &&
+                    (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId))
                     result.Add(new CharacterPieceReference(player, piece));
             }
         }
@@ -365,24 +366,29 @@ public static class CcBoardEffects
             target.Piece.PieceId,
             attackingPieceCount,
             grantsExtraThrow);
-        decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
-
-        if (decision == CharacterCaptureDecision.Prevent ||
-            decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
-            decision == CharacterCaptureDecision.ConvertToParts)
+        CcEffectService.BeginCaptureResolution();
+        try
         {
-            return false;
-        }
+            decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
 
-        bool finalExtraThrow =
-            grantsExtraThrow &&
-            decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
-        CcEffectService.RewardMarks(target.Piece, request);
-        Retire(target, finalExtraThrow);
-        if (target.Piece.State != PieceState.Waiting)
-            return false;
-        CharacterSkillRegistry.NotifyCaptureCompleted(request);
-        return true;
+            if (decision == CharacterCaptureDecision.Prevent ||
+                decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+                decision == CharacterCaptureDecision.ConvertToParts)
+            {
+                return false;
+            }
+
+            bool finalExtraThrow =
+                grantsExtraThrow &&
+                decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
+            CcEffectService.RewardMarks(target.Piece, request);
+            Retire(target, finalExtraThrow);
+            if (target.Piece.State != PieceState.Waiting)
+                return false;
+            CharacterSkillRegistry.NotifyCaptureCompleted(request);
+            return true;
+        }
+        finally { CcEffectService.EndCaptureResolution(); }
     }
 
     public static void MoveStackAlongPath(
@@ -483,7 +489,8 @@ public static class CcBoardEffects
     public static void RefreshClones(PlayerController owner, PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (owner == null) return;
-        int count = piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
+        int count = piece == CcEffectService.StackLeader(piece)
+            ? piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0 : 0;
         if (count > 0 && !piece.IsStacked)
             piece.SetStackGroup(owner.RuntimeData.CreateStackGroupId(), piece.PieceId);
         else if (count == 0 && piece.IsStacked)
@@ -503,29 +510,22 @@ public static class CcBoardEffects
         PlayerRuntimeData.PieceRuntimeData leader)
     {
         if (owner == null || leader == null) return 0;
+        leader = CcEffectService.StackLeader(leader);
         int count = 0;
         foreach (var piece in owner.RuntimeData.Pieces)
             if (piece.State == PieceState.InBoard &&
                 (piece == leader || (leader.IsStacked && piece.StackGroupId == leader.StackGroupId)))
-                count += 1 + (piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0);
-        return count;
+                count++;
+        return count + (leader.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0);
     }
 
     internal static void EnforceCloneCapacity(PlayerController owner,
         PlayerRuntimeData.PieceRuntimeData moved)
     {
+        moved = CcEffectService.StackLeader(moved);
         int excess = CountStackUnits(owner, moved) - 4;
         if (excess <= 0) return;
-        foreach (var piece in owner.RuntimeData.Pieces)
-        {
-            if (piece != moved && (!moved.IsStacked || piece.StackGroupId != moved.StackGroupId)) continue;
-            var clone = piece.Cc.Get(CcDefine.Stack_fake);
-            if (clone == null) continue;
-            int removed = Math.Min(clone.Value, excess);
-            CcEffectService.ConsumeClones(piece, removed);
-            excess -= removed;
-            if (excess == 0) break;
-        }
+        CcEffectService.ConsumeClones(moved, excess);
     }
 
     internal static void NormalizeStack(PlayerController owner, int groupId)
@@ -555,7 +555,8 @@ public sealed class CcCloneView : MonoBehaviour
     public void Refresh(PlayerRuntimeData.PieceRuntimeData piece, CharacterStatusBehaviour source)
     {
         Clear();
-        int count = piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
+        int count = piece == CcEffectService.StackLeader(piece)
+            ? piece.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0 : 0;
         for (int index = 0; index < count; index++)
         {
             var root = new GameObject($"SkillClone_{index + 1}");

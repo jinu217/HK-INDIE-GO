@@ -144,7 +144,7 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
     public void SetTarget(int playerId, int pieceId)
     {
         targetPlayerId = playerId;
-        targetPieceId = pieceId;
+        targetPieceId = CcEffectService.StackLeader(CcEffectService.GetPiece(playerId, pieceId))?.PieceId ?? pieceId;
         SelectionChanged?.Invoke();
     }
 

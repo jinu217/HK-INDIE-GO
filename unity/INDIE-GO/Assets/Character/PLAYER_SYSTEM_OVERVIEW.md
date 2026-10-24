@@ -235,13 +235,15 @@ CharacterCaptureDecision decision =
 
 - `Proceed`: 기존 잡기 처리 진행
 - `Prevent`: 잡기 무효
-- `LimitRetireToAttackingCount`: 공격측 말 수만큼만 대상 스택 리타이어
-- `ConsumeCloneWithoutBonus`: 실제 말 대신 분신 하나만 제거하고 추가 던지기 금지
+- `LimitRetireToAttackingCount`: 기존 외부 API/숫자 호환용 값. 현재 캐릭터는 반환하지 않으며 실제 업힌 말 일부만 퇴장시키지 않음
+- `ConsumeCloneWithoutBonus`: 분신을 소모하고 실제 스택 전체 생존, 추가 던지기 없음
 - `ConvertToParts`: 리타이어하지 않고 해당 타일의 부품 상태로 유지
 
 `Prevent`, `ConsumeCloneWithoutBonus`, `ConvertToParts`는 일반적인 잡기 성공이 아니다.
 공격자에게 잡기 보상이나 추가 던지기를 부여하면 안 된다.
 실제 잡기가 완료된 경우에만 `NotifyPieceRetired`와 `NotifyCaptureCompleted`를 호출한다.
+
+업힌 실제 말은 리더의 효과·면역·방어 판정을 공유한다. 한 번의 공격에 보호 횟수를 한 번만 소비하며 리더가 생존하면 전체 생존, 리더가 퇴장하면 전체 퇴장한다. 홍길동도 수적 방어가 발동하면 실제 스택 전체가 생존하며 분신만 먼저 소모할 수 있다.
 
 지정형 스킬은 후보 표시 시점과 실행 직전에 모두 `IsTargetable`을 검사한다.
 일반 착지 잡기는 `IsTargetable`만으로 끝내지 않고 반드시 `EvaluateIncomingCapture`까지 호출한다.
@@ -295,8 +297,8 @@ CharacterActiveResult result = CharacterSkillRegistry.TryUseActive(request);
 실패한 요청은 SP를 차감하거나 쿨다운을 시작하지 않는다.
 `SuppressExtraThrow`가 `true`이면 턴 시스템은 해당 스킬 결과로 추가 던지기를 만들지 않는다.
 
-기본 액티브 사용 단계는 `TurnPhase.WaitAction`이다.
-윷을 던지기 전에 쓰는 캐릭터는 `CanUseActiveDuringPhase`를 override해 `WaitThrow`를 허용한다.
+현재 11종의 액티브는 공통으로 자기 턴의 `WaitThrow`와 `WaitAction`에서 사용한다.
+첫 윷을 던지기 전부터 시전자·SP·쿨다운·상태 조건이 충족되면 버튼이 활성화된다. 윤누리·전우치의 다음 던지기 예약도 두 입력 단계에서 사용할 수 있으며 이미 저장된 결과는 바꾸지 않는다. 군인의 강제 턴 종료는 두 단계 모두 적용한다.
 
 ## 12. SP와 쿨다운의 현재 단위
 
@@ -342,9 +344,9 @@ CharacterActiveResult result = CharacterSkillRegistry.TryUseActive(request);
 
 | 캐릭터 | 패시브 | 액티브 |
 |---|---|---|
-| `CHAR_001_1` 기본형 남자 | 첫 이동·착지·잡기 후 도 1칸을 별도 이동, 리타이어 시 재사용 | 다음 윷을 도/모 50%로 제한 (`WaitThrow`) |
+| `CHAR_001_1` 기본형 남자 | 첫 이동·착지·잡기 후 도 1칸을 별도 이동, 리타이어 시 재사용 | 다음 윷을 도/모 50%로 제한 (두 입력 대기 단계에서 예약) |
 | `CHAR_001_2` 기본형 여자 | 잡기 성공 또는 아군 업기 시 SP 1 획득 | 윷을 던진 뒤 스킬 추가 던지기 예약 |
-| `CHAR_002` 전우치 | 보드 진입 시 가장 가까운 아군에게 다음 턴까지 보호 | 다음 던지기 결과 한 개를 2배로 이동 (`WaitThrow`) |
+| `CHAR_002` 전우치 | 보드 진입 시 가장 가까운 아군에게 다음 턴까지 보호 | 다음 던지기 결과 한 개를 2배로 이동 (두 입력 대기 단계에서 예약) |
 | `CHAR_003` 홍길동 | 방어측이 더 많으면 분신 → 업힌 말 → 선두 말 순서로 공격측 수만큼 소모 | 분신 추가, 분신 피격 시 잡기 보상 차단 |
 | `CHAR_004` 구미호 | 말마다 일반 잡기 1회 방어 | 3번의 소유자 턴 동안 지정과 일반 착지 잡기 방어 |
 | `CHAR_005` 사무라이 | 뒷도 확률을 윷·모에 절반씩 분배 | 전방 최대 3칸을 이동하며 첫 꼭짓점·중앙에서 멈추고 경로의 모든 적을 리타이어, 추가 던지기 없음 |

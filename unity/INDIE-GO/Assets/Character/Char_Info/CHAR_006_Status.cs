@@ -26,9 +26,10 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
 
             // Sword Aura is a retirement effect, so capture-only defenses and
             // capture bonus throws do not apply.
+            int realPieceCount = CcEffectService.StackMembers(enemy.Piece).Count;
             ApplyActiveEffect(target: enemy.Piece);
             if (enemy.Piece.State == PieceState.Waiting)
-                retiredCount++;
+                retiredCount += realPieceCount;
         }
 
         if (retiredCount > 0)

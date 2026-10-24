@@ -9,8 +9,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
     // 현재 플레이어에게 추가 던지기를 부여하며 특정 말을 선택하지 않습니다.
     public override bool RequiresCasterPieceSelection => false;
 
-    protected override bool CanUseActiveDuringPhase(TurnPhase phase) => IsPlayerInputPhase(phase);
-
     public override int ModifyMoveCount(CharacterMoveRequest request)
     {
         // 이동 전에 크기를 기록해야 기존 스택의 단순 이동과 새 업기를 구별할 수 있습니다.

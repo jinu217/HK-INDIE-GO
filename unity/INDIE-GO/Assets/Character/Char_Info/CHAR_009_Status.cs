@@ -51,8 +51,9 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             if (!affectedTiles.Contains(reference.Piece.CurrentTileId))
                 continue;
 
+            int realPieceCount = CcEffectService.StackMembers(reference.Piece).Count;
             ApplyActiveEffect(target: reference.Piece);
-            if (reference.Piece.State == PieceState.Waiting) retiredCount++;
+            if (reference.Piece.State == PieceState.Waiting) retiredCount += realPieceCount;
         }
 
         UnityEngine.Debug.Log(

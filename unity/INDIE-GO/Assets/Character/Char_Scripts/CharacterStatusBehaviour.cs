@@ -258,7 +258,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     protected virtual bool CanUseActiveDuringPhase(TurnPhase phase)
     {
-        return phase == TurnPhase.WaitAction;
+        // 모든 캐릭터는 첫 던지기 전부터 입력 가능한 두 대기 단계에서 사용합니다.
+        return IsPlayerInputPhase(phase);
     }
 
     protected static bool IsPlayerInputPhase(TurnPhase phase) =>
@@ -346,9 +347,12 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     protected virtual bool CanReceivePassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index) => true;
 
     internal bool TryApplyPassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index = 0,
-        IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
-        target != null && CanReceivePassiveEffect(target, index) &&
-        ApplyConfiguredEffect(PassiveEffect(index), target, path, amount);
+        IReadOnlyList<BoardTileId> path = null, int? amount = null)
+    {
+        target = CcEffectService.StackLeader(target);
+        return target != null && CanReceivePassiveEffect(target, index) &&
+            ApplyConfiguredEffect(PassiveEffect(index), target, path, amount);
+    }
 
     protected bool ApplyPassiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
         IReadOnlyList<BoardTileId> path = null, int? amount = null) =>

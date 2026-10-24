@@ -80,8 +80,26 @@ namespace YutArena.InGame
     public sealed class PieceCcCollection
     {
         [SerializeField] private List<CcState> effects = new List<CcState>();
-        public IReadOnlyList<CcState> Effects => effects.AsReadOnly();
-        public CcState Get(CcDefine type) => effects.Find(effect => effect.Type == type);
+        [NonSerialized] private PlayerRuntimeData owner;
+        [NonSerialized] private PlayerRuntimeData.PieceRuntimeData piece;
+        internal void Bind(PlayerRuntimeData runtime, PlayerRuntimeData.PieceRuntimeData member)
+        { owner = runtime; piece = member; }
+        private PieceCcCollection Effective
+        {
+            get
+            {
+                if (owner != null && piece != null && piece.State == PieceState.InBoard &&
+                    piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId &&
+                    owner.TryGetPiece(piece.StackLeaderPieceId, out var leader) &&
+                    leader.State == PieceState.InBoard && leader.StackGroupId == piece.StackGroupId &&
+                    leader.StackLeaderPieceId == leader.PieceId)
+                    return leader.Cc;
+                return this;
+            }
+        }
+        internal IReadOnlyList<CcState> OwnEffects => effects;
+        public IReadOnlyList<CcState> Effects => Effective.effects.AsReadOnly();
+        public CcState Get(CcDefine type) => Effective.effects.Find(effect => effect.Type == type);
         public bool Has(CcDefine type) => Get(type) != null;
         internal void Add(CcState state) { effects.Add(state); }
         internal void Remove(CcState state) { effects.Remove(state); }
@@ -94,7 +112,8 @@ namespace YutArena.InGame
                 foreach (var type in new[] { CcDefine.Kill, CcDefine.Retire, CcDefine.Sturn,
                     CcDefine.Binding, CcDefine.Silence, CcDefine.Robot_part })
                     if (Has(type)) return type;
-                return effects.Count == 0 ? CcDefine.None : effects[0].Type;
+                var current = Effective.effects;
+                return current.Count == 0 ? CcDefine.None : current[0].Type;
             }
         }
     }
@@ -113,10 +132,68 @@ namespace YutArena.InGame
         public static string GetSkillId(CcDefine type) => type == CcDefine.Capture ? nameof(CcDefine.Capture) :
             type == CcDefine.Robot_part ? nameof(CcDefine.Robot_part) : type.ToString();
         private static int windMoveDepth;
+        private static bool resolvingCapture;
+        private static readonly Dictionary<(int attacker, int attackingPiece, int defender, int group),
+            CharacterCaptureDecision> stackCaptures =
+            new Dictionary<(int, int, int, int), CharacterCaptureDecision>();
+        private static PlayerRuntimeData.PieceRuntimeData pendingCaptureTarget;
+        private static CcDefine pendingCaptureType;
         internal static bool IsResolvingWindMove => windMoveDepth > 0;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetRuntime() { Changed = null; windMoveDepth = 0; }
+        private static void ResetRuntime() { Changed = null; windMoveDepth = 0; EndCaptureResolution(); }
+
+        internal static void BeginCaptureResolution()
+        { resolvingCapture = true; stackCaptures.Clear(); pendingCaptureTarget = null; }
+        internal static void EndCaptureResolution()
+        { resolvingCapture = false; stackCaptures.Clear(); pendingCaptureTarget = null; }
+        internal static bool TryGetCaptureDecision(CharacterCaptureRequest request,
+            PlayerRuntimeData.PieceRuntimeData leader, out CharacterCaptureDecision decision)
+        {
+            decision = default;
+            if (!resolvingCapture || leader == null || !leader.IsStacked ||
+                !stackCaptures.TryGetValue((request.AttackerPlayerId, request.AttackerPieceId,
+                    request.TargetPlayerId, leader.StackGroupId), out decision)) return false;
+            // 첫 구성원의 Retire가 부품으로 대체됐다면 뒤의 구성원도 전환 결과를 따릅니다.
+            if (decision == CharacterCaptureDecision.Proceed && leader.Cc.Has(CcDefine.Robot_part))
+                decision = CharacterCaptureDecision.ConvertToParts;
+            return true;
+        }
+        internal static void RememberCaptureDecision(CharacterCaptureRequest request,
+            PlayerRuntimeData.PieceRuntimeData leader, CharacterCaptureDecision decision)
+        {
+            if (resolvingCapture && leader != null && leader.IsStacked)
+                stackCaptures[(request.AttackerPlayerId, request.AttackerPieceId,
+                    request.TargetPlayerId, leader.StackGroupId)] = decision;
+        }
+        internal static void PrepareCapture(CharacterCaptureRequest request,
+            PlayerRuntimeData.PieceRuntimeData target, CharacterCaptureDecision decision)
+        {
+            if (!resolvingCapture) return;
+            pendingCaptureTarget = decision == CharacterCaptureDecision.Proceed ||
+                decision == CharacterCaptureDecision.LimitRetireToAttackingCount ? target : null;
+            pendingCaptureType = request.WouldGrantExtraThrow &&
+                decision != CharacterCaptureDecision.LimitRetireToAttackingCount ? CcDefine.Kill : CcDefine.Retire;
+        }
+
+        internal static void BindPieces(PlayerController owner)
+        {
+            if (owner?.RuntimeData == null) return;
+            foreach (var member in owner.RuntimeData.Pieces) member.Cc.Bind(owner.RuntimeData, member);
+        }
+
+        internal static List<PlayerRuntimeData.PieceRuntimeData> StackMembers(
+            PlayerRuntimeData.PieceRuntimeData piece)
+        {
+            var members = new List<PlayerRuntimeData.PieceRuntimeData>();
+            if (piece == null) return members;
+            var owner = FindOwner(piece);
+            foreach (var member in owner != null ? owner.RuntimeData.Pieces :
+                (IReadOnlyList<PlayerRuntimeData.PieceRuntimeData>)new[] { piece })
+                if (member == piece || (piece.IsStacked && member.State == PieceState.InBoard &&
+                    member.StackGroupId == piece.StackGroupId)) members.Add(member);
+            return members;
+        }
 
         public static bool CanMove(PlayerRuntimeData.PieceRuntimeData piece) =>
             piece != null && piece.State != PieceState.Goal &&
@@ -136,7 +213,9 @@ namespace YutArena.InGame
             if (piece != null && piece.IsStacked)
             {
                 var owner = FindOwner(piece);
-                if (owner != null && owner.TryGetPieceData(piece.StackLeaderPieceId, out var leader))
+                if (owner != null && owner.TryGetPieceData(piece.StackLeaderPieceId, out var leader) &&
+                    leader.State == PieceState.InBoard && leader.StackGroupId == piece.StackGroupId &&
+                    leader.StackLeaderPieceId == leader.PieceId)
                     return leader;
             }
             return piece;
@@ -159,6 +238,9 @@ namespace YutArena.InGame
             if (type != CcDefine.None && type != CcDefine.Move_plus && value <= 0)
                 throw new ArgumentOutOfRangeException(nameof(value));
             if (charges < -1 || charges == 0) throw new ArgumentOutOfRangeException(nameof(charges));
+            if ((type == CcDefine.Kill || type == CcDefine.Retire) && pendingCaptureTarget == piece)
+            { type = pendingCaptureType; pendingCaptureTarget = null; }
+            piece = StackLeader(piece);
             if (type == CcDefine.None) { Clear(piece); return true; }
 
             PlayerController owner = FindOwner(piece);
@@ -206,10 +288,28 @@ namespace YutArena.InGame
             }
             if (type == CcDefine.Kill || type == CcDefine.Retire)
             {
-                int oldGroup = piece.StackGroupId;
-                Clear(piece);
-                piece.ApplyCapturedPosition();
-                CcBoardEffects.NormalizeStack(owner, oldGroup);
+                // 한 스택은 함께 퇴장합니다. 잡기 보너스 마커는 리더에만 남깁니다.
+                var members = StackMembers(piece);
+                foreach (var member in members)
+                {
+                    foreach (var old in new List<CcState>(member.Cc.OwnEffects))
+                    {
+                        member.Cc.Remove(old);
+                        Changed?.Invoke(member, old, false);
+                    }
+                    member.ApplyCapturedPosition();
+                }
+                foreach (var member in members)
+                {
+                    var captured = new CcState(member == piece ? type : CcDefine.Retire,
+                        0, 1, sourcePlayerId, sourcePieceId, BoardTileId.None, null, -1);
+                    member.Cc.Add(captured);
+                    Changed?.Invoke(member, captured, true);
+                    if (owner != null)
+                        CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, member.PieceId);
+                    CcBoardEffects.RefreshClones(owner, member);
+                }
+                return true;
             }
             else
             {
@@ -243,15 +343,6 @@ namespace YutArena.InGame
             bool succeeded = true;
             switch (type)
             {
-                case CcDefine.Kill:
-                case CcDefine.Retire:
-                    if (owner != null) CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, piece.PieceId);
-                    break;
-                case CcDefine.Robot_part:
-                    int oldGroup = piece.StackGroupId;
-                    piece.ClearStack();
-                    CcBoardEffects.NormalizeStack(owner, oldGroup);
-                    break;
                 case CcDefine.Stack_fake: CcBoardEffects.RefreshClones(owner, piece); break;
                 case CcDefine.Get_throw:
                     for (int i = 0; i < value; i++) turnsManager.GrantSkillExtraThrow();
@@ -269,12 +360,14 @@ namespace YutArena.InGame
 
         public static void Remove(PlayerRuntimeData.PieceRuntimeData piece, CcDefine type)
         {
+            piece = StackLeader(piece);
             foreach (CcState state in Snapshot(piece))
                 if (state.Type == type) Remove(piece, state);
         }
 
         private static void Remove(PlayerRuntimeData.PieceRuntimeData piece, CcState state)
         {
+            piece = StackLeader(piece);
             if (piece == null || !Contains(piece, state)) return;
             piece.Cc.Remove(state);
             if (state.Type == CcDefine.Stack_fake) CcBoardEffects.RefreshClones(FindOwner(piece), piece);
@@ -284,6 +377,7 @@ namespace YutArena.InGame
         public static void Clear(PlayerRuntimeData.PieceRuntimeData piece)
         {
             if (piece == null) return;
+            piece = StackLeader(piece);
             foreach (CcState state in Snapshot(piece)) Remove(piece, state);
         }
 
@@ -304,6 +398,7 @@ namespace YutArena.InGame
         public static CharacterCaptureDecision ResolveCapture(PlayerRuntimeData.PieceRuntimeData piece,
             CharacterCaptureRequest request)
         {
+            piece = StackLeader(piece);
             if (piece == null) return CharacterCaptureDecision.Proceed;
             if (!IsTargetable(piece)) return CharacterCaptureDecision.Prevent;
             var guardPiece = piece;
@@ -320,6 +415,7 @@ namespace YutArena.InGame
 
         internal static void ConsumeClones(PlayerRuntimeData.PieceRuntimeData piece, int count)
         {
+            piece = StackLeader(piece);
             CcState clone = piece?.Cc.Get(CcDefine.Stack_fake);
             if (clone == null || count <= 0) return;
             clone.SetValue(Math.Max(0, clone.Value - count));
@@ -356,6 +452,7 @@ namespace YutArena.InGame
             if (owner == null || owner.RuntimeData == null) return;
             foreach (var piece in owner.RuntimeData.Pieces)
             {
+                if (piece != StackLeader(piece)) continue;
                 bool retireExpiredParts = false;
                 foreach (CcState state in Snapshot(piece))
                 {
@@ -415,7 +512,15 @@ namespace YutArena.InGame
                         if (piece.IsFinished) piece.State = PieceState.Waiting;
             }
             if (result.EndTurnAfterResolution)
-                turns.EndTurnAfterSkill(request.PlayerId);
+            {
+                var context = turns.CurrentTurn;
+                bool beforeThrow = !context.isGameEnded &&
+                    (int)context.currentPlayer == request.PlayerId && context.currentPhase == TurnPhase.WaitThrow;
+                // 외부 종료 API는 WaitAction만 받습니다. 던지기 전 종료도 같은 공개 API로 전달합니다.
+                if (beforeThrow) context.currentPhase = TurnPhase.WaitAction;
+                if (!turns.EndTurnAfterSkill(request.PlayerId) && beforeThrow)
+                    context.currentPhase = TurnPhase.WaitThrow;
+            }
         }
 
         public static void OnMoveCompleted(CharacterMoveRecord record)
@@ -423,10 +528,14 @@ namespace YutArena.InGame
             var movedOwner = FindOwner(GetPiece(record.PlayerId, record.PieceId));
             var movedPiece = GetPiece(record.PlayerId, record.PieceId);
             if (movedOwner != null && movedPiece != null)
+            {
+                DiscardCarriedEffects(movedOwner);
                 CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
-            //수정: 부적은 지정된 아군 한 말의 효과이며 업기 시 다른 말로 복사하지 않습니다.
+            }
+            // 상태는 리더에만 저장하고 업힌 말은 같은 상태를 조회합니다.
             foreach (var piece in PlayerPieces(record.PlayerId))
             {
+                if (piece != StackLeader(piece)) continue;
                 CcState parts = piece.Cc.Get(CcDefine.Robot_part);
                 if (parts != null && piece.PieceId != record.PieceId &&
                     record.To == parts.Tile)
@@ -436,19 +545,26 @@ namespace YutArena.InGame
                         !partsOwner.TryGetPieceData(record.PieceId, out var arrived) ||
                         arrived.State != PieceState.InBoard)
                         continue;
-                    piece.MoveTo(parts.Tile);
+                    var rescued = StackMembers(piece);
                     Remove(piece, parts);
                     int groupId = arrived.IsStacked
                         ? arrived.StackGroupId : partsOwner.RuntimeData.CreateStackGroupId();
                     int leaderId = arrived.IsStacked
                         ? arrived.StackLeaderPieceId : arrived.PieceId;
                     arrived.SetStackGroup(groupId, leaderId);
-                    piece.SetStackGroup(groupId, leaderId);
-                    CharacterSkillRegistry.NotifyPieceEnteredBoard(record.PlayerId, piece.PieceId);
+                    foreach (var member in rescued)
+                    {
+                        member.MoveTo(parts.Tile);
+                        member.SetStackGroup(groupId, leaderId);
+                        CharacterSkillRegistry.NotifyPieceEnteredBoard(record.PlayerId, member.PieceId);
+                    }
                 }
             }
             if (movedOwner != null && movedPiece != null)
+            {
+                DiscardCarriedEffects(movedOwner);
                 CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
+            }
 
             if (!CharacterSkillRegistry.AreSkillsEnabled ||
                 record.IsSimpleMove || IsResolvingWindMove || movedPiece == null ||
@@ -464,6 +580,7 @@ namespace YutArena.InGame
                 if (!CharacterBoardUtility.AreAllies(record.PlayerId, windOwner.PlayerId)) continue;
                 foreach (var sourcePiece in windOwner.RuntimeData.Pieces)
                 {
+                    if (sourcePiece != StackLeader(sourcePiece)) continue;
                     CcState wind = sourcePiece.Cc.Get(CcDefine.WindPath);
                     if (wind == null || !new List<BoardTileId>(wind.Path).Contains(record.To)) continue;
                     if (!CharacterSkillRegistry.TryGet(windOwner.PlayerId, sourcePiece.PieceId, out var source))
@@ -482,6 +599,21 @@ namespace YutArena.InGame
         public static void RewardMarks(PlayerRuntimeData.PieceRuntimeData target,
             CharacterCaptureRequest request) { }
 
+        private static void DiscardCarriedEffects(PlayerController owner)
+        {
+            // 업기 전의 독립 상태/분신은 버리고 리더 상태만 사용합니다.
+            foreach (var member in owner.RuntimeData.Pieces)
+            {
+                if (member == StackLeader(member)) continue;
+                foreach (var old in new List<CcState>(member.Cc.OwnEffects))
+                {
+                    member.Cc.Remove(old);
+                    Changed?.Invoke(member, old, false);
+                }
+                CcBoardEffects.RefreshClones(owner, member);
+            }
+        }
+
         internal static PlayerController FindOwner(PlayerRuntimeData.PieceRuntimeData piece)
         {
             if (piece == null) return null;
@@ -489,7 +621,10 @@ namespace YutArena.InGame
             if (players == null) return null;
             foreach (var owner in players.ActivePlayers)
                 if (owner.TryGetPieceData(piece.PieceId, out var candidate) && ReferenceEquals(candidate, piece))
+                {
+                    BindPieces(owner);
                     return owner;
+                }
             return null;
         }
 

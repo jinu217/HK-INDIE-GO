@@ -217,6 +217,8 @@ public sealed class CharacterPieceInteractionController : MonoBehaviour
     private bool IsSkillCandidate(DebugPieceView view)
     {
         if (view == null || activeButton == null) return false;
+        var piece = CcEffectService.GetPiece(view.PlayerId, view.PieceId);
+        if (piece != CcEffectService.StackLeader(piece)) return false;
         if (activeButton.IsSelectingTarget)
             return CharacterSkillRegistry.TryGet((int)turns.CurrentTurn.currentPlayer,
                 activeButton.CurrentCasterPieceId, out var caster) &&

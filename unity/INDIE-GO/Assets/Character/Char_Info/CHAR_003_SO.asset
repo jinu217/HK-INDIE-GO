@@ -21,8 +21,7 @@ MonoBehaviour:
   pieceImage: {fileID: -3371663049945760498, guid: bc762ed970b3e67478d9e400c91e88c6, type: 3}
   passive_Icon: {fileID: -6568617476166714493, guid: 970b7dd8690d41840964069e1d533eeb, type: 3}
   passive_Name: "\uC758\uC801\uC758 \uAE30\uAC1C"
-  passive_Desc: "\uC7A1\uD790 \uC2DC, \uC801\uC758 \uB9D0\uC758 \uC22B\uC790\uB9CC\uD07C\uB9CC
-    \uB9AC\uD0C0\uC774\uC5B4"
+  passive_Desc: "자신의 스택 수(분신 포함)가 공격 말 수보다 많으면 실제 말 전체가 생존합니다. 분신은 공격 말 수만큼 먼저 소모됩니다."
   active_Icon: {fileID: -4737323601079526532, guid: a86120c59dc969f4f9d6d5a12e2368e3, type: 3}
   active_Name: "\uBD84\uC2E0\uC220"
   active_Desc: "5\uD134\uB9C8\uB2E4 \uC0AC\uC6A9 \uAC00\uB2A5. \uC790\uC2E0\uC758

@@ -72,9 +72,4 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
         return CharacterActiveResult.Success("The next throw is limited to Do or Mo at 50% each.");
     }
 
-    protected override bool CanUseActiveDuringPhase(TurnPhase phase)
-    {
-        // 윷/모 또는 잡기로 다시 얻은 던지기 기회에도 사용할 수 있습니다.
-        return phase == TurnPhase.WaitThrow;
-    }
 }

@@ -61,7 +61,7 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
             return;
 
         PlayerRuntimeData.PieceRuntimeData target = nearest.Value.Piece;
-        //수정: 선택한 아군 한 말에만 부여하며 자신이나 업힌 말로 확산하지 않습니다.
+        // 선택한 아군 리더에 저장하며 업힌 말도 리더의 보호를 따릅니다.
         // 한 번 맞을 때가 아니라 대상의 다음 턴이 시작될 때까지 보호합니다.
         if (!ApplyPassiveEffect(target: target))
             return;
@@ -119,11 +119,6 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
     public override void OnOwnerTurnEnded()
     {
         DoubleMoves.Remove(PlayerId);
-    }
-
-    protected override bool CanUseActiveDuringPhase(TurnPhase phase)
-    {
-        return phase == TurnPhase.WaitThrow;
     }
 
     protected override CharacterActiveResult ExecuteActive(

@@ -37,9 +37,10 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
             {
                 if (enemy.Piece.CurrentTileId == tile)
                 {
+                    int realPieceCount = CcEffectService.StackMembers(enemy.Piece).Count;
                     ApplyActiveEffect(1, enemy.Piece);
                     if (enemy.Piece.State != PieceState.Waiting) continue;
-                    retiredCount++;
+                    retiredCount += realPieceCount;
                 }
             }
         }

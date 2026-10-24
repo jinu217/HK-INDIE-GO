@@ -101,6 +101,7 @@ public static class CharacterSkillRegistry
         ActiveCooldowns.Clear();
         SkillPoints.Clear();
         settingsOwner = null;
+        CcEffectService.EndCaptureResolution();
         SkillPointRequested = null;
         SkillPointChanged = null;
         MoveCompleted = null;
@@ -126,6 +127,7 @@ public static class CharacterSkillRegistry
                 $"Player {owner.PlayerId} has no piece with ID {pieceId}.");
 
         Behaviours[(owner.PlayerId, pieceId)] = behaviour;
+        CcEffectService.BindPieces(owner);
         return pieceId;
     }
 
@@ -154,6 +156,7 @@ public static class CharacterSkillRegistry
 
     public static int ModifyMoveCount(CharacterMoveRequest request)
     {
+        CcEffectService.BeginCaptureResolution();
         if (!AreSkillsEnabled ||
             !TryGet(request.PlayerId, request.PieceId, out CharacterStatusBehaviour behaviour))
             return CcEffectService.ResolveMove(CcEffectService.GetPiece(request.PlayerId, request.PieceId), request);
@@ -188,15 +191,26 @@ public static class CharacterSkillRegistry
 
     public static CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
-        return AreSkillsEnabled &&
-            TryGet(request.TargetPlayerId, request.TargetPieceId, out CharacterStatusBehaviour target)
-            ? target.EvaluateIncomingCapture(request)
-            : CcEffectService.ResolveCapture(CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId), request);
+        var piece = CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId);
+        var leader = CcEffectService.StackLeader(piece);
+        var effective = new CharacterCaptureRequest(request.AttackerPlayerId, request.AttackerPieceId,
+            request.TargetPlayerId, leader != null ? leader.PieceId : request.TargetPieceId,
+            request.AttackingPieceCount, request.WouldGrantExtraThrow);
+        if (!CcEffectService.TryGetCaptureDecision(effective, leader, out var decision))
+        {
+            decision = AreSkillsEnabled && TryGet(effective.TargetPlayerId, effective.TargetPieceId, out var target)
+                ? target.EvaluateIncomingCapture(effective) : CcEffectService.ResolveCapture(leader, effective);
+            CcEffectService.RememberCaptureDecision(effective, leader, decision);
+        }
+        CcEffectService.PrepareCapture(effective, piece, decision);
+        return decision;
     }
 
     public static void NotifyPieceEnteredBoard(int playerId, int pieceId)
     {
-        if (AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
+        var piece = CcEffectService.GetPiece(playerId, pieceId);
+        if (piece == CcEffectService.StackLeader(piece) &&
+            AreSkillsEnabled && TryGet(playerId, pieceId, out CharacterStatusBehaviour behaviour))
             behaviour.OnPieceEnteredBoard();
     }
 
@@ -208,7 +222,10 @@ public static class CharacterSkillRegistry
 
     public static void NotifyMoveCompleted(CharacterMoveRecord record)
     {
-        if (AreSkillsEnabled && TryGet(record.PlayerId, record.PieceId, out CharacterStatusBehaviour behaviour))
+        CcEffectService.EndCaptureResolution();
+        var moved = CcEffectService.GetPiece(record.PlayerId, record.PieceId);
+        if (moved == CcEffectService.StackLeader(moved) &&
+            AreSkillsEnabled && TryGet(record.PlayerId, record.PieceId, out CharacterStatusBehaviour behaviour))
         {
             behaviour.OnMoveCompleted(record);
             if (CcEffectService.GetPiece(record.PlayerId, record.PieceId)?.State == PieceState.Goal)
@@ -217,7 +234,7 @@ public static class CharacterSkillRegistry
 
         if (AreSkillsEnabled)
             foreach (CharacterStatusBehaviour candidate in SnapshotBehaviours())
-                candidate.OnAnyPieceMoveCompleted(record);
+                if (IsStackLeader(candidate)) candidate.OnAnyPieceMoveCompleted(record);
 
         CcEffectService.OnMoveCompleted(record);
         MoveCompleted?.Invoke(record);
@@ -241,14 +258,14 @@ public static class CharacterSkillRegistry
         GrantBaseTurnSkillPoint(playerId);
 
         foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
-            behaviour.OnOwnerTurnStarted();
+            if (IsStackLeader(behaviour)) behaviour.OnOwnerTurnStarted();
     }
 
     public static void NotifyOwnerTurnEnded(int playerId)
     {
         if (AreSkillsEnabled)
             foreach (CharacterStatusBehaviour behaviour in SnapshotForPlayer(playerId))
-                behaviour.OnOwnerTurnEnded();
+                if (IsStackLeader(behaviour)) behaviour.OnOwnerTurnEnded();
         CcEffectService.EndOwnerTurn(playerId);
     }
 
@@ -414,6 +431,12 @@ public static class CharacterSkillRegistry
                existing != null && existing != behaviour;
     }
 
+    private static bool IsStackLeader(CharacterStatusBehaviour behaviour)
+    {
+        var piece = CcEffectService.GetPiece(behaviour.PlayerId, behaviour.PieceId);
+        return piece == CcEffectService.StackLeader(piece);
+    }
+
     private static int FindAvailablePieceId(PlayerController owner)
     {
         for (int pieceId = 0; pieceId < owner.RuntimeData.Pieces.Count; pieceId++)
@@ -514,7 +537,7 @@ public enum CharacterCaptureDecision
 {
     Proceed = 0,
     Prevent,
-    LimitRetireToAttackingCount,
+    LimitRetireToAttackingCount, // 기존 직렬화/외부 API 호환용. 현재 캐릭터는 부분 퇴장을 반환하지 않습니다.
     ConsumeCloneWithoutBonus,
     ConvertToParts
 }
