@@ -242,6 +242,8 @@ namespace YutArena.InGame
             { type = pendingCaptureType; pendingCaptureTarget = null; }
             piece = StackLeader(piece);
             if (type == CcDefine.None) { Clear(piece); return true; }
+            // 부품은 보드에 남지만 효과를 주고받지 않습니다. 구출/만료만 상태를 끝냅니다.
+            if (piece.Cc.Has(CcDefine.Robot_part)) return false;
 
             PlayerController owner = FindOwner(piece);
             int effectivePieceId = piece.IsStacked ? piece.StackLeaderPieceId : piece.PieceId;
@@ -288,27 +290,7 @@ namespace YutArena.InGame
             }
             if (type == CcDefine.Kill || type == CcDefine.Retire)
             {
-                // 한 스택은 함께 퇴장합니다. 잡기 보너스 마커는 리더에만 남깁니다.
-                var members = StackMembers(piece);
-                foreach (var member in members)
-                {
-                    foreach (var old in new List<CcState>(member.Cc.OwnEffects))
-                    {
-                        member.Cc.Remove(old);
-                        Changed?.Invoke(member, old, false);
-                    }
-                    member.ApplyCapturedPosition();
-                }
-                foreach (var member in members)
-                {
-                    var captured = new CcState(member == piece ? type : CcDefine.Retire,
-                        0, 1, sourcePlayerId, sourcePieceId, BoardTileId.None, null, -1);
-                    member.Cc.Add(captured);
-                    Changed?.Invoke(member, captured, true);
-                    if (owner != null)
-                        CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, member.PieceId);
-                    CcBoardEffects.RefreshClones(owner, member);
-                }
+                RetireStack(owner, piece, type, sourcePlayerId, sourcePieceId);
                 return true;
             }
             else
@@ -356,6 +338,32 @@ namespace YutArena.InGame
             if (type == CcDefine.Get_throw || type == CcDefine.Get_point ||
                 type == CcDefine.Move_plus || IsPathMove(type)) Remove(piece, state);
             return succeeded;
+        }
+
+        private static void RetireStack(PlayerController owner, PlayerRuntimeData.PieceRuntimeData piece,
+            CcDefine type, int sourcePlayerId = -1, int sourcePieceId = -1)
+        {
+            // 한 스택은 함께 퇴장합니다. 잡기 보너스 마커는 리더에만 남깁니다.
+            var members = StackMembers(piece);
+            foreach (var member in members)
+            {
+                foreach (var old in new List<CcState>(member.Cc.OwnEffects))
+                {
+                    member.Cc.Remove(old);
+                    Changed?.Invoke(member, old, false);
+                }
+                member.ApplyCapturedPosition();
+            }
+            foreach (var member in members)
+            {
+                var captured = new CcState(member == piece ? type : CcDefine.Retire,
+                    0, 1, sourcePlayerId, sourcePieceId, BoardTileId.None, null, -1);
+                member.Cc.Add(captured);
+                Changed?.Invoke(member, captured, true);
+                if (owner != null)
+                    CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, member.PieceId);
+                CcBoardEffects.RefreshClones(owner, member);
+            }
         }
 
         public static void Remove(PlayerRuntimeData.PieceRuntimeData piece, CcDefine type)
@@ -464,9 +472,9 @@ namespace YutArena.InGame
                     Remove(piece, state);
                 }
 
-                // 같은 턴에 만료되는 보호를 먼저 제거하고 부품 퇴장을 판정합니다.
+                // 구조 기한이 끝난 부품은 방어/패시브를 다시 판정하지 않고 함께 퇴장합니다.
                 if (retireExpiredParts)
-                    CcBoardEffects.Retire(new CharacterPieceReference(owner, piece), false);
+                    RetireStack(owner, piece, CcDefine.Retire);
             }
         }
 
@@ -533,24 +541,22 @@ namespace YutArena.InGame
                 CcBoardEffects.EnforceCloneCapacity(movedOwner, movedPiece);
             }
             // 상태는 리더에만 저장하고 업힌 말은 같은 상태를 조회합니다.
-            foreach (var piece in PlayerPieces(record.PlayerId))
+            // 후속 이동으로 이미 떠났거나 부품이 된 말의 이전 도착 알림은 구출할 수 없습니다.
+            if (movedOwner != null && movedPiece != null && movedPiece.State == PieceState.InBoard &&
+                !movedPiece.Cc.Has(CcDefine.Robot_part) && movedPiece.CurrentTileId == record.To &&
+                record.Path.Count > 0 && record.Path[record.Path.Count - 1] == record.To)
             {
-                if (piece != StackLeader(piece)) continue;
-                CcState parts = piece.Cc.Get(CcDefine.Robot_part);
-                if (parts != null && piece.PieceId != record.PieceId &&
-                    record.To == parts.Tile)
+                foreach (var piece in movedOwner.RuntimeData.Pieces)
                 {
-                    PlayerController partsOwner = FindOwner(piece);
-                    if (partsOwner == null ||
-                        !partsOwner.TryGetPieceData(record.PieceId, out var arrived) ||
-                        arrived.State != PieceState.InBoard)
-                        continue;
+                    if (piece != StackLeader(piece)) continue;
+                    CcState parts = piece.Cc.Get(CcDefine.Robot_part);
+                    if (parts == null || piece.PieceId == record.PieceId || record.To != parts.Tile) continue;
+                    var arrived = StackLeader(movedPiece);
                     var rescued = StackMembers(piece);
                     Remove(piece, parts);
                     int groupId = arrived.IsStacked
-                        ? arrived.StackGroupId : partsOwner.RuntimeData.CreateStackGroupId();
-                    int leaderId = arrived.IsStacked
-                        ? arrived.StackLeaderPieceId : arrived.PieceId;
+                        ? arrived.StackGroupId : movedOwner.RuntimeData.CreateStackGroupId();
+                    int leaderId = arrived.PieceId;
                     arrived.SetStackGroup(groupId, leaderId);
                     foreach (var member in rescued)
                     {

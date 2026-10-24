@@ -1314,6 +1314,7 @@ internal static class CcArchitectureVerifier
                     VerifyNavigationFlow(id, skill, manager, movement, turns, p1, p2);
                 if (id == "002" || id == "003" || id == "004" || id == "006" || id == "009")
                     VerifyStackCharacter(id, skill, movement, p1, p2);
+                if (id == "009") VerifyRobotPartsLifecycle(skill, movement, turns, p1, p2);
                 CharacterSkillRegistry.Unregister(skill);
                 UnityEngine.Object.DestroyImmediate(host);
             }
@@ -1563,6 +1564,138 @@ internal static class CcArchitectureVerifier
             UnityEngine.Object.DestroyImmediate(host);
             owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
         }
+    }
+
+    private static void VerifyRobotPartsLifecycle(CharacterStatusBehaviour skill, PieceMovementManager movement,
+        TestTurnManager turns, PlayerController owner, PlayerController attacker)
+    {
+        var robot = owner.RuntimeData.Pieces[0];
+        var ally = owner.RuntimeData.Pieces[1];
+        Action prepare = () =>
+        {
+            PrepareActiveAttempt(turns, owner, attacker);
+            skill.OnPieceRetired();
+            robot.MoveTo(BoardTileId.Outer04);
+            CcEffectService.Apply(robot, CcDefine.Retire);
+        };
+
+        PrepareActiveAttempt(turns, owner, attacker);
+        skill.OnPieceRetired();
+        robot.MoveTo(BoardTileId.Outer04);
+        Check("Robot actual Yut retirement leaves Parts at the original board tile",
+            movement.TryMovePiece(2, 0, 4) && robot.State == PieceState.InBoard &&
+            robot.CurrentTileId == BoardTileId.Outer04 && robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 3 &&
+            !CcEffectService.ConsumeCapture(robot));
+        Check("Parts remains a board piece but cannot move, cast or be selected",
+            CharacterBoardUtility.GetPiecesOnBoard(UnityEngine.Object.FindFirstObjectByType<PlayerManager>())
+                .Exists(reference => ReferenceEquals(reference.Piece, robot)) &&
+            !movement.TryMovePiece(1, 0, 1) && !CharacterSkillRegistry.CanUseActive(1, 0) &&
+            !CharacterSkillRegistry.IsTargetable(1, 0));
+        attacker.RuntimeData.Pieces[1].MoveTo(BoardTileId.Outer03);
+        Check("Enemy landing cannot capture or remove existing Parts",
+            movement.TryMovePiece(2, 1, 1) && robot.State == PieceState.InBoard &&
+            robot.Cc.Has(CcDefine.Robot_part) && !CcEffectService.ConsumeCapture(robot));
+
+        foreach (CcDefine effect in new[] { CcDefine.Retire, CcDefine.Kill, CcDefine.Sturn,
+            CcDefine.Binding, CcDefine.protect, CcDefine.Stack_fake, CcDefine.Move_plus,
+            CcDefine.Peace_move, CcDefine.Get_point, CcDefine.Get_throw, CcDefine.Robot_part })
+        {
+            prepare();
+            var parts = robot.Cc.Get(CcDefine.Robot_part);
+            int points = CharacterSkillRegistry.GetSkillPoints(1);
+            int throws = (int)Get(turns, "pendingSkillThrows");
+            Check("Parts ignores direct interaction " + effect,
+                !CcEffectService.Apply(robot, effect, turns: 2, sourcePlayerId: 2, sourcePieceId: 0,
+                    path: new[] { BoardTileId.Outer03 }) &&
+                robot.State == PieceState.InBoard && robot.CurrentTileId == BoardTileId.Outer04 &&
+                robot.Cc.Effects.Count == 1 && ReferenceEquals(robot.Cc.Get(CcDefine.Robot_part), parts) &&
+                parts.RemainingOwnerTurns == 3 && CharacterSkillRegistry.GetSkillPoints(1) == points &&
+                (int)Get(turns, "pendingSkillThrows") == throws);
+        }
+
+        var attackerHost = new GameObject("Robot area interaction verifier");
+        attackerHost.transform.SetParent(attacker.transform);
+        var attackingRobot = attackerHost.AddComponent<CHAR_009_Status>();
+        try
+        {
+            attackingRobot.Initialize(skill.Data);
+            typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(attackingRobot, null);
+            prepare();
+            var existingParts = robot.Cc.Get(CcDefine.Robot_part);
+            attacker.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer03);
+            turns.CurrentTurn.currentPlayer = PlayerSlot.Player2;
+            CharacterSkillRegistry.RequestSkillPoint(2, 5);
+            Check("Another robot's actual area self-destruct cannot remove existing Parts",
+                CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(2, 0)).Succeeded &&
+                robot.State == PieceState.InBoard && robot.CurrentTileId == BoardTileId.Outer04 &&
+                ReferenceEquals(robot.Cc.Get(CcDefine.Robot_part), existingParts) && existingParts.RemainingOwnerTurns == 3);
+        }
+        finally
+        {
+            CharacterSkillRegistry.Unregister(attackingRobot);
+            UnityEngine.Object.DestroyImmediate(attackerHost);
+        }
+
+        prepare();
+        var beginTurn = typeof(TestTurnManager).GetMethod("BeginTurnFor", BindingFlags.Instance | BindingFlags.NonPublic);
+        beginTurn.Invoke(turns, new object[] { PlayerSlot.Player1 });
+        Check("Parts survives the owner's first complete rescue turn",
+            robot.State == PieceState.InBoard && robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 2);
+        beginTurn.Invoke(turns, new object[] { PlayerSlot.Player2 });
+        Check("An opponent's turn does not shorten Parts lifetime",
+            robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 2);
+        beginTurn.Invoke(turns, new object[] { PlayerSlot.Player1 });
+        Check("Parts survives the owner's second complete rescue turn",
+            robot.State == PieceState.InBoard && robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 1);
+        beginTurn.Invoke(turns, new object[] { PlayerSlot.Player1 });
+        Check("Unrescued Parts retires before the third owner turn without a capture bonus",
+            robot.State == PieceState.Waiting && !robot.Cc.Has(CcDefine.Robot_part) &&
+            robot.Cc.Has(CcDefine.Retire) && !CcEffectService.ConsumeCapture(robot));
+
+        PrepareActiveAttempt(turns, owner, attacker);
+        skill.OnPieceRetired();
+        robot.MoveTo(BoardTileId.Outer04);
+        CcEffectService.Apply(robot, CcDefine.Robot_part, turns: 3);
+        for (int tick = 0; tick < 3; tick++) CcEffectService.TickOwnerTurn(owner);
+        Check("Parts expiry cannot trigger a new Parts passive even when granted directly",
+            robot.State == PieceState.Waiting && !robot.Cc.Has(CcDefine.Robot_part));
+
+        prepare();
+        ally.MoveTo(BoardTileId.Outer03);
+        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer02,
+            BoardTileId.Outer04, new[] { BoardTileId.Outer04 }));
+        Check("A stale move notification cannot revive Parts from a different tile",
+            robot.Cc.Has(CcDefine.Robot_part) && !robot.IsStacked && !ally.IsStacked);
+
+        prepare();
+        ally.MoveTo(BoardTileId.Outer03);
+        CcEffectService.Apply(ally, CcDefine.Robot_part, turns: 3);
+        ally.MoveTo(BoardTileId.Outer04);
+        CharacterSkillRegistry.NotifyMoveCompleted(new CharacterMoveRecord(1, 1, BoardTileId.Outer03,
+            BoardTileId.Outer04, new[] { BoardTileId.Outer04 }));
+        Check("Another inactive Parts piece cannot act as a rescuer",
+            robot.Cc.Has(CcDefine.Robot_part) && ally.Cc.Has(CcDefine.Robot_part) && !robot.IsStacked && !ally.IsStacked);
+
+        prepare();
+        ally.MoveTo(BoardTileId.Outer02);
+        Check("Passing through Parts without stopping does not revive it",
+            movement.TryMovePiece(1, 1, 3) && robot.Cc.Has(CcDefine.Robot_part) && !robot.IsStacked);
+        CcEffectService.TickOwnerTurn(owner);
+        CcEffectService.TickOwnerTurn(owner);
+        ally.MoveTo(BoardTileId.Outer03);
+        CcEffectService.Apply(ally, CcDefine.protect, turns: 4);
+        Check("Landing ally revives Parts on the second rescue turn and becomes its carrier",
+            movement.TryMovePiece(1, 1, 1) && !robot.Cc.Has(CcDefine.Robot_part) &&
+            robot.State == PieceState.InBoard && robot.CurrentTileId == ally.CurrentTileId &&
+            robot.IsStacked && robot.StackGroupId == ally.StackGroupId && robot.StackLeaderPieceId == ally.PieceId &&
+            ReferenceEquals(robot.Cc.Get(CcDefine.protect), ally.Cc.Get(CcDefine.protect)));
+        CcEffectService.TickOwnerTurn(owner);
+        Check("Revived cargo survives its former expiry and travels with the rescuing leader",
+            movement.TryMovePiece(1, 1, 1) && robot.State == PieceState.InBoard &&
+            robot.CurrentTileId == ally.CurrentTileId && robot.CurrentTileId == BoardTileId.Corner01);
+        owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+        skill.OnPieceRetired();
     }
 
     private static void VerifyDisabledCharacterSkills(string id, CharacterStatusBehaviour skill,
