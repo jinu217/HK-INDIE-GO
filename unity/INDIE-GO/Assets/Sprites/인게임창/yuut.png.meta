@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: e5f99ba0ceb80b048931317912a16e0e
+guid: a5b65184030649d4a8526d0e6492bc39
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -1298389118498373951
-    second: "\uAE30\uBCF8\uC737_basecolor_0"
+      213: 8457812825274938640
+    second: yuut_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "\uAE30\uBCF8\uC737_basecolor_0"
+      name: yuut_0
       rect:
         serializedVersion: 2
-        x: 0
+        x: 6
         y: 0
-        width: 8192
-        height: 8192
+        width: 1096
+        height: 1479
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 1cefba3d9f13bfde0800000000000000
-      internalID: -1298389118498373951
+      spriteID: 015714304ff206570800000000000000
+      internalID: 8457812825274938640
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "\uAE30\uBCF8\uC737_basecolor_0": -1298389118498373951
+      yuut_0: 8457812825274938640
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

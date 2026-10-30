@@ -1082,8 +1082,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Test.YutThrowTest
   throwButton: {fileID: 136010556}
   turnManager: {fileID: 1332604209}
-  normalYutPrefab: {fileID: 866212242665524197, guid: 2b97fc2541b47a5439f1e08c4df1d4a0, type: 3}
-  backDoYutPrefab: {fileID: 3442712889567312468, guid: 51185519ec3afbb4aad3c67c097cf0f9, type: 3}
+  normalYutPrefab: {fileID: 919132149155446097, guid: 7a63682f81d9d654180e3ae3250eee24, type: 3}
+  backDoYutPrefab: {fileID: 919132149155446097, guid: 2a84debc577699e408e41d9c7f259353, type: 3}
   boardCenter: {fileID: 1353961010}
   boardRadius: 0.6
   edgePadding: 0.05
@@ -16051,9 +16051,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6206670ad76f38647be939dd4aaee6aa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MoveDestinationSelector
-  turnManager: {fileID: 0}
   playerManager: {fileID: 0}
-  pieceMovementManager: {fileID: 0}
   mapManager: {fileID: 0}
   pieceDebugController: {fileID: 0}
   finishMarkerAnchor: {fileID: 0}
@@ -16061,6 +16059,7 @@ MonoBehaviour:
   startStopArrowOffset: {x: -0.2, y: 0.1}
   startTileEscapeOffset: {x: 0.38, y: -0.38}
   pieceArrowColor: {r: 0.45, g: 0.85, b: 1, a: 1}
+  skillArrowColor: {r: 0.55, g: 1, b: 0.65, a: 1}
   pieceArrowScale: 0.35
   pieceArrowHeight: 1.15
   destColor: {r: 1, g: 0.86, b: 0.35, a: 1}

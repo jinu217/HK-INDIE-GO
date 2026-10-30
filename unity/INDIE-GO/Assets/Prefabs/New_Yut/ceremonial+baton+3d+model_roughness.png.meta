@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: b1e0c1e28cbc8104eaf7d6d9f91cb456
+guid: 5a791ba0c229470478e2b4707c6e372c
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 7438726941053324487
-    second: "\uAE30\uBCF8\uC737_x_normal_0"
+      213: -4475499592373714793
+    second: ceremonial+baton+3d+model_roughness_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,7 +100,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "\uAE30\uBCF8\uC737_x_normal_0"
+      name: ceremonial+baton+3d+model_roughness_0
       rect:
         serializedVersion: 2
         x: 0
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7cc8c96adbaab3760800000000000000
-      internalID: 7438726941053324487
+      spriteID: 790c82c35d4d3e1c0800000000000000
+      internalID: -4475499592373714793
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "\uAE30\uBCF8\uC737_x_normal_0": 7438726941053324487
+      ceremonial+baton+3d+model_roughness_0: -4475499592373714793
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

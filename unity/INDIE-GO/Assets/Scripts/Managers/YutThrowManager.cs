@@ -25,6 +25,14 @@ namespace YutArena.Test
         [Tooltip("원판 중앙 및 로컬 X/Y축 기준점")]
         [SerializeField] private Transform boardCenter;
 
+        [Header("Throw Points")]
+        [Tooltip("윷 던지기 시작 위치")]
+        [SerializeField] private Transform throwStartPoint;
+        [Tooltip("윷 던지기 도착 중심 위치")]
+        [SerializeField] private Transform throwEndPoint;
+        [Tooltip("결과 표시 유지 시간")]
+        [SerializeField, Min(0f)] private float resultVisibleDuration = 5f;
+
         [Header("Board Area (Local XY)")]
         [Tooltip("윷 착지 원형 영역 반지름")]
         [SerializeField, Min(0.1f)] private float boardRadius = 2.5f;
@@ -80,7 +88,11 @@ namespace YutArena.Test
 
         private readonly List<Transform> yuts = new List<Transform>();
         private readonly List<float> yutVisualThicknesses = new List<float>();
+        private readonly List<Renderer[]> yutRenderers = new List<Renderer[]>();
         private bool isThrowing;
+        private Coroutine resetCoroutine;
+        private static readonly int BaseColorProperty = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorProperty = Shader.PropertyToID("_Color");
 
         private void Awake()
         {
@@ -94,7 +106,18 @@ namespace YutArena.Test
                 boardCenter = transform;
             }
 
+            if (throwStartPoint == null)
+            {
+                throwStartPoint = transform;
+            }
+
+            if (throwEndPoint == null)
+            {
+                throwEndPoint = boardCenter;
+            }
+
             CreateYuts();
+            ResetYutsToStart(true);
         }
 
         private void OnEnable()
@@ -109,6 +132,9 @@ namespace YutArena.Test
         private void OnDisable()
         {
             if (turnManager != null) turnManager.OnTurnPhaseChanged -= HandleTurnPhaseChanged;
+            isThrowing = false;
+            resetCoroutine = null;
+            if (yuts.Count > 0) ResetYutsToStart(true);
         }
 
         [ContextMenu("Create Yuts")]
@@ -148,7 +174,17 @@ namespace YutArena.Test
 
         public void Throw(YutResult result)
         {
-            if (!isThrowing && yuts.Count > 0) StartCoroutine(ThrowRoutine(result));
+            if (isThrowing || yuts.Count == 0) return;
+
+            if (resetCoroutine != null)
+            {
+                StopCoroutine(resetCoroutine);
+                resetCoroutine = null;
+            }
+
+            ResetYutsToStart(false);
+            SetYutsAlpha(1f);
+            StartCoroutine(ThrowRoutine(result));
         }
 
         private void CreateYut(GameObject prefab, string instanceName, int index)
@@ -174,12 +210,11 @@ namespace YutArena.Test
             pivot.SetPositionAndRotation(visualCenter, Quaternion.identity);
             instance.transform.SetParent(pivot, true);
 
-            float x = startYutPositionOffset.x + (index - 1.5f) * startYutSpacing;
-            float y = -boardRadius * 0.45f + startYutPositionOffset.y;
             pivot.SetPositionAndRotation(
-                BoardPoint(new Vector2(x, y), surfaceOffset),
-                BoardRotation(index * 12f, false));
+                GetStartPosition(index),
+                GetStartRotation(index));
             yuts.Add(pivot);
+            yutRenderers.Add(instance.GetComponentsInChildren<Renderer>(true));
             Vector3 boardNormal = GetBoardFrameRotation() * Vector3.forward;
             yutVisualThicknesses.Add(GetProjectedVisualSize(instance, boardNormal));
         }
@@ -235,6 +270,67 @@ namespace YutArena.Test
             }
 
             return Mathf.Max(0f, maximum - minimum);
+        }
+
+        private Vector3 GetStartPosition(int index)
+        {
+            Transform start = throwStartPoint != null ? throwStartPoint : transform;
+            float x = startYutPositionOffset.x + (index - 1.5f) * startYutSpacing;
+            float y = startYutPositionOffset.y;
+            return start.position + start.right * x + start.up * y;
+        }
+
+        private Quaternion GetStartRotation(int index)
+        {
+            Transform start = throwStartPoint != null ? throwStartPoint : transform;
+            return start.rotation
+                 * Quaternion.AngleAxis(index * 12f, Vector3.forward)
+                 * Quaternion.Euler(modelRotationOffset);
+        }
+
+        private void ResetYutsToStart(bool hide)
+        {
+            for (int i = 0; i < yuts.Count; i++)
+            {
+                if (yuts[i] == null) continue;
+                yuts[i].SetPositionAndRotation(GetStartPosition(i), GetStartRotation(i));
+            }
+
+            if (hide) SetYutsAlpha(0f);
+        }
+
+        private void SetYutsAlpha(float alpha)
+        {
+            alpha = Mathf.Clamp01(alpha);
+            bool visible = alpha > 0.001f;
+            var propertyBlock = new MaterialPropertyBlock();
+
+            foreach (Renderer[] renderers in yutRenderers)
+            {
+                foreach (Renderer renderer in renderers)
+                {
+                    if (renderer == null) continue;
+                    renderer.enabled = visible;
+                    renderer.GetPropertyBlock(propertyBlock);
+
+                    Material material = renderer.sharedMaterial;
+                    if (material != null && material.HasProperty(BaseColorProperty))
+                    {
+                        Color color = material.GetColor(BaseColorProperty);
+                        color.a = alpha;
+                        propertyBlock.SetColor(BaseColorProperty, color);
+                    }
+                    else if (material != null && material.HasProperty(ColorProperty))
+                    {
+                        Color color = material.GetColor(ColorProperty);
+                        color.a = alpha;
+                        propertyBlock.SetColor(ColorProperty, color);
+                    }
+
+                    renderer.SetPropertyBlock(propertyBlock);
+                    propertyBlock.Clear();
+                }
+            }
         }
 
         private IEnumerator ThrowRoutine(YutResult result)
@@ -355,6 +451,15 @@ namespace YutArena.Test
 
             isThrowing = false;
             RefreshThrowButton(turnManager != null ? turnManager.CurrentTurn : null);
+            resetCoroutine = StartCoroutine(HideAndResetAfterDelay());
+        }
+
+        private IEnumerator HideAndResetAfterDelay()
+        {
+            yield return new WaitForSeconds(resultVisibleDuration);
+            SetYutsAlpha(0f);
+            ResetYutsToStart(false);
+            resetCoroutine = null;
         }
 
         private static bool[] CreateFaceResults(YutResult result, int count)
@@ -519,12 +624,14 @@ namespace YutArena.Test
 
         private Quaternion GetBoardFrameRotation()
         {
-            return boardCenter.rotation * Quaternion.Euler(boardTiltX, 0f, 0f);
+            Transform end = throwEndPoint != null ? throwEndPoint : boardCenter;
+            return end.rotation * Quaternion.Euler(boardTiltX, 0f, 0f);
         }
 
         private Vector3 GetBoardOrigin()
         {
-            return boardCenter.position + Vector3.up * boardPositionY;
+            Transform end = throwEndPoint != null ? throwEndPoint : boardCenter;
+            return end.position + Vector3.up * boardPositionY;
         }
 
 #if UNITY_EDITOR
@@ -539,13 +646,16 @@ namespace YutArena.Test
             stackLayerHeight = Mathf.Max(0.001f, stackLayerHeight);
             stackClearance = Mathf.Max(0f, stackClearance);
             maximumStackTilt = Mathf.Clamp(maximumStackTilt, 0f, 30f);
+            resultVisibleDuration = Mathf.Max(0f, resultVisibleDuration);
             throwDuration = Mathf.Max(0.1f, throwDuration);
             tumbleTurns.y = Mathf.Max(tumbleTurns.x, tumbleTurns.y);
         }
 
         private void OnDrawGizmosSelected()
         {
-            Transform center = boardCenter != null ? boardCenter : transform;
+            Transform center = throwEndPoint != null
+                ? throwEndPoint
+                : (boardCenter != null ? boardCenter : transform);
             Quaternion boardFrame = center.rotation * Quaternion.Euler(boardTiltX, 0f, 0f);
             Vector3 boardOrigin = center.position + Vector3.up * boardPositionY;
             Gizmos.color = Color.yellow;

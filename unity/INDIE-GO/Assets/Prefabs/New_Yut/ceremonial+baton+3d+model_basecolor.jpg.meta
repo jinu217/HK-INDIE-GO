@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: c2f01b1f6eca4d440859ea8ce246564c
+guid: e4e1326fc46d02449a4233b8a316d855
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 6179790340715831836
-    second: "\uAE30\uBCF8\uC737_x_metallic_0"
+      213: -2698120949030032568
+    second: ceremonial+baton+3d+model_basecolor_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,7 +100,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "\uAE30\uBCF8\uC737_x_metallic_0"
+      name: ceremonial+baton+3d+model_basecolor_0
       rect:
         serializedVersion: 2
         x: 0
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: c12e1cca29603c550800000000000000
-      internalID: 6179790340715831836
+      spriteID: 84b6608ca495e8ad0800000000000000
+      internalID: -2698120949030032568
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "\uAE30\uBCF8\uC737_x_metallic_0": 6179790340715831836
+      ceremonial+baton+3d+model_basecolor_0: -2698120949030032568
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
