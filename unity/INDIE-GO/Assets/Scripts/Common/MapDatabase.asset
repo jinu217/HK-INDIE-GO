@@ -19,17 +19,17 @@ MonoBehaviour:
     description: 
     mapType: -1
   - index: 1
-    image: {fileID: 0}
+    image: {fileID: 1757125043012547400, guid: 70b1070b786c1e346998261d5937f8d2, type: 3}
     mapName: Basic
     description: 
     mapType: 0
   - index: 2
-    image: {fileID: 0}
+    image: {fileID: 2447545358166481511, guid: f3476c48937392048b705331462478fa, type: 3}
     mapName: Korean
     description: 
     mapType: 2
   - index: 3
-    image: {fileID: 0}
+    image: {fileID: 9157747607836895154, guid: 9e4fb94bc4187824691e18f2e16420a1, type: 3}
     mapName: Grassland
     description: 
     mapType: 1

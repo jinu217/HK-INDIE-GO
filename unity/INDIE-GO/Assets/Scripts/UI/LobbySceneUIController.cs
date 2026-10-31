@@ -523,7 +523,7 @@ namespace YutArena.UI
                     ? startPieceCount : GameRuleDefine.DefaultPieceCountPerPlayer,
                 targetEscapeCount = SelectedGameMode == GameMode.Escape
                     ? targetEscapeCount : GameRuleDefine.DefaultTargetEscapeCount,
-                maxTurnCount = turnLength,
+                maxTurnCount = SelectedGameMode == GameMode.Classic ? 0 : turnLength,
                 turnTimeSeconds = turnTimeOptions[turnTimeIndex],
                 isTeamMode = isTeamMode,
                 playerTeams = CreatePlayerTeamData()

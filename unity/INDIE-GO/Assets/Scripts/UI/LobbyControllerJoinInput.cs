@@ -1,14 +1,16 @@
-using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using YutArena.Common;
 
 namespace YutArena.UI
 {
     public class LobbyControllerJoinInput : MonoBehaviour
     {
-        [Header("Player Texts")]
-        [Tooltip("플레이어 텍스트")]
-        [SerializeField] private TMP_Text[] playerTexts;
+        [Header("Player Controller Images")]
+        [Tooltip("1PController ~ 4PController의 Image를 순서대로 연결")]
+        [SerializeField] private Image[] playerControllerImages = new Image[4];
+        [SerializeField] private Sprite keyboardSprite;
+        [SerializeField] private Sprite padSprite;
 
         [Header("Options")]
         [Tooltip("최대 플레이어 수")]
@@ -23,7 +25,7 @@ namespace YutArena.UI
 
             connectedPlayers[0] = showKeyboardPlayerOnStart;
             SaveJoinState();
-            RefreshPlayerTexts();
+            RefreshPlayerImages();
         }
 
         private void Update()
@@ -32,32 +34,32 @@ namespace YutArena.UI
             for (int i = 0; i < maxPlayers; i++)
                 connectedPlayers[i] = true;
             SaveJoinState();
-            RefreshPlayerTexts();
+            RefreshPlayerImages();
         }
 
-        private void RefreshPlayerTexts()
+        private void RefreshPlayerImages()
         {
-            if (playerTexts == null)
+            if (playerControllerImages == null)
             {
                 return;
             }
 
-            int count = Mathf.Min(playerTexts.Length, maxPlayers);
+            int count = Mathf.Min(playerControllerImages.Length, maxPlayers);
 
             for (int i = 0; i < count; i++)
             {
-                TMP_Text playerText = playerTexts[i];
+                Image image = playerControllerImages[i];
 
-                if (playerText == null)
+                if (image == null)
                 {
                     continue;
                 }
 
-                playerText.text = (i + 1) + "P " +
-                    (LocalSelectionInput.GetGamepad(i) != null ? "[NP Pad]" :
-                        LocalSelectionInput.SharedGamepadSelected && LocalSelectionInput.SharedInputAvailable
-                            ? "[Pad]" : "[Keyboard]");
-                playerText.gameObject.SetActive(connectedPlayers[i]);
+                bool usesPad = LocalSelectionInput.GetGamepad(i) != null ||
+                    (LocalSelectionInput.SharedGamepadSelected && LocalSelectionInput.SharedInputAvailable);
+                image.sprite = usesPad ? padSprite : keyboardSprite;
+                image.enabled = image.sprite != null;
+                image.gameObject.SetActive(connectedPlayers[i]);
             }
         }
 

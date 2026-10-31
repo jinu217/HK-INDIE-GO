@@ -14,17 +14,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Common.GameModeDatabase
   modes:
   - index: 0
-    image: {fileID: 0}
+    image: {fileID: -3004653061961154332, guid: ee1b596922a361e4f8236b510a7f6acf, type: 3}
     modeName: Classic
     description: 
     gameMode: 0
   - index: 1
-    image: {fileID: 0}
+    image: {fileID: -565759882138374896, guid: f03839b0061b40f4f8d935c82f224e04, type: 3}
     modeName: Escape
     description: 
     gameMode: 1
   - index: 2
-    image: {fileID: 0}
+    image: {fileID: -1343068281997532964, guid: 6ef5ccdffdcc8c24885da8ac06277c9b, type: 3}
     modeName: Kill The King
     description: 
     gameMode: 2

@@ -19,12 +19,8 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text characterNameText;
         [Tooltip("패시브 스킬 이미지")]
         [SerializeField] private Image passiveSkillImage;
-        [Tooltip("패시브 스킬 이름")]
-        [SerializeField] private TMP_Text passiveSkillNameText;
         [Tooltip("액티브 스킬 이미지")]
         [SerializeField] private Image activeSkillImage;
-        [Tooltip("액티브 스킬 이름")]
-        [SerializeField] private TMP_Text activeSkillNameText;
         [Header("Victory Conditions")]
         [SerializeField] private GameObject escapeVictoryPanel;
         [SerializeField] private TMP_Text currentEscapeCountText;
@@ -50,6 +46,7 @@ namespace YutArena.UI
 
         private CharacterData currentCharacter;
         private Coroutine hoverCoroutine;
+        private bool skillsVisible = true;
         private readonly List<Image> availablePieceImages = new List<Image>();
         private PlayerRuntimeData availablePieceRuntimeData;
 
@@ -65,6 +62,15 @@ namespace YutArena.UI
 
             CharacterData character = player.SelectedCharacter;
             currentCharacter = character;
+            skillsVisible = settings == null || settings.gameMode != GameMode.Classic;
+            foreach (Transform child in GetComponentsInChildren<Transform>(true))
+                if (child != transform && child.name == "Skill")
+                    child.gameObject.SetActive(skillsVisible);
+            if (!skillsVisible)
+            {
+                CancelHover();
+                if (skillDetailPanel != null) skillDetailPanel.Hide();
+            }
             SetText(
                 characterNameText,
                 character != null && !string.IsNullOrWhiteSpace(character.char_Name)
@@ -79,8 +85,6 @@ namespace YutArena.UI
 
             SetImage(passiveSkillImage, character != null ? character.passive_Icon : null);
             SetImage(activeSkillImage, character != null ? character.active_Icon : null);
-            SetText(passiveSkillNameText, character != null ? character.passive_Name : string.Empty);
-            SetText(activeSkillNameText, character != null ? character.active_Name : string.Empty);
             RefreshVictoryCondition(player, settings, escapeScore);
         }
 
@@ -93,7 +97,7 @@ namespace YutArena.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (currentCharacter == null || skillDetailPanel == null) return;
+            if (!skillsVisible || currentCharacter == null || skillDetailPanel == null) return;
 
             CancelHover();
             hoverCoroutine = StartCoroutine(ShowSkillDetailAfterDelay());
@@ -225,7 +229,7 @@ namespace YutArena.UI
             yield return new WaitForSecondsRealtime(hoverDelaySeconds);
             hoverCoroutine = null;
 
-            if (skillDetailPanel != null && currentCharacter != null)
+            if (skillsVisible && skillDetailPanel != null && currentCharacter != null)
                 skillDetailPanel.Show(currentCharacter);
         }
 

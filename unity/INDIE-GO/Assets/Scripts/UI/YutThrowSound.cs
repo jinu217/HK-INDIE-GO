@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using YutArena.Common;
 using YutArena.Managers;
@@ -17,9 +17,6 @@ namespace YutArena.Test
         [SerializeField] private AudioClip throwClip;
         [SerializeField] private AudioClip extraThrowConfirmedClip;
 
-        [Header("Timing")]
-        [Tooltip("윷 던지기 연출이 끝난 뒤 확정음을 재생하기 위한 대기 시간")]
-        [SerializeField, Min(0f)] private float extraThrowSoundDelay = 0.85f;
 
         private TurnPhase previousPhase = TurnPhase.None;
         private Coroutine extraSoundCoroutine;
@@ -91,7 +88,11 @@ namespace YutArena.Test
 
         private IEnumerator PlayExtraSoundAfterDelay()
         {
-            yield return new WaitForSeconds(extraThrowSoundDelay / YutArena.Managers.GeneralSettingsManager.PresentationSpeedMultiplier);
+            // 같은 프레임의 턴 이벤트 구독자가 모두 처리된 뒤 연출 상태 확인
+            yield return null;
+            // 윷별 착지 시간이 달라도 마지막 윷의 반동 종료 후 확정음 재생
+            YutThrowManager throwManager = FindFirstObjectByType<YutThrowManager>();
+            while (throwManager != null && throwManager.IsThrowing) yield return null;
             PlayOneShot(extraThrowConfirmedClip);
             extraSoundCoroutine = null;
         }
@@ -112,11 +113,6 @@ namespace YutArena.Test
             AudioManager.Instance.PlayEffectSound(clip);
         }
 
-#if UNITY_EDITOR
-        private void OnValidate()
-        {
-            extraThrowSoundDelay = Mathf.Max(0f, extraThrowSoundDelay);
-        }
-#endif
+
     }
 }

@@ -3,6 +3,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using YutArena.Managers;
 
@@ -110,6 +112,44 @@ namespace YutArena.UI
         [SerializeField] private bool showMissingReferenceWarnings = true;
 
         private List<Vector2Int> resolutionOptions;
+        private readonly List<RaycastResult> dismissHits = new List<RaycastResult>();
+
+        private void LateUpdate()
+        {
+            if (gameObject.scene.name != "StartScene") return;
+            if (!IsActive(onlineGameButtons) && !IsActive(onlineJoinPanel) &&
+                !IsActive(helpPanel) && !IsActive(settingsPanel)) return;
+
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                HideAllPanels();
+                return;
+            }
+
+            if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame ||
+                EventSystem.current == null) return;
+            var pointer = new PointerEventData(EventSystem.current)
+            {
+                position = Mouse.current.position.ReadValue()
+            };
+            dismissHits.Clear();
+            EventSystem.current.RaycastAll(pointer, dismissHits);
+            foreach (RaycastResult hit in dismissHits)
+            {
+                Transform target = hit.gameObject.transform;
+                if (hit.gameObject.GetComponentInParent<Selectable>() != null ||
+                    IsInsideOpenPanel(target, onlineGameButtons) ||
+                    IsInsideOpenPanel(target, onlineJoinPanel) ||
+                    IsInsideOpenPanel(target, helpPanel) ||
+                    IsInsideOpenPanel(target, settingsPanel)) return;
+            }
+            HideAllPanels();
+        }
+
+        private static bool IsInsideOpenPanel(Transform target, GameObject panel)
+        {
+            return panel != null && panel.activeInHierarchy && target.IsChildOf(panel.transform);
+        }
 
         private void Awake()
         {
@@ -122,6 +162,8 @@ namespace YutArena.UI
 
         private void BindButtons()
         {
+            BindPanelEscapeButton(settingsPanel);
+            BindPanelEscapeButton(helpPanel);
             AddClick(helpButton, OpenHelp);
             AddClick(settingsButton, OpenSettings);
             AddClick(quitButton, QuitGame);
@@ -136,6 +178,16 @@ namespace YutArena.UI
             AddClick(characterHelpButton, ShowCharacterHelp);
             AddClick(mapHelpButton, ShowMapHelp);
             AddClick(modeHelpButton, ShowModeHelp);
+        }
+
+        private static void BindPanelEscapeButton(GameObject panel)
+        {
+            if (panel == null) return;
+            foreach (Button button in panel.GetComponentsInChildren<Button>(true))
+            {
+                if (button.name == "ESCButton")
+                    button.onClick.AddListener(() => panel.SetActive(false));
+            }
         }
 
         private void ValidateRequiredReferences()

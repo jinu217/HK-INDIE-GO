@@ -4,6 +4,10 @@
 
 .utmp/
 
+# Unity CLI / Pipeline local connection and cache files
+.unity/
+.pipeline/
+
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/

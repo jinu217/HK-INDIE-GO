@@ -243,12 +243,12 @@ namespace YutArena.UI
                     ? new Color(1f, 1f, 1f, 0.25f) : Color.white;
                 image.gameObject.SetActive(i < maximum);
                 RectTransform rect = image.rectTransform;
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
-                rect.pivot = new Vector2(0f, 0.5f);
+                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
                 rect.localScale = Vector3.one;
                 rect.localRotation = Quaternion.identity;
                 rect.sizeDelta = size;
-                rect.anchoredPosition = new Vector2(i * (size.x + spSpacing), 0f);
+                rect.anchoredPosition = new Vector2((i - (maximum - 1) * 0.5f) * (size.x + spSpacing), 0f);
             }
         }
 
@@ -352,6 +352,12 @@ namespace YutArena.UI
             if (turnCountText == null && maxTurnCountText == null) return;
 
             GameStartSettings settings = GetSettings();
+            Transform turnCountRoot = turnCountText != null ? turnCountText.transform
+                : maxTurnCountText.transform;
+            while (turnCountRoot != null && turnCountRoot.name != "TurnCount")
+                turnCountRoot = turnCountRoot.parent;
+            if (turnCountRoot != null)
+                turnCountRoot.gameObject.SetActive(settings == null || settings.gameMode != GameMode.Classic);
             int current = turnManager != null && turnManager.CurrentTurn != null
                 ? turnManager.CurrentTurn.roundNumber // 턴 수 = 전원 1바퀴(라운드) 기준
                 : 0;

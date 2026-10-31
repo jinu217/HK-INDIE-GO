@@ -599,26 +599,29 @@ MonoBehaviour:
   turnManager: {fileID: 1332604209}
   normalYutPrefab: {fileID: 866212242665524197, guid: 2b97fc2541b47a5439f1e08c4df1d4a0, type: 3}
   backDoYutPrefab: {fileID: 3442712889567312468, guid: 51185519ec3afbb4aad3c67c097cf0f9, type: 3}
-  boardCenter: {fileID: 1133845951}
+  throwStartPoint: {fileID: 1028748208}
+  resultVisibleDuration: 5
+  boardTileRoot: {fileID: 0}
+  fadedTileIds: 160000001700000018000000190000001a0000001b0000001c0000001d0000001e000000
+  throwingTileAlpha: 0.3
   boardRadius: 1.25
   edgePadding: 0.05
-  surfaceOffset: -1.5
   startYutSpacing: 0.5
-  startYutPositionOffset: {x: -0.15, y: 0.3}
   minimumYutSpacing: 0.65
   enableOverlapStacking: 1
-  yutFootprintLength: 1.6
-  yutFootprintWidth: 0.35
   stackLayerHeight: 0.12
   stackClearance: 0.02
   modelLongAxisIsY: 1
   maximumStackTilt: 12
-  boardTiltX: 40
-  boardPositionY: -0.75
+  boardSurface: {fileID: 1264562985}
   throwDuration: 0.9
   arcHeight: 1.2
   depthHop: 0.45
   tumbleTurns: {x: 2, y: 3}
+  landingInterval: 0.1
+  settleDuration: 0.22
+  landingBounce: 0.045
+  landingRockAngle: 2.5
   modelRotationOffset: {x: 0, y: 0, z: 0}
   faceFlipRotation: {x: 180, y: 0, z: 0}
   modelScaleMultiplier: 2
@@ -634,7 +637,9 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1028748208}
+  - {fileID: 1264562985}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &100287683
@@ -652,7 +657,6 @@ MonoBehaviour:
   turnManager: {fileID: 1332604209}
   throwClip: {fileID: 8300000, guid: 97b8da977bf83a84e94c55ea5a5e70e6, type: 3}
   extraThrowConfirmedClip: {fileID: 8300000, guid: ccf7565062da45140918dd4243add5e9, type: 3}
-  extraThrowSoundDelay: 0.85
 --- !u!1 &112841066
 GameObject:
   m_ObjectHideFlags: 0
@@ -3347,7 +3351,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGamePlayerPanelView
   characterImage: {fileID: 2002800108}
   characterNameText: {fileID: 404756575}
-  escapeCountText: {fileID: 327826711}
+  passiveSkillImage: {fileID: 0}
+  activeSkillImage: {fileID: 0}
+  escapeVictoryPanel: {fileID: 0}
+  currentEscapeCountText: {fileID: 0}
+  targetEscapeCountText: {fileID: 0}
+  classicVictoryPanel: {fileID: 0}
+  classicPieceImages: []
+  classicPendingSprites: []
+  classicFinishedSprites: []
+  availablePieceImageTemplate: {fileID: 0}
   currentTurnHighlight: {fileID: 1367129871}
   nextTurnHighlight: {fileID: 1922911473}
   skillDetailPanel: {fileID: 1573103392}
@@ -3408,7 +3421,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGamePlayerPanelView
   characterImage: {fileID: 146876778}
   characterNameText: {fileID: 1087588701}
-  escapeCountText: {fileID: 891899147}
+  passiveSkillImage: {fileID: 0}
+  activeSkillImage: {fileID: 0}
+  escapeVictoryPanel: {fileID: 0}
+  currentEscapeCountText: {fileID: 0}
+  targetEscapeCountText: {fileID: 0}
+  classicVictoryPanel: {fileID: 0}
+  classicPieceImages: []
+  classicPendingSprites: []
+  classicFinishedSprites: []
+  availablePieceImageTemplate: {fileID: 0}
   currentTurnHighlight: {fileID: 1174421670}
   nextTurnHighlight: {fileID: 2062653905}
   skillDetailPanel: {fileID: 1573103392}
@@ -3582,23 +3604,26 @@ MonoBehaviour:
   gameManager: {fileID: 1332604208}
   turnManager: {fileID: 1332604209}
   playerManager: {fileID: 41707850}
+  winConditionManager: {fileID: 0}
   playerPanels:
   - {fileID: 2112492872}
   - {fileID: 758938203}
   - {fileID: 758816901}
   - {fileID: 1254468206}
-  gameTimeText: {fileID: 1180322542}
   turnTimeText: {fileID: 1591336956}
   turnCountText: {fileID: 489099848}
-  passiveSkillImage: {fileID: 1006960339}
+  maxTurnCountText: {fileID: 0}
   activeSkillImage: {fileID: 599632151}
   activeSkillButtonController: {fileID: 360661885}
-  passiveSkillTooltip: {fileID: 1006960340}
   activeSkillTooltip: {fileID: 360661891}
   spContainer: {fileID: 0}
   spSprite: {fileID: 0}
+  emptySpSprite: {fileID: 0}
   spImageSize: {x: 32, y: 32}
   spSpacing: 3
+  commonAvailablePiecesContainer: {fileID: 0}
+  commonAvailablePieceButtonTemplate: {fileID: 0}
+  moveDestinationSelector: {fileID: 0}
 --- !u!4 &877852083
 Transform:
   m_ObjectHideFlags: 0
@@ -4333,6 +4358,37 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.SkillTooltipTrigger
   detailPanel: {fileID: 907757823}
   hoverDelaySeconds: 1
+--- !u!1 &1028748207
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1028748208}
+  m_Layer: 0
+  m_Name: ThrowStartPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1028748208
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1028748207}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.15, y: 0.3, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100287682}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1048523382
 GameObject:
   m_ObjectHideFlags: 0
@@ -4367,8 +4423,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f31c500b76174136a4e16b7059ea12e3, type: 2}
   - {fileID: 11400000, guid: a5c426ad48e54d6a8ed0bf60401a63c9, type: 2}
   backgroundRoot: {fileID: 0}
-  boardRoot: {fileID: 0}
+  fallbackBoardVisual: {fileID: 0}
   commonBoardLayoutRoot: {fileID: 0}
+  automaticPieceAnchorClearance: 0.3
 --- !u!4 &1048523384
 Transform:
   m_ObjectHideFlags: 0
@@ -4632,7 +4689,7 @@ SpriteRenderer:
   m_Size: {x: 1, y: 1}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 1
+  m_WasSpriteAssigned: 0
   m_SpriteSortPoint: 0
 --- !u!4 &1133845951
 Transform:
@@ -5328,11 +5385,51 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGamePlayerPanelView
   characterImage: {fileID: 215023169}
   characterNameText: {fileID: 590882163}
-  escapeCountText: {fileID: 720487999}
+  passiveSkillImage: {fileID: 0}
+  activeSkillImage: {fileID: 0}
+  escapeVictoryPanel: {fileID: 0}
+  currentEscapeCountText: {fileID: 0}
+  targetEscapeCountText: {fileID: 0}
+  classicVictoryPanel: {fileID: 0}
+  classicPieceImages: []
+  classicPendingSprites: []
+  classicFinishedSprites: []
+  availablePieceImageTemplate: {fileID: 0}
   currentTurnHighlight: {fileID: 1480090008}
   nextTurnHighlight: {fileID: 1813658075}
   skillDetailPanel: {fileID: 1573103392}
   hoverDelaySeconds: 1
+--- !u!1 &1264562984
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1264562985}
+  m_Layer: 0
+  m_Name: BoardSurface
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1264562985
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1264562984}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.34202015, y: -0, z: -0, w: 0.9396927}
+  m_LocalPosition: {x: 0, y: 0.21418136, z: -4.149067}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 100287682}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1312933191
 GameObject:
   m_ObjectHideFlags: 0
@@ -8096,7 +8193,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGamePlayerPanelView
   characterImage: {fileID: 600303893}
   characterNameText: {fileID: 1643586700}
-  escapeCountText: {fileID: 1618795398}
+  passiveSkillImage: {fileID: 0}
+  activeSkillImage: {fileID: 0}
+  escapeVictoryPanel: {fileID: 0}
+  currentEscapeCountText: {fileID: 0}
+  targetEscapeCountText: {fileID: 0}
+  classicVictoryPanel: {fileID: 0}
+  classicPieceImages: []
+  classicPendingSprites: []
+  classicFinishedSprites: []
+  availablePieceImageTemplate: {fileID: 0}
   currentTurnHighlight: {fileID: 1126984778}
   nextTurnHighlight: {fileID: 1898219904}
   skillDetailPanel: {fileID: 1573103392}
