@@ -1107,7 +1107,7 @@ MonoBehaviour:
   landingRockAngle: 2.5
   modelRotationOffset: {x: 0, y: 0, z: 0}
   faceFlipRotation: {x: 180, y: 0, z: 0}
-  modelScaleMultiplier: 1.4
+  modelScaleMultiplier: 2.5
 --- !u!4 &100287682
 Transform:
   m_ObjectHideFlags: 0
