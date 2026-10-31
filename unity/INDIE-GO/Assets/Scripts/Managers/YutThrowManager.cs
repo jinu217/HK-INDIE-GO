@@ -80,7 +80,7 @@ namespace YutArena.Test
         [SerializeField] private Vector2 tumbleTurns = new Vector2(2f, 3f);
 
         [Header("Landing Motion")]
-        [Tooltip("윷별 착지 시간 간격 / 반동 유지 시간 이상의 실제 간격")]
+        [Tooltip("착지 묶음 사이 시간 간격 / 반동 유지 시간 이상의 실제 간격")]
         [SerializeField, Min(0.02f)] private float landingInterval = 0.1f;
         [Tooltip("착지 후 반동 유지 시간")]
         [SerializeField, Min(0.05f)] private float settleDuration = 0.22f;
@@ -343,8 +343,14 @@ namespace YutArena.Test
             var flights = new YutFlight[count];
             int minTurns = Mathf.Max(1, Mathf.CeilToInt(tumbleTurns.x));
             int maxTurns = Mathf.Max(minTurns, Mathf.FloorToInt(tumbleTurns.y));
+            // 인접한 착지 순서 사이의 경계를 각각 무작위 선택
+            // 4개 기준 1-2-3-4부터 1234까지 총 8가지 묶음 형태
+            int groupBoundaries = Random.Range(0, 1 << Mathf.Max(0, count - 1));
+            int landingGroup = 0;
             for (int order = 0; order < count; order++)
             {
+                if (order > 0 && (groupBoundaries & (1 << (order - 1))) != 0)
+                    landingGroup++;
                 YutLandingPose pose = poses[order];
                 int i = pose.Index;
                 Vector3 target = origin + frame * new Vector3(pose.Center.x, pose.Center.y, -pose.Height);
@@ -365,7 +371,7 @@ namespace YutArena.Test
                     Visual = visuals[i], RockAxis = shortAxis,
                     StartRotation = yuts[i].rotation, TargetRotation = rotation,
                     SpinAxis = frame * new Vector3(Random.Range(0.75f, 1f), Random.Range(-0.3f, 0.3f), 0f).normalized,
-                    Duration = throwDuration + order * Mathf.Max(landingInterval, settleDuration),
+                    Duration = throwDuration + landingGroup * Mathf.Max(landingInterval, settleDuration),
                     Height = arcHeight * Random.Range(0.85f, 1.05f),
                     Turns = Random.Range(minTurns, maxTurns + 1)
                 };
