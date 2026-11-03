@@ -367,6 +367,7 @@ public static class CcBoardEffects
             attackingPieceCount,
             grantsExtraThrow);
         CcEffectService.BeginCaptureResolution();
+        string qaTargets = QaDebugLog.Stack(target.Player.PlayerId, target.Piece);
         try
         {
             decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
@@ -375,6 +376,7 @@ public static class CcBoardEffects
                 decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
                 decision == CharacterCaptureDecision.ConvertToParts)
             {
+                QaDebugLog.Capture(request, decision, qaTargets, false);
                 return false;
             }
 
@@ -383,6 +385,7 @@ public static class CcBoardEffects
                 decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
             CcEffectService.RewardMarks(target.Piece, request);
             Retire(target, finalExtraThrow);
+            QaDebugLog.Capture(request, decision, qaTargets, target.Piece.State == PieceState.Waiting);
             if (target.Piece.State != PieceState.Waiting)
                 return false;
             CharacterSkillRegistry.NotifyCaptureCompleted(request);

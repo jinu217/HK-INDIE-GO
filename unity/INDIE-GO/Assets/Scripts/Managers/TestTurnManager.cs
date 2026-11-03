@@ -39,6 +39,10 @@ namespace YutArena.Managers
         private int pendingSkillThrows = 0;
         //수정: 기본/윷·모로 이미 확보한 던지기는 잡기·스킬 보너스와 별도로 소비합니다.
         private bool pendingRegularThrow = true;
+        // 읽기 전용 QA/UI 조회. 잔여 던지기 원인을 분리해서 표시합니다.
+        public bool HasPendingRegularThrow => pendingRegularThrow;
+        public int PendingCaptureThrows => pendingCaptureThrows;
+        public int PendingSkillThrows => pendingSkillThrows;
         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
         private GameStartSettings settings;
@@ -94,7 +98,6 @@ namespace YutArena.Managers
                 order = determinedOrder,
                 currentIndex = 0
             };
-            Debug.Log("[실제 게임] 확정된 순서: " + string.Join(" -> ", determinedOrder)); // 테스트용, 진짜 게임이 쓰는 순서를 딱 한 번 찍음
             seatOrder = new List<PlayerSlot>(determinedOrder); // 라운드 계산용 (IsNewRound 참고)
             CurrentTurn.roundNumber = 1;
             CurrentTurn.turnNumber = 1;
@@ -172,14 +175,14 @@ namespace YutArena.Managers
         public void TestDetermineOrder()
         {
             var result = DetermineOrder(TurnOrder.order);
-            Debug.Log("정해진 순서: " + string.Join(" -> ", result));
+            QaDebugLog.Event("정해진 순서: " + string.Join(" -> ", result));
         }
         // 테스트용: 인스펙터 우클릭으로 팀 단위 순서정하기 전체 과정을 확인
         [ContextMenu("테스트: 팀 단위 순서 다시 정하기")]
         public void TestDetermineTeamBasedOrder()
         {
             var result = DetermineTeamBasedOrder(TurnOrder.order);
-            Debug.Log("팀 단위로 정해진 순서: " + string.Join(" -> ", result));
+            QaDebugLog.Event("팀 단위로 정해진 순서: " + string.Join(" -> ", result));
         }
         private void BeginTurnFor(PlayerSlot player)
         {
@@ -240,14 +243,14 @@ namespace YutArena.Managers
                 return;
             }
             var first = pendingResults[0];
-            Debug.Log("이동 요청 보냄: " + first.result);
+            QaDebugLog.Event("이동 요청 보냄: " + first.result);
             RequestMovePiece(0, first.result); //  테스트용 pieceId를 0으로 (영서 코드는 pieceId가 0부터 시작함)
-            Debug.Log("이동 요청 처리 끝, 현재 단계: " + CurrentTurn.currentPhase);
+            QaDebugLog.Event("이동 요청 처리 끝, 현재 단계: " + CurrentTurn.currentPhase);
         }
         [ContextMenu("테스트: 현재 상태 보기")]
         public void TestPrintCurrentPhase()
         {
-            Debug.Log("현재 단계: " + CurrentTurn.currentPhase
+            QaDebugLog.Event("현재 단계: " + CurrentTurn.currentPhase
                 + " / 결과묶음 개수: " + pendingResults.Count
                 + " / 현재 플레이어: " + CurrentTurn.currentPlayer);
         }
@@ -275,7 +278,6 @@ namespace YutArena.Managers
             bool isSkillBonusThrow = !pendingRegularThrow && !isCaptureBonusThrow && pendingSkillThrows > 0;
             SetPhase(TurnPhase.Throwing);
             YutResult result = yutRuleManager.Throw(CurrentTurn.currentPlayer);
-            Debug.Log("[던지기] " + CurrentTurn.currentPlayer + " → " + result); // 던진 결과 확인용
             CurrentTurn.lastYutResult = result;
             SetPhase(TurnPhase.SaveThrowResult);
             if (YutResultRule.IsTurnCancelResult(result))
@@ -451,7 +453,7 @@ namespace YutArena.Managers
                 int finishedBeforeForcedMove = CountFinishedPieces(playerId);
                 SetPhase(TurnPhase.MovePiece);
                 if (!forcedMoveOwner.ExecutePendingForcedMove())
-                    Debug.Log("[턴] 윤누리 추가 1칸 이동 못 함 (업힘 등) → 건너뜀");
+                    QaDebugLog.Event("[턴] 윤누리 추가 1칸 이동 못 함 (업힘 등) → 건너뜀");
                 ResolveAfterMove(playerId, finishedBeforeForcedMove);
                 return;
             }
@@ -557,14 +559,14 @@ namespace YutArena.Managers
             // 이번 턴에 잡기/스킬로 얻은 보너스 던지기가 남아 있으면, 못 쓰는 결과만 버리고 던지러 감
             if (pendingCaptureThrows > 0 || pendingSkillThrows > 0)
             {
-                Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
+                QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
                 pendingResults.Clear();
                 OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
                 SetPhase(TurnPhase.WaitThrow);
                 return;
             }
 
-            Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
+            QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
             EndTurn();
         }
 
@@ -702,7 +704,7 @@ namespace YutArena.Managers
                 CurrentTurn.roundNumber >= settings.maxTurnCount)
             {
                 maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
-                Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
+                QaDebugLog.Event("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
                 winConditionManager.HandleTimeLimitReached();
                 if (CurrentTurn.isGameEnded) return; // 턴제한 함수
             }
@@ -741,7 +743,7 @@ namespace YutArena.Managers
             pendingCaptureThrows = 0;
             pendingSkillThrows = 0;
             OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
-            Debug.Log("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
+            QaDebugLog.Event("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
             EndTurn();
         }
 
@@ -966,7 +968,7 @@ namespace YutArena.Managers
                 turnTimerRemainingSeconds -= Time.deltaTime;
             }
             turnTimerCoroutine = null;
-            Debug.Log("[타이머] 턴 제한시간 초과, 턴 강제 종료");
+            QaDebugLog.Event("[타이머] 턴 제한시간 초과, 턴 강제 종료");
             EndTurn();
         }
     }

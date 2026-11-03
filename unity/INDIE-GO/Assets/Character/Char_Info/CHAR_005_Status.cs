@@ -47,10 +47,6 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
 
         if (!ApplyActiveEffect(path: path))
             return CharacterActiveResult.Failure("Issen movement could not be applied.");
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_005_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success(
             $"Moved {path.Count} spaces and retired {retiredCount} enemy piece(s) along the path.",
             suppressExtraThrow: true);

@@ -68,10 +68,6 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
 
         TryStartPassiveCooldown();
         talismanAvailable = false;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_002_Status)} granted protection to " +
-            $"Player={nearest.Value.Player.PlayerId}, Piece={nearest.Value.Piece.PieceId}. Owner={PlayerId}, Piece={PieceId}",
-            this);
     }
 
     protected override bool CanReceivePassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index)
@@ -132,10 +128,6 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
 
         ObserveTurnManager(Turns);
         DoubleMoves[PlayerId] = new DoubleMoveReservation(Turns.PendingResults);
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_002_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success($"The next throw result's move count will be multiplied by {ActiveEffect().amount}.");
     }
 

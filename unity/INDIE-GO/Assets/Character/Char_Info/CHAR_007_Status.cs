@@ -11,10 +11,6 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
     {
         if (!IsPassiveReady || !ApplyPassiveEffect()) return;
         TryStartPassiveCooldown();
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_007_Status)} requested {PassiveEffect().amount} skill point(s). " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -35,10 +31,6 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
         foreach (CharacterPieceReference enemy in enemiesOnPath)
             ApplyActiveEffect(1, enemy.Piece);
 
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success(
             $"Charged to the end of the straight path and stunned {enemiesOnPath.Count} enemy piece(s).");
     }

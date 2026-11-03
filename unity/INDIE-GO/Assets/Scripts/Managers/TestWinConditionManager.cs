@@ -93,8 +93,10 @@ namespace YutArena.Managers
             if (!isFinished) return; // 완주가 아니면 여기서 할 일 없음
             int bonus = GetEscapeBonus(team);
             AddEscapeCount(team, finishedCount + bonus); // 탈출한 말 개수 + 보너스 = 이번에 얻은 점수
-            Debug.Log("[점수] " + team + " 탈출 " + finishedCount + "개 + 보너스 " + bonus +
-                " -> 총 " + GetEscapeCount(team) + "/" + settings.targetEscapeCount + "점"); // 확인용 로그
+            if (settings.gameMode == GameMode.Escape)
+                QaDebugLog.Event($"[탈출] {player}/{team} | 실제 말 수={finishedCount}, 보너스={bonus}, 점수={GetEscapeCount(team)}/{settings.targetEscapeCount}");
+            else
+                QaDebugLog.Event($"[완주 판정] {player}/{team} | 이번 완주 말 수={finishedCount}");
             CheckWinCondition(team); // 점수 올랐으니 승리 조건 채웠는지 바로 확인
         }
         // ===================================================================
@@ -113,7 +115,7 @@ namespace YutArena.Managers
             {
                 firstEscapeBonusGiven = true;
                 bonus += 1;
-                Debug.Log("[점수] " + team + " 첫 탈출 보너스 +1");
+                QaDebugLog.Event("[점수] " + team + " 첫 탈출 보너스 +1");
             }
 
             scoringStreak = team == lastScoringTeam ? scoringStreak + 1 : 1;
@@ -121,7 +123,7 @@ namespace YutArena.Managers
             if (scoringStreak >= 2 && (ConsecutiveBonusEveryTime || scoringStreak == 2))
             {
                 bonus += 1;
-                Debug.Log("[점수] " + team + " 연속 탈출 보너스 +1 (" + scoringStreak + "연속)");
+                QaDebugLog.Event("[점수] " + team + " 연속 탈출 보너스 +1 (" + scoringStreak + "연속)");
             }
             return bonus;
         }
@@ -166,7 +168,7 @@ namespace YutArena.Managers
                 // 턴 순서에서 이 팀 플레이어들을 빼달라고 TurnManager한테 부탁
                 turnManager.RemovePlayersOfTeam(team, settings);
                 ClearBoardPiecesOfTeam(team);
-                Debug.Log(team + " 목표 달성! " + finishedRanking.Count + "등으로 기록, 남은 " + activeTeams.Count + "팀으로 게임 계속");
+                QaDebugLog.Event(team + " 목표 달성! " + finishedRanking.Count + "등으로 기록, 남은 " + activeTeams.Count + "팀으로 게임 계속");
             }
         }
         // ===================================================================
@@ -229,7 +231,7 @@ namespace YutArena.Managers
                 winningPlayer = FindSoloWinningPlayer(displayedWinner), // displayedWinner 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
                 finalRanking = finalRanking
             };
-            Debug.Log("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
+            QaDebugLog.Event("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
                 " / settings.matchComposition=" + settings.matchComposition + " / settings.playerCount=" + settings.playerCount); // 확인용 로그
             gameManager.EndGame(result);
         }
@@ -338,7 +340,7 @@ namespace YutArena.Managers
                 activeTeams.Remove(team);
                 turnManager.RemovePlayersOfTeam(team, settings); // 남은 팀원(있다면)도 마저 순서에서 제거
                 ClearBoardPiecesOfTeam(team);
-                Debug.Log(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
+                QaDebugLog.Event(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
             }
         }
         // ===================================================================
@@ -370,7 +372,7 @@ namespace YutArena.Managers
                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 턴 제한 승부 미구현");
                 return;
             }
-            Debug.Log("[승리조건2] " + settings.gameMode + " 턴 수 도달, 순위 판정 시작"); // 확인용 로그
+            QaDebugLog.Event("[승리조건2] " + settings.gameMode + " 턴 수 도달, 순위 판정 시작"); // 확인용 로그
 
             // 버그 수정: 예전엔 타이브레이커를 시작해도 턴이 멈추지 않아서 바로 다음 턴이 시작됐음.
             // 순위가 다 정해질 때까지 턴 진행을 먼저 멈춤 (타이브레이커 결과가 나올 때까지 이 상태로 대기)
@@ -388,7 +390,7 @@ namespace YutArena.Managers
                 .ToList();
 
             foreach (var team in sorted)
-                Debug.Log("[승리조건2] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
+                QaDebugLog.Event("[승리조건2] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
                     (distanceByTeam[team] == int.MaxValue ? "판 위 말 없음" : distanceByTeam[team] + "칸"));
 
             // 점수와 거리가 둘 다 같은 팀끼리 한 묶음으로 나눔 (혼자면 1팀짜리 묶음)
@@ -429,7 +431,7 @@ namespace YutArena.Managers
 
             // 모든 순위가 정해짐 -> 게임 종료
             if (turnLimitRanking.Count == 0) return; // 방어 처리 (남은 팀이 없을 수는 없음)
-            Debug.Log("[승리조건2] 순위 확정: " + string.Join(" > ", turnLimitRanking));
+            QaDebugLog.Event("[승리조건2] 순위 확정: " + string.Join(" > ", turnLimitRanking));
             Declare(turnLimitRanking[0], GameResultType.TimeOver, new List<TeamSlot>(turnLimitRanking));
         }
 
@@ -470,7 +472,7 @@ namespace YutArena.Managers
                     tieBreakerPendingPlayers.Add(p);
             }
             int rank = finishedRanking.Count + turnLimitRanking.Count + 1; // 이번 묶음이 몇 등 자리를 다투는지
-            Debug.Log("[타이브레이커] " + rank + "등 결정전 시작! 대상 팀: " + string.Join(", ", tiedTeams) +
+            QaDebugLog.Event("[타이브레이커] " + rank + "등 결정전 시작! 대상 팀: " + string.Join(", ", tiedTeams) +
                 " / 던져야 할 사람: " + string.Join(", ", tieBreakerPendingPlayers));
             OnTieBreakerRoundStarted?.Invoke(new List<TeamSlot>(tiedTeams), new List<PlayerSlot>(tieBreakerPendingPlayers));
         }
@@ -508,7 +510,7 @@ namespace YutArena.Managers
             YutResult result = yutRuleManager.ThrowForTieBreaker(); // 낙 없는 전용 확률표 사용
             tieBreakerResults[player] = result;
             tieBreakerPendingPlayers.Remove(player);
-            Debug.Log("[타이브레이커] " + player + " 던짐 → " + result +
+            QaDebugLog.Event("[타이브레이커] " + player + " 던짐 → " + result +
                 " (남은 사람: " + tieBreakerPendingPlayers.Count + "명)");
             OnTieBreakerThrown?.Invoke(player, result);
 
@@ -529,7 +531,7 @@ namespace YutArena.Managers
                 sumByTeam[team] = sum;
             }
             foreach (var kv in sumByTeam)
-                Debug.Log("[타이브레이커] " + kv.Key + " 합산 결과: " + kv.Value);
+                QaDebugLog.Event("[타이브레이커] " + kv.Key + " 합산 결과: " + kv.Value);
 
             // 합이 큰 순서대로 다시 묶음을 나눠서, 지금 묶음 자리에 끼워 넣음
             // 예: A 5, B 5, C 2 -> [A,B] [C] -> A·B는 다시 타이브레이커, C는 그 다음 순위로 확정
@@ -539,7 +541,7 @@ namespace YutArena.Managers
                 .Select(g => g.ToList())
                 .ToList();
             if (splitGroups.Count == 1)
-                Debug.Log("[타이브레이커] 또 동점, 재던지기 라운드 시작");
+                QaDebugLog.Event("[타이브레이커] 또 동점, 재던지기 라운드 시작");
 
             isTieBreakerActive = false;
             pendingRankGroups.RemoveAt(0);

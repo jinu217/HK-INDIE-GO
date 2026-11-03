@@ -84,10 +84,6 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
         if (path.Count == 0 || !ApplyActiveEffect(path: path))
             return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
 
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_010_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success(
             $"Retreated {path.Count} tile(s).",
             suppressExtraThrow: true,

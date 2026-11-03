@@ -119,14 +119,14 @@ namespace YutArena.Managers
         [ContextMenu("테스트: 순서정하기 던지기")]
         public void TestThrowForOrder()
         {
-            Debug.Log("순서정하기 결과: " + ThrowForOrder());
+            QaDebugLog.Event("순서정하기 결과: " + ThrowForOrder());
         }
 
         // 테스트용: 인스펙터 우클릭으로 타이브레이커 확률표가 잘 도는지 확인
         [ContextMenu("테스트: 타이브레이커 던지기")]
         public void TestThrowForTieBreaker()
         {
-            Debug.Log("타이브레이커 결과: " + ThrowForTieBreaker());
+            QaDebugLog.Event("타이브레이커 결과: " + ThrowForTieBreaker());
         }
     }
 }

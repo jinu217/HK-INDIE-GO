@@ -35,9 +35,6 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
         if (retiredCount > 0)
             ApplyActiveEffect(1, amount: retiredCount * ActiveEffect(1).amount);
 
-        Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_006_Status)} retired {retiredCount} " +
-            $"piece(s). Player={PlayerId}, Piece={PieceId}", this);
         return CharacterActiveResult.Success(
             $"Sword Aura retired {retiredCount} enemy piece(s) and granted the same number of throws.",
             suppressExtraThrow: true);

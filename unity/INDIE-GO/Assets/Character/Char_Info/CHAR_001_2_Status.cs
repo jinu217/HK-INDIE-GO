@@ -47,10 +47,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
     private void GrantPassiveSkillPoint(string trigger)
     {
         if (!ApplyPassiveEffect()) return;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Passive] {nameof(CHAR_001_2_Status)} requested {PassiveEffect().amount} SP " +
-            $"from {trigger}. Player={PlayerId}, Piece={PieceId}",
-            this);
     }
 
     protected override CharacterActiveResult ExecuteActive(
@@ -63,10 +59,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
             return CharacterActiveResult.Failure("The active skill can be used only during its owner's turn.");
         if (!ApplyActiveEffect())
             return CharacterActiveResult.Failure("The extra throw effect could not be applied.");
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_001_2_Status)} activated. " +
-            $"Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success("One skill extra throw was granted.");
     }
 }

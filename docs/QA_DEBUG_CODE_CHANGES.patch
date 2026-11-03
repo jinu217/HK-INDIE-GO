@@ -1,0 +1,2554 @@
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_1_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_1_Status.cs
+index d05dccf..d8fbbff 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_1_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_1_Status.cs
+@@ -32,10 +32,6 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
+         firstMovePassivePending = false;
+         firstMovePassiveAvailable = false;
+         forcedMovePending = true;
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Passive] {nameof(CHAR_001_1_Status)} queued a Do move " +
+-            $"after the piece's first move. Player={PlayerId}, Piece={PieceId}",
+-            this);
+     }
+ 
+     // 턴매니저가 호출: 플레이어가 추가 이동 화살표를 눌렀거나, 누르기 전에 턴이 끝날 때
+@@ -45,10 +41,6 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
+ 
+         forcedMovePending = false;
+         bool moved = ApplyPassiveEffect();
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Passive] {nameof(CHAR_001_1_Status)} forced a Do move " +
+-            $"after the piece's first move. Player={PlayerId}, Piece={PieceId}, Moved={moved}",
+-            this);
+         return moved;
+     }
+ 
+@@ -65,10 +57,6 @@ public sealed class CHAR_001_1_Status : CharacterStatusBehaviour
+     {
+         if (!ApplyActiveEffect())
+             return CharacterActiveResult.Failure("MOorDO effect could not be applied.");
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_001_1_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success("The next throw is limited to Do or Mo at 50% each.");
+     }
+ 
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_2_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_2_Status.cs
+index e6cea9b..597084c 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_2_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_001_2_Status.cs
+@@ -47,10 +47,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
+     private void GrantPassiveSkillPoint(string trigger)
+     {
+         if (!ApplyPassiveEffect()) return;
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Passive] {nameof(CHAR_001_2_Status)} requested {PassiveEffect().amount} SP " +
+-            $"from {trigger}. Player={PlayerId}, Piece={PieceId}",
+-            this);
+     }
+ 
+     protected override CharacterActiveResult ExecuteActive(
+@@ -63,10 +59,6 @@ public sealed class CHAR_001_2_Status : CharacterStatusBehaviour
+             return CharacterActiveResult.Failure("The active skill can be used only during its owner's turn.");
+         if (!ApplyActiveEffect())
+             return CharacterActiveResult.Failure("The extra throw effect could not be applied.");
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_001_2_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success("One skill extra throw was granted.");
+     }
+ }
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_002_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_002_Status.cs
+index f4464a8..cc753d2 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_002_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_002_Status.cs
+@@ -68,10 +68,6 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
+ 
+         TryStartPassiveCooldown();
+         talismanAvailable = false;
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Passive] {nameof(CHAR_002_Status)} granted protection to " +
+-            $"Player={nearest.Value.Player.PlayerId}, Piece={nearest.Value.Piece.PieceId}. Owner={PlayerId}, Piece={PieceId}",
+-            this);
+     }
+ 
+     protected override bool CanReceivePassiveEffect(PlayerRuntimeData.PieceRuntimeData target, int index)
+@@ -132,10 +128,6 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
+ 
+         ObserveTurnManager(Turns);
+         DoubleMoves[PlayerId] = new DoubleMoveReservation(Turns.PendingResults);
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_002_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success($"The next throw result's move count will be multiplied by {ActiveEffect().amount}.");
+     }
+ 
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_003_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_003_Status.cs
+index a8d8077..eeb0d55 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_003_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_003_Status.cs
+@@ -20,6 +20,10 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
+         int defendingCount = CcBoardEffects.CountStackUnits(Owner, target);
+         bool limitCapture = defendingCount > request.AttackingPieceCount && IsPassiveReady;
+         int clones = target.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
++        if (limitCapture || clones > 0)
++            QaDebugLog.Skill("패시브/분신 방어", PlayerId, PieceId,
++                request.AttackerPlayerId, request.AttackerPieceId,
++                $"방어수={defendingCount}, 공격수={request.AttackingPieceCount}, 분신소모={Math.Min(clones, request.AttackingPieceCount)}, 방어성공={limitCapture || clones >= request.AttackingPieceCount}");
+         if (limitCapture) TryStartPassiveCooldown();
+         if (clones > 0)
+         {
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_005_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_005_Status.cs
+index 0f55632..7a87eb0 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_005_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_005_Status.cs
+@@ -47,10 +47,6 @@ public sealed class CHAR_005_Status : CharacterStatusBehaviour
+ 
+         if (!ApplyActiveEffect(path: path))
+             return CharacterActiveResult.Failure("Issen movement could not be applied.");
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_005_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success(
+             $"Moved {path.Count} spaces and retired {retiredCount} enemy piece(s) along the path.",
+             suppressExtraThrow: true);
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_006_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_006_Status.cs
+index 17bedd8..b7b3569 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_006_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_006_Status.cs
+@@ -35,9 +35,6 @@ public sealed class CHAR_006_Status : CharacterStatusBehaviour
+         if (retiredCount > 0)
+             ApplyActiveEffect(1, amount: retiredCount * ActiveEffect(1).amount);
+ 
+-        Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_006_Status)} retired {retiredCount} " +
+-            $"piece(s). Player={PlayerId}, Piece={PieceId}", this);
+         return CharacterActiveResult.Success(
+             $"Sword Aura retired {retiredCount} enemy piece(s) and granted the same number of throws.",
+             suppressExtraThrow: true);
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_007_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_007_Status.cs
+index 43559f6..842b24f 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_007_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_007_Status.cs
+@@ -11,10 +11,6 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
+     {
+         if (!IsPassiveReady || !ApplyPassiveEffect()) return;
+         TryStartPassiveCooldown();
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Passive] {nameof(CHAR_007_Status)} requested {PassiveEffect().amount} skill point(s). " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+     }
+ 
+     protected override CharacterActiveResult ExecuteActive(
+@@ -35,10 +31,6 @@ public sealed class CHAR_007_Status : CharacterStatusBehaviour
+         foreach (CharacterPieceReference enemy in enemiesOnPath)
+             ApplyActiveEffect(1, enemy.Piece);
+ 
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_007_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success(
+             $"Charged to the end of the straight path and stunned {enemiesOnPath.Count} enemy piece(s).");
+     }
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_008_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_008_Status.cs
+index e501f37..2cbae2f 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_008_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_008_Status.cs
+@@ -99,11 +99,6 @@ public sealed class CHAR_008_Status : CharacterStatusBehaviour
+         // 유효한 대상에게 쏜 화살은 보호/면역에 막혀도 정상 시전입니다.
+         // 보호 소비와 속박 적용 여부는 공통 CC 처리기가 결정합니다.
+         bool applied = ApplyActiveEffect(target: CcEffectService.StackLeader(target.Piece));
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_008_Status)} activated against " +
+-            $"Player={target.Player.PlayerId}, Piece={target.Piece.PieceId}. " +
+-            $"Owner={PlayerId}, Piece={PieceId}, Applied={applied}",
+-            this);
+         return CharacterActiveResult.Success(applied
+             ? $"Binding applied for {ActiveEffect().ownerTurnTicks} owner-turn ticks."
+             : "Spirit Arrow was used, but the target blocked or resisted Binding.");
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_009_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_009_Status.cs
+index b2b7573..ae7fc65 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_009_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_009_Status.cs
+@@ -51,10 +51,6 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
+             if (reference.Piece.State == PieceState.Waiting) retiredCount += realPieceCount;
+         }
+ 
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_009_Status)} activated and retired " +
+-            $"{retiredCount} piece(s). Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success(
+             $"Self Destruct retired {retiredCount} piece(s) on this tile and all connected adjacent tiles.",
+             suppressExtraThrow: true);
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_010_Status.cs b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_010_Status.cs
+index cc6922f..529b6ad 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_010_Status.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Info/CHAR_010_Status.cs
+@@ -84,10 +84,6 @@ public sealed class CHAR_010_Status : CharacterStatusBehaviour
+         if (path.Count == 0 || !ApplyActiveEffect(path: path))
+             return CharacterActiveResult.Failure("The one-tile retreat could not be resolved.");
+ 
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][Active] {nameof(CHAR_010_Status)} activated. " +
+-            $"Player={PlayerId}, Piece={PieceId}",
+-            this);
+         return CharacterActiveResult.Success(
+             $"Retreated {path.Count} tile(s).",
+             suppressExtraThrow: true,
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Scripts/CcEffectService.cs b/unity/INDIE-GO/Assets/Character/Char_Scripts/CcEffectService.cs
+index 6464b43..0092775 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Scripts/CcEffectService.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Scripts/CcEffectService.cs
+@@ -250,7 +250,11 @@ namespace YutArena.InGame
+             if (owner != null &&
+                 CharacterSkillRegistry.TryGet(owner.PlayerId, effectivePieceId, out var status) &&
+                 status.IsImmuneToEffect(type))
++            {
++                QaDebugLog.Skill("패시브/면역", owner.PlayerId, effectivePieceId,
++                    sourcePlayerId, sourcePieceId, $"차단한 효과={GetSkillId(type)}");
+                 return false;
++            }
+ 
+             // 보호는 잡기뿐 아니라 직접 부여되는 해로운 상태이상도 막습니다.
+             if ((type == CcDefine.Sturn || type == CcDefine.Binding ||
+@@ -319,9 +323,6 @@ namespace YutArena.InGame
+                 piece.CurrentTileId, path, charges);
+             piece.Cc.Add(state);
+             Changed?.Invoke(piece, state, true);
+-            Debug.Log($"[CC][Apply] Player={owner?.PlayerId}, Piece={piece.PieceId}, " +
+-                $"Effect={GetSkillId(type)}, Turns={turns}, Value={value}, Charges={charges}, " +
+-                $"Source={sourcePlayerId}/{sourcePieceId}");
+             bool succeeded = true;
+             switch (type)
+             {
+@@ -553,6 +554,8 @@ namespace YutArena.InGame
+                     if (parts == null || piece.PieceId == record.PieceId || record.To != parts.Tile) continue;
+                     var arrived = StackLeader(movedPiece);
+                     var rescued = StackMembers(piece);
++                    QaDebugLog.Skill("패시브/부품 구출", record.PlayerId, arrived.PieceId,
++                        record.PlayerId, piece.PieceId, $"부활 및 업기, 위치={parts.Tile}, 부활 말 수={rescued.Count}");
+                     Remove(piece, parts);
+                     int groupId = arrived.IsStacked
+                         ? arrived.StackGroupId : movedOwner.RuntimeData.CreateStackGroupId();
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterBoardUtility.cs b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterBoardUtility.cs
+index cf8cedc..a53befc 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterBoardUtility.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterBoardUtility.cs
+@@ -367,6 +367,7 @@ public static class CcBoardEffects
+             attackingPieceCount,
+             grantsExtraThrow);
+         CcEffectService.BeginCaptureResolution();
++        string qaTargets = QaDebugLog.Stack(target.Player.PlayerId, target.Piece);
+         try
+         {
+             decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+@@ -375,6 +376,7 @@ public static class CcBoardEffects
+                 decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+                 decision == CharacterCaptureDecision.ConvertToParts)
+             {
++                QaDebugLog.Capture(request, decision, qaTargets, false);
+                 return false;
+             }
+ 
+@@ -383,6 +385,7 @@ public static class CcBoardEffects
+                 decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
+             CcEffectService.RewardMarks(target.Piece, request);
+             Retire(target, finalExtraThrow);
++            QaDebugLog.Capture(request, decision, qaTargets, target.Piece.State == PieceState.Waiting);
+             if (target.Piece.State != PieceState.Waiting)
+                 return false;
+             CharacterSkillRegistry.NotifyCaptureCompleted(request);
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRegistry.cs b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRegistry.cs
+index 54f886b..28d92b8 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRegistry.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRegistry.cs
+@@ -270,6 +270,18 @@ public static class CharacterSkillRegistry
+     }
+ 
+     public static CharacterActiveResult TryUseActive(CharacterActiveRequest request)
++    {
++        var result = TryUseActiveCore(request);
++        QaDebugLog.Skill("액티브 요청", request.PlayerId, request.CasterPieceId,
++            request.HasTarget ? request.TargetPlayerId : request.PlayerId,
++            request.HasTarget ? request.TargetPieceId :
++                TryGet(request.PlayerId, request.CasterPieceId, out var caster) && caster.RequiresCasterPieceSelection
++                    ? request.CasterPieceId : -1,
++            $"성공={result.Succeeded}, {result.Message}");
++        return result;
++    }
++
++    private static CharacterActiveResult TryUseActiveCore(CharacterActiveRequest request)
+     {
+         if (!AreSkillsEnabled)
+             return CharacterActiveResult.Failure("Character skills are disabled for the current game settings.");
+@@ -301,10 +313,6 @@ public static class CharacterSkillRegistry
+             int previousPoints = GetSkillPoints(request.PlayerId);
+             int remainingPoints = previousPoints - skillPointCost;
+             SkillPoints[request.PlayerId] = remainingPoints;
+-            UnityEngine.Debug.Log(
+-                $"[CharacterSkill][SkillPoint] Spent {skillPointCost}. " +
+-                $"Player={request.PlayerId}, Remaining={remainingPoints}",
+-                behaviour);
+             NotifySkillPointChanged(
+                 request.PlayerId,
+                 previousPoints,
+@@ -316,10 +324,6 @@ public static class CharacterSkillRegistry
+         if (behaviour.ActiveCooldownTurns > 0)
+         {
+             ActiveCooldowns[(request.PlayerId, behaviour.Data)] = behaviour.ActiveCooldownTurns;
+-            UnityEngine.Debug.Log(
+-                $"[CharacterSkill][Cooldown] Started {behaviour.ActiveCooldownTurns} turn(s). " +
+-                $"Player={request.PlayerId}, Character={behaviour.Data.char_Name}",
+-                behaviour);
+         }
+ 
+         // 결과 처리도 UI와 독립적으로 실행합니다(아이템/테스트/API 호출과 동일한 경로).
+@@ -390,9 +394,6 @@ public static class CharacterSkillRegistry
+ 
+         int total = current + gained;
+         SkillPoints[playerId] = total;
+-        UnityEngine.Debug.Log(
+-            $"[CharacterSkill][SkillPoint] Gained {gained}. " +
+-            $"Player={playerId}, Total={total}/{maximum}, Source={source}");
+         SkillPointRequested?.Invoke(playerId, gained);
+         NotifySkillPointChanged(playerId, current, total, gained, source);
+     }
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRuntimeVerifier.cs b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRuntimeVerifier.cs
+index 5d883fe..2187f8a 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRuntimeVerifier.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterSkillRuntimeVerifier.cs
+@@ -439,6 +439,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
+                 int pointsAfterStackMove = CharacterSkillRegistry.GetSkillPoints(1);
+                 CcEffectService.Apply(caster, CcDefine.Retire);
+                 caster.MoveTo(BoardTileId.Outer02);
++                // Retire removes the entire real stack; prepare a new ally landing.
++                ally.MoveTo(BoardTileId.Outer04);
+                 bool stackedAgain = movement.TryMovePiece(1, 0, 2);
+                 ok = skill.PassiveStatus == CharacterSkillStatus.Get_point &&
+                      stacked && caster.IsStacked &&
+@@ -447,6 +449,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
+                      stackedAgain && CharacterSkillRegistry.GetSkillPoints(1) ==
+                          System.Math.Min(pointsAfterStack + 1,
+                              CharacterSkillRegistry.GetMaxSkillPoints(1));
++                detail = $"SP={garamPointsBefore}/{pointsAfterStack}/{pointsAfterStackMove}, " +
++                    $"moves={stacked}/{movedExistingStack}/{stackedAgain}, stacked={caster.IsStacked}";
+                 break;
+             case "CHAR_002":
+                 skill.OnPieceEnteredBoard();
+diff --git a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterStatusBehaviour.cs b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterStatusBehaviour.cs
+index b81a4d3..2b00fcb 100644
+--- a/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterStatusBehaviour.cs
++++ b/unity/INDIE-GO/Assets/Character/Char_Scripts/CharacterStatusBehaviour.cs
+@@ -270,13 +270,6 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
+         if (!IsPassiveReady) return false;
+ 
+         remainingPassiveCooldownTurns = PassiveCooldownTurns;
+-        if (remainingPassiveCooldownTurns > 0)
+-        {
+-            Debug.Log(
+-                $"[CharacterSkill][PassiveCooldown] Started " +
+-                $"{remainingPassiveCooldownTurns} turn(s). Player={PlayerId}, Piece={PieceId}",
+-                this);
+-        }
+ 
+         return true;
+     }
+@@ -351,7 +344,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
+     {
+         target = CcEffectService.StackLeader(target);
+         return target != null && CanReceivePassiveEffect(target, index) &&
+-            ApplyConfiguredEffect(PassiveEffect(index), target, path, amount);
++            ApplyConfiguredEffect(PassiveEffect(index), target, path, amount, "패시브");
+     }
+ 
+     protected bool ApplyPassiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
+@@ -361,13 +354,26 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
+     protected bool ApplyActiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
+         IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
+         ApplyConfiguredEffect(ActiveEffect(index),
+-            target ?? CcEffectService.GetPiece(PlayerId, PieceId), path, amount);
++            target ?? CcEffectService.GetPiece(PlayerId, PieceId), path, amount, "액티브 효과");
+ 
+     private bool ApplyConfiguredEffect(CharacterEffectDefinition effect,
+-        PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount) =>
+-        CharacterSkillRegistry.AreSkillsEnabled && effect != null && effect.IsValid &&
+-        CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
++        PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount, string kind)
++    {
++        if (!CharacterSkillRegistry.AreSkillsEnabled || effect == null || !effect.IsValid) return false;
++        // 이동/퇴장 뒤에도 적용 당시 대상과 위치를 정확히 남깁니다.
++        var leader = QaDebugLog.Enabled ? CcEffectService.StackLeader(target) : null;
++        var owner = CcEffectService.FindOwner(leader);
++        string targets = QaDebugLog.Stack(owner != null ? owner.PlayerId : -1, leader);
++        var from = leader != null ? leader.CurrentTileId : BoardTileId.None;
++        bool applied = CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
+             PlayerId, PieceId, path, effect.isSimpleMove, effect.charges, effect.ignoresInstalledItems);
++        if (QaDebugLog.Enabled)
++            QaDebugLog.Event($"[{kind}] {QaDebugLog.Piece(PlayerId, PieceId)} -> {targets} | " +
++                $"스킬={(kind == "패시브" ? characterData.passive_Name : characterData.active_Name)}, " +
++                $"요청효과={CcEffectService.GetSkillId(effect.id)}, 처리성공={applied}, 값={amount ?? effect.amount}, " +
++                $"턴={effect.ownerTurnTicks}, 결과상태={leader?.State}, 위치={from}->{leader?.CurrentTileId}");
++        return applied;
++    }
+ 
+     // 발동 조건과 선택 순서는 스킬이 정의하고 UI는 입력/강조만 담당합니다.
+     public virtual CharacterSkillInputStep GetNextInputStep(bool selectionStarted,
+diff --git a/unity/INDIE-GO/Assets/Scenes/InGameScene.unity b/unity/INDIE-GO/Assets/Scenes/InGameScene.unity
+index bd04c3a..11eae37 100644
+--- a/unity/INDIE-GO/Assets/Scenes/InGameScene.unity
++++ b/unity/INDIE-GO/Assets/Scenes/InGameScene.unity
+@@ -6932,9 +6932,9 @@ MonoBehaviour:
+   m_EditorClassIdentifier: Assembly-CSharp::PlayerDataDebugTester
+   playerManager: {fileID: 41707850}
+   pieceMovementManager: {fileID: 41707852}
+-  testPlayerId: 1
+-  testPieceId: 0
+-  testMoveCount: 1
++  refreshInterval: 0.5
++  logStateChanges: 0
++  logGameplayEvents: 1
+ --- !u!4 &1004494005
+ Transform:
+   m_ObjectHideFlags: 0
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/LobbySettingsDebugViewer.cs b/unity/INDIE-GO/Assets/Scripts/InGame/LobbySettingsDebugViewer.cs
+index 3587c64..4792d14 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/LobbySettingsDebugViewer.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/LobbySettingsDebugViewer.cs
+@@ -4,22 +4,17 @@ using YutArena.Common;
+ namespace YutArena.InGame
+ {
+     /// <summary>
+-    /// InGameScene에서 Lobby가 전달한 시작 설정을 Console과 Inspector로 확인하는 임시 디버그 컴포넌트입니다.
++    /// 필요할 때만 로비 설정을 Inspector에서 확인하는 수동 도구입니다. 상시 상태는 QA 모니터에서 제공합니다.
+     /// </summary>
+     public class LobbySettingsDebugViewer : MonoBehaviour
+     {
+         [Header("Lobby Settings Debug")]
+         [SerializeField, TextArea(3, 12)] private string currentSettingsJson;
+ 
+-        private void Start()
+-        {
+-            RefreshSettingsView();
+-        }
+ 
+         [ContextMenu("Refresh Lobby Settings")]
+         public void RefreshSettingsView()
+         {
+-            RoomSettingsData roomSettings = GameStartSettingsHolder.CurrentRoomSettings;
+             GameStartSettings gameSettings = GameStartSettingsHolder.Current;
+ 
+             if (gameSettings == null)
+@@ -30,15 +25,7 @@ namespace YutArena.InGame
+             }
+ 
+             currentSettingsJson = JsonUtility.ToJson(gameSettings, true);
+-            string roomSettingsJson = roomSettings != null
+-                ? roomSettings.ToJson()
+-                : "CurrentRoomSettings is null";
+ 
+-            Debug.Log(
+-                "[LobbySettingsDebugViewer] Lobby -> InGame settings received\n" +
+-                "RoomSettingsData: " + roomSettingsJson + "\n" +
+-                "GameStartSettings: " + currentSettingsJson,
+-                this);
+         }
+     }
+ }
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/LogMapSpecialTileEvent.cs b/unity/INDIE-GO/Assets/Scripts/InGame/LogMapSpecialTileEvent.cs
+index 8642ade..3f1e9e7 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/LogMapSpecialTileEvent.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/LogMapSpecialTileEvent.cs
+@@ -7,14 +7,11 @@ namespace YutArena.InGame
+     public sealed class LogMapSpecialTileEvent : MapSpecialTileEvent
+     {
+         [SerializeField] private string message = "특수 타일 이벤트 발동";
++        public override string DebugLabel => message;
+ 
+         public override void Execute(MapSpecialTileContext context)
+         {
+-            Debug.Log(
+-                $"[MapEvent] {message}: Map={context.Map.CurrentMap.name}, " +
+-                $"Tile={context.TileId}, Player={context.Player.PlayerId}, " +
+-                $"Piece={context.Piece.PieceId}, Count={context.MovingPieceCount}, Value={context.Value}",
+-                context.Map);
++            // MapManager emits one common trace for every map event, including this example.
+         }
+     }
+ }
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/MapManager.cs b/unity/INDIE-GO/Assets/Scripts/InGame/MapManager.cs
+index e28c343..260b25b 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/MapManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/MapManager.cs
+@@ -146,13 +146,18 @@ namespace YutArena.InGame
+ 
+             // 이벤트가 다시 말을 이동시키더라도 특수 타일 이벤트가 무한 연쇄되지 않게 합니다.
+             isResolvingSpecialTile = true;
++            var origin = piece.CurrentTileId;
++            string qaTargets = QaDebugLog.Enabled ? QaDebugLog.Stack(player.PlayerId, piece) : "";
+             try
+             {
+                 setting.tileEvent.Execute(new MapSpecialTileContext(
+                     this, player, piece, movingPieceCount, setting.value, movement));
++                QaDebugLog.Event($"[맵 기믹] {setting.tileEvent.DebugLabel} | 맵={CurrentMap?.name}, 칸={origin}, " +
++                    $"대상={qaTargets}, 말 수={movingPieceCount}, 값={setting.value}, 성공=True");
+             }
+             catch (System.Exception exception)
+             {
++                QaDebugLog.Event($"[맵 기믹] {setting.tileEvent.DebugLabel} | 칸={origin}, 대상={qaTargets}, 성공=False");
+                 Debug.LogException(exception, setting.tileEvent);
+             }
+             finally
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/MapSpecialTileEvent.cs b/unity/INDIE-GO/Assets/Scripts/InGame/MapSpecialTileEvent.cs
+index 0a34c9e..8ef1920 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/MapSpecialTileEvent.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/MapSpecialTileEvent.cs
+@@ -39,6 +39,7 @@ namespace YutArena.InGame
+     /// </summary>
+     public abstract class MapSpecialTileEvent : ScriptableObject
+     {
++        public virtual string DebugLabel => name;
+         public abstract void Execute(MapSpecialTileContext context);
+     }
+ }
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/MoveDestinationSelector.cs b/unity/INDIE-GO/Assets/Scripts/InGame/MoveDestinationSelector.cs
+index 77e3cda..8f6a3b4 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/MoveDestinationSelector.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/MoveDestinationSelector.cs
+@@ -79,7 +79,7 @@ namespace YutArena.InGame
+         [SerializeField] private float topUiPixels = 140f;
+ 
+         [Header("Debug")]
+-        [SerializeField] private bool verboseLog = true;
++        [SerializeField] private bool verboseLog = false;
+ 
+         private readonly List<MoveMarker> pieceArrows = new List<MoveMarker>();
+         private readonly List<MoveMarker> destMarkers = new List<MoveMarker>();
+@@ -273,7 +273,6 @@ namespace YutArena.InGame
+                 // (결과는 작은 것부터 처리됨). 예전엔 여러 깃발을 옆으로 벌리다 옆 칸으로 밀려나 헷갈렸음.
+                 if (escapeFlagCount > 0)
+                 {
+-                    if (verboseLog) Debug.Log($"[MoveSelector]   {result}: 탈출 깃발은 이미 있음 (더 작은 결과로 탈출) → 생략", this);
+                     return false;
+                 }
+                 escapeFlagCount++;
+@@ -338,7 +337,6 @@ namespace YutArena.InGame
+             marker.OutlineIsLarge = IsLargeTile(reachesFinish ? BoardTileId.Start : landingTile);
+             ApplyOutlineShape(marker); // 큰 칸 크기 + 위치 보정 적용
+             destMarkers.Add(marker);
+-            if (verboseLog) Debug.Log($"[MoveSelector]   {result} → {landingTile} finish={reachesFinish} piece={pieceOnTile} {tilePos}", this);
+             return true;
+         }
+ 
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/MoveMarker.cs b/unity/INDIE-GO/Assets/Scripts/InGame/MoveMarker.cs
+index a9b90d2..99dafe8 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/MoveMarker.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/MoveMarker.cs
+@@ -184,7 +184,6 @@ namespace YutArena.InGame
+             DestroyTileHulls();
+             if (tileVisual == null)
+             {
+-                Debug.Log($"[MoveMarker] {Result} 테두리 생략: 칸 Transform 없음");
+                 return;
+             }
+ 
+@@ -193,7 +192,6 @@ namespace YutArena.InGame
+             {
+                 outlineUsesTileHull = true;
+                 SetTileHullsActive(false);
+-                Debug.Log($"[MoveMarker] {Result} 칸 윤곽선 생성: 칸='{tileVisual.name}' 모델 {tileHullPivots.Count}개");
+                 return;
+             }
+             outlineUsesTileHull = false;
+@@ -220,7 +218,6 @@ namespace YutArena.InGame
+             outlineRingSr.sortingOrder = 45;
+             frameObject.SetActive(false);
+ 
+-            Debug.Log($"[MoveMarker] {Result} 테두리 생성: 칸='{tileVisual.name}' size={frameBaseScale.x:0.00} angle={angleDeg:0} order=45");
+         }
+ 
+         // 칸 Anchor 아래의 칸 3D 모델마다, 같은 메시를 모델 중심 기준으로 (1 + 굵기)배 키운 복사본을 만든다.
+@@ -447,7 +444,6 @@ namespace YutArena.InGame
+             bool show = hasPieceOnTile || isHovered;
+             if (show == highlightOn) return;
+             highlightOn = show;
+-            Debug.Log($"[MoveMarker] {Result} 강조 {(show ? "ON" : "OFF")} (hover={isHovered}, hull={outlineUsesTileHull}, ring={(outlineRing != null)})");
+             if (outlineUsesTileHull) SetTileHullsActive(show);
+             else if (outlineRing != null) outlineRing.gameObject.SetActive(show);
+         }
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/PlayerController.cs b/unity/INDIE-GO/Assets/Scripts/InGame/PlayerController.cs
+index 3e37084..45c60e9 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/PlayerController.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/PlayerController.cs
+@@ -60,10 +60,6 @@ public sealed class PlayerController : MonoBehaviour
+         selectedCharacter = characterData;
+         jobPiecePrefab = characterData != null ? characterData.piecePrefab : defaultJobPiecePrefab;
+ 
+-        Debug.Log(
+-            $"{name}: 선택 챔피언 '{(characterData != null ? characterData.char_Name : "없음")}'의 Job Piece Prefab을 " +
+-            $"'{(jobPiecePrefab != null ? jobPiecePrefab.name : "없음")}'으로 적용했습니다.",
+-            this);
+     }
+ 
+     /// <summary>
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs b/unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs
+index bca05b4..2609dc1 100644
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs
+@@ -1,124 +1,297 @@
++using System.Collections.Generic;
++using System.Text;
+ using UnityEngine;
++using Unity.Profiling;
++using YutArena.Common;
++using YutArena.InGame;
++using YutArena.Managers;
+ 
+-/// <summary>
+-/// 런타임 말 데이터를 읽고, 이동 요청이 정상적으로 처리되는지 확인하는 개발용 도구.
+-/// Play Mode에서 컴포넌트 메뉴를 실행한다.
+-/// </summary>
++/// <summary>Fixed-layout current status for all players, plus a separate special-action stream.</summary>
++[DisallowMultipleComponent]
+ public sealed class PlayerDataDebugTester : MonoBehaviour
+ {
+     [SerializeField] private PlayerManager playerManager;
+     [SerializeField] private PieceMovementManager pieceMovementManager;
++    [SerializeField] private TestTurnManager turnManager;
++    [SerializeField] private TestWinConditionManager winManager;
++    private MapManager mapManager;
++    [Header("QA (Editor / Development Build only)")]
++    [SerializeField, Min(0.25f)] private float refreshInterval = 0.5f;
++    [SerializeField, InspectorName("상태 변경을 Console에도 기록 (로그 누적)")] private bool logStateChanges;
++    [SerializeField, InspectorName("Console 특별 행동")] private bool logGameplayEvents = true;
++    public string CurrentSnapshot { get; private set; } = "플레이 모드에서 상태를 수집합니다.";
++    public string RecentEvents { get; private set; } = "";
++    public float RefreshInterval { get => refreshInterval; set => refreshInterval = Mathf.Clamp(value, 0.25f, 10f); }
++    public bool LogStateChanges { get => logStateChanges; set => logStateChanges = value; }
++    public bool LogGameplayEvents { get => logGameplayEvents; set => logGameplayEvents = value; }
++    public int PollCount { get; private set; }
++    public int ConsoleBatchCount { get; private set; }
++    private const int EventCapacity = 64;
++    private readonly Queue<string> events = new Queue<string>();
++    private readonly Queue<string> history = new Queue<string>();
++    private readonly Queue<TurnPhase> phaseHistory = new Queue<TurnPhase>();
++    private readonly StringBuilder text = new StringBuilder(8192);
++    private float nextPoll;
++    private int droppedEvents;
++    private bool forceSnapshot { get; set; }
++    private bool historyDirty { get; set; }
++    private TestTurnManager observedTurns;
++    private int flowRound = -1, flowTurn = -1;
++    private PlayerSlot flowPlayer;
++    private TurnPhase lastPhase;
++    private static readonly ProfilerMarker PollMarker = new ProfilerMarker("QA.StatePoll");
+ 
+-    [Header("Move Test Input (positive: forward, negative: back-do)")]
+-    [SerializeField] private int testPlayerId = 1;
+-    [SerializeField] private int testPieceId;
+-    [SerializeField] private int testMoveCount = 1;
+-
+-    [ContextMenu("Log All Piece Data")]
+-    public void LogAllPieceData()
++    private void OnEnable()
++    {
++#if UNITY_EDITOR || DEVELOPMENT_BUILD
++        if (!Application.isPlaying) return;
++        forceSnapshot = false;
++        nextPoll = 0;
++        QaDebugLog.Receiver += ReceiveEvent;
++        ResolveDependencies();
++#else
++        enabled = false;
++#endif
++    }
++    private void OnDisable()
+     {
+-        if (!Application.isPlaying)
++        QaDebugLog.Receiver -= ReceiveEvent;
++        if (observedTurns != null) observedTurns.OnTurnPhaseChanged -= RecordPhase;
++        observedTurns = null;
++    }
++    private void ResolveDependencies()
++    {
++        if (playerManager == null) playerManager = FindFirstObjectByType<PlayerManager>();
++        if (pieceMovementManager == null) pieceMovementManager = FindFirstObjectByType<PieceMovementManager>();
++        if (turnManager == null) turnManager = FindFirstObjectByType<TestTurnManager>();
++        if (winManager == null) winManager = FindFirstObjectByType<TestWinConditionManager>();
++        if (mapManager == null) mapManager = FindFirstObjectByType<MapManager>();
++        if (observedTurns == turnManager) return;
++        if (observedTurns != null) observedTurns.OnTurnPhaseChanged -= RecordPhase;
++        observedTurns = turnManager;
++        if (observedTurns != null)
+         {
+-            Debug.LogWarning("이 테스트는 Play Mode에서 실행해야 합니다.", this);
+-            return;
++            observedTurns.OnTurnPhaseChanged += RecordPhase;
++            RecordPhase(observedTurns.CurrentTurn);
+         }
+-
+-        if (playerManager == null)
++    }
++    private void RecordPhase(TurnContext turn)
++    {
++        if (turn == null) return;
++        if (flowRound != turn.roundNumber || flowTurn != turn.turnNumber || flowPlayer != turn.currentPlayer)
+         {
+-            Debug.LogError("PlayerManager 참조를 Inspector에 연결하세요.", this);
+-            return;
++            phaseHistory.Clear();
++            flowRound = turn.roundNumber; flowTurn = turn.turnNumber; flowPlayer = turn.currentPlayer;
+         }
+-
+-        if (playerManager.ActivePlayers.Count == 0)
++        if (phaseHistory.Count > 0 && lastPhase == turn.currentPhase) return;
++        if (phaseHistory.Count == 16) phaseHistory.Dequeue();
++        phaseHistory.Enqueue(turn.currentPhase);
++        lastPhase = turn.currentPhase;
++    }
++    private void Update()
++    {
++#if UNITY_EDITOR || DEVELOPMENT_BUILD
++        if (Time.unscaledTime < nextPoll) return;
++        nextPoll = Time.unscaledTime + Mathf.Clamp(refreshInterval, 0.25f, 10f);
++        PollNow();
++#endif
++    }
++    private void ReceiveEvent(string message)
++    {
++        var turn = turnManager != null ? turnManager.CurrentTurn : null;
++        if (turn != null) message = $"[R{turn.roundNumber}/T{turn.turnNumber}/{turn.currentPhase}] " + message;
++        if (events.Count == EventCapacity) { events.Dequeue(); droppedEvents++; }
++        events.Enqueue(message);
++        if (history.Count == EventCapacity) history.Dequeue();
++        history.Enqueue(message);
++        historyDirty = true;
++    }
++    [ContextMenu("QA / Print Full Snapshot")]
++    public void LogAllPieceData()
++    {
++#if UNITY_EDITOR || DEVELOPMENT_BUILD
++        if (!Application.isPlaying) return;
++        forceSnapshot = true;
++        PollNow();
++#endif
++    }
++    public void ClearEventHistory()
++    {
++        history.Clear(); events.Clear(); RecentEvents = "";
++        droppedEvents = 0; historyDirty = false;
++    }
++    public void PollNow()
++    {
++#if UNITY_EDITOR || DEVELOPMENT_BUILD
++        if (!Application.isPlaying) return;
++        using (PollMarker.Auto())
+         {
+-            Debug.LogError("활성 플레이어가 없습니다. SetupPlayers()가 먼저 호출되어야 합니다.", this);
+-            return;
+-        }
++            ResolveDependencies();
++            if (playerManager == null) return;
++            PollCount++;
++            text.Clear();
++            var settings = turnManager?.Settings ?? GameStartSettingsHolder.Current;
++            string actualMap = mapManager != null && mapManager.CurrentMap != null ? mapManager.CurrentMap.mapType.ToString() : "로딩 중";
++            text.AppendLine(settings == null ? "[게임 설정] 초기화 대기" :
++                $"[게임 설정] 모드={settings.gameMode}, 선택맵={settings.mapType}, 현재맵={actualMap}, 인원={settings.playerCount}, 팀전={settings.isTeamMode}, " +
++                $"스킬={settings.useSkill}, 실제스킬사용={CharacterSkillRegistry.AreSkillsEnabled}, 아이템={settings.useItem}, 특수칸={settings.useSpecialTile}, 목표점수={settings.targetEscapeCount}, 최대라운드={settings.maxTurnCount}");
++            AppendTurn();
++            if (playerManager.ActivePlayers.Count == 0)
++                text.AppendLine("[플레이어] 로비 설정을 전달받아 플레이어/말을 생성하는 중입니다.");
++            foreach (var player in playerManager.ActivePlayers)
++                if (player != null && player.RuntimeData != null) AppendPlayer(player, settings);
++            string snapshot = text.ToString();
++            bool changed = snapshot != CurrentSnapshot;
++            CurrentSnapshot = snapshot;
++            // CurrentSnapshot is the persistent view. Console history is opt-in; changing values cannot collapse.
++            if (forceSnapshot || (logStateChanges && changed))
++                WriteConsole(forceSnapshot ? "[QA][현재 상태]" : "[QA][상태 변경 기록]", CurrentSnapshot);
+ 
+-        Debug.Log($"===== Piece Data: {playerManager.ActivePlayers.Count} Players =====", this);
+-
+-        foreach (PlayerController player in playerManager.ActivePlayers)
++            text.Clear();
++            if (logGameplayEvents)
++            {
++                foreach (string item in events) text.AppendLine(item);
++                if (droppedEvents > 0) text.AppendLine($"[생략] 특별 행동이 많아 오래된 {droppedEvents}개 생략");
++                if (text.Length > 0) WriteConsole("[QA][특별 행동]", text.ToString());
++            }
++            events.Clear(); droppedEvents = 0;
++            if (historyDirty)
++            {
++                text.Clear();
++                foreach (string item in history) text.AppendLine(item);
++                RecentEvents = text.ToString();
++                historyDirty = false;
++            }
++            forceSnapshot = false;
++        }
++#endif
++    }
++    private void WriteConsole(string label, string body)
++    {
++        Debug.LogFormat(LogType.Log, LogOption.NoStacktrace, this, "{0}\n{1}", label, body);
++        ConsoleBatchCount++;
++    }
++    private void AppendTurn()
++    {
++        text.Append("[턴 순서] ");
++        if (turnManager?.TurnOrder?.order != null)
+         {
+-            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
++            bool first = true;
++            foreach (var player in turnManager.TurnOrder.order)
+             {
+-                string remainingStepsText = "-";
+-                if (piece.State == PieceState.InBoard)
+-                {
+-                    if (pieceMovementManager != null &&
+-                        pieceMovementManager.TryGetRemainingStepsToGoal(
+-                            player.PlayerId,
+-                            piece.PieceId,
+-                            out int remainingSteps))
+-                    {
+-                        remainingStepsText = remainingSteps.ToString();
+-                    }
+-                    else
+-                    {
+-                        remainingStepsText = "조회 실패";
+-                    }
+-                }
+-
+-                Debug.Log(
+-                    $"[Player {player.PlayerId}] Piece {piece.PieceId + 1} | " +
+-                    $"Current: {piece.CurrentTileId} | " +
+-                    $"Previous: {piece.PreviousTileId} | " +
+-                    $"State: {piece.State} | " +
+-                    $"Remaining To Goal: {remainingStepsText} | " +
+-                    $"StackGroup: {piece.StackGroupId} | " +
+-                    $"StackLeader: {piece.StackLeaderPieceId} | " +
+-                    $"Finished: {piece.IsFinished} | " +
+-                    $"CC: {piece.CurrentCc} (remaining: {piece.RemainingCcTurns})",
+-                    player);
++                if (!first) text.Append(" → ");
++                text.Append(player); first = false;
+             }
+         }
++        text.AppendLine();
++        var turn = turnManager != null ? turnManager.CurrentTurn : null;
++        if (turn == null) { text.AppendLine("[턴 진행] 초기화 대기"); return; }
++        RecordPhase(turn);
++        text.AppendLine($"[턴 진행] 라운드={turn.roundNumber}, 전체턴={turn.turnNumber}, 현재={turn.currentPlayer}/{turn.currentTeam}, " +
++            $"단계={turn.currentPhase}, 종료={turn.isGameEnded}, 낙취소={turn.isTurnCanceledByNak}");
++        text.Append("  진행 흐름: ");
++        bool firstPhase = true;
++        foreach (var phase in phaseHistory)
++        {
++            if (!firstPhase) text.Append(" → ");
++            text.Append(phase); firstPhase = false;
++        }
++        text.AppendLine();
++        text.Append($"  최근윷={turn.lastYutResult}; 남은결과=");
++        foreach (var result in turnManager.PendingResults) text.Append(result.result).Append(' ');
++        text.AppendLine($"; 남은던지기: 기본={turnManager.HasPendingRegularThrow}, 잡기={turnManager.PendingCaptureThrows}, 스킬={turnManager.PendingSkillThrows}");
++        if (winManager != null && winManager.IsTieBreakerActive) text.AppendLine("  타이브레이커 진행 중");
+     }
+-
+-    [ContextMenu("Run Configured Move Test")]
+-    public void RunConfiguredMoveTest()
++    private void AppendPlayer(PlayerController player, GameStartSettings settings)
+     {
+-        if (!Application.isPlaying)
++        int board = 0, waiting = 0, finished = 0;
++        var characterData = player.SelectedCharacter;
++        foreach (var piece in player.RuntimeData.Pieces)
+         {
+-            Debug.LogWarning("이 테스트는 Play Mode에서 실행해야 합니다.", this);
+-            return;
++            if (piece.State == PieceState.InBoard) board++;
++            else if (piece.State == PieceState.Waiting) waiting++;
++            else if (piece.State == PieceState.Goal) finished++;
++            if (characterData == null && CharacterSkillRegistry.TryGet(player.PlayerId, piece.PieceId, out var status))
++                characterData = status.Data;
+         }
+-
+-        if (pieceMovementManager == null)
++        var team = settings != null ? MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)player.PlayerId) : TeamSlot.None;
++        text.AppendLine();
++        text.Append($"[P{player.PlayerId}] {(characterData != null ? characterData.char_Name : "미등록")} | " +
++            $"SP={CharacterSkillRegistry.GetSkillPoints(player.PlayerId)}/{CharacterSkillRegistry.GetMaxSkillPoints(player.PlayerId)} | ");
++        int total = player.RuntimeData.Pieces.Count;
++        if (settings != null && settings.gameMode == GameMode.Classic)
++            text.Append($"완주={finished}/{total} | 남은말={total - finished} (보드={board}, 대기={waiting})");
++        else if (settings != null && settings.gameMode == GameMode.Escape)
++            text.Append($"{(settings.isTeamMode ? "팀점수" : "점수")}={(winManager != null ? winManager.GetEscapeCount(team).ToString() : "조회 대기")}/{settings.targetEscapeCount} | 보드={board}, 대기={waiting}");
++        else
++            text.Append($"보드={board}, 대기={waiting}, 완주={finished}/{total}");
++        text.Append($" | 팀={team}");
++        if (characterData != null)
++            text.Append($" | 액티브CD={CharacterSkillRegistry.GetRemainingActiveCooldown(player.PlayerId, characterData)}");
++        text.AppendLine();
++        foreach (var piece in player.RuntimeData.Pieces)
++            if (piece.State == PieceState.InBoard) AppendPiece(player, piece, team);
++        if (board == 0) text.AppendLine("  보드 위 말 없음");
++    }
++    private void AppendPiece(PlayerController player, PlayerRuntimeData.PieceRuntimeData piece, TeamSlot team)
++    {
++        CharacterSkillRegistry.TryGet(player.PlayerId, piece.PieceId, out var skill);
++        text.Append($"  말{piece.PieceId + 1}(id={piece.PieceId}) | 상태={piece.State}, 위치={piece.CurrentTileId}, 이전={piece.PreviousTileId}");
++        if (pieceMovementManager != null &&
++            pieceMovementManager.TryGetRemainingStepsToGoal(player.PlayerId, piece.PieceId, out int remaining))
++            text.Append($", 남은칸={remaining}");
++        text.Append(piece.IsStacked ? $", 업기그룹={piece.StackGroupId}, 선두=말{piece.StackLeaderPieceId + 1}" : ", 업기=-");
++        if (skill != null)
++            text.Append($", 패시브CD={skill.RemainingPassiveCooldownTurns}, 스킬사용가능={CharacterSkillRegistry.CanUseActive(player.PlayerId, piece.PieceId)}");
++        text.Append(", CC=[");
++        foreach (var cc in piece.Cc.Effects)
+         {
+-            Debug.LogError("PieceMovementManager 참조를 Inspector에 연결하세요.", this);
+-            return;
++            text.Append($"{cc.SkillId}(턴={cc.RemainingOwnerTurns}, 값={cc.Value}, 횟수={cc.Charges}, 출처=P{cc.SourcePlayerId}/id={cc.SourcePieceId}");
++            if (cc.Path.Count > 0) { text.Append(", 경로="); foreach (var tile in cc.Path) text.Append(tile).Append('>'); }
++            text.Append(") ");
+         }
+-
+-        pieceMovementManager.TryMovePiece(testPlayerId, testPieceId, testMoveCount);
++        text.AppendLine("]");
++        AppendPieceDetails(text, player.RuntimeData, piece, team);
+     }
+-
+-    [ContextMenu("Log Configured Piece Remaining Steps")]
+-    public void LogConfiguredPieceRemainingSteps()
++    // Additional line only: the original status, distance score, stack, cooldown and CC fields stay intact.
++    internal static void AppendPieceDetails(StringBuilder output, PlayerRuntimeData owner,
++        PlayerRuntimeData.PieceRuntimeData piece, TeamSlot team)
+     {
+-        if (!Application.isPlaying)
++        output.Append($"    팀={team}, 골인까지=");
++        if (PieceMovementManager.TryCountMinimumGoalSteps(piece.CurrentTileId, piece.PreviousTileId, out int remaining))
++            output.Append(remaining).Append("칸(최단)");
++        else
++            output.Append("조회불가");
++        if (!piece.IsStacked)
+         {
+-            Debug.LogWarning("이 테스트는 Play Mode에서 실행해야 합니다.", this);
++            output.AppendLine(", 업기역할=단독, 리더말=-, 업힌말=[], 업힌수=0, 그룹전체=1");
+             return;
+         }
+ 
+-        if (pieceMovementManager == null)
++        int total = 0, carried = 0;
++        bool leaderPresent = false;
++        foreach (var member in owner.Pieces)
+         {
+-            Debug.LogError("PieceMovementManager 참조를 Inspector에 연결하세요.", this);
+-            return;
++            if (!IsSameBoardStack(piece, member)) continue;
++            total++;
++            if (member.PieceId == piece.StackLeaderPieceId) leaderPresent = true;
++            else carried++;
+         }
+-
+-        if (pieceMovementManager.TryGetRemainingStepsToGoal(
+-                testPlayerId,
+-                testPieceId,
+-                out int remainingSteps))
++        output.Append(piece.PieceId == piece.StackLeaderPieceId ? ", 업기역할=리더" : ", 업기역할=업힌 말");
++        output.Append($", 리더말=P{owner.PlayerId}/말{piece.StackLeaderPieceId + 1}(id={piece.StackLeaderPieceId})");
++        if (!leaderPresent) output.Append("[보드에서 찾지 못함]");
++        output.Append(", 업힌말=[");
++        bool first = true;
++        foreach (var member in owner.Pieces)
+         {
+-            Debug.Log(
+-                $"[Remaining Steps] Player {testPlayerId}, Piece {testPieceId + 1}: {remainingSteps}",
+-                this);
+-            return;
++            if (!IsSameBoardStack(piece, member) || member.PieceId == piece.StackLeaderPieceId) continue;
++            if (!first) output.Append(", ");
++            output.Append($"P{owner.PlayerId}/말{member.PieceId + 1}(id={member.PieceId})");
++            first = false;
+         }
+-
+-        Debug.LogWarning(
+-            $"[Remaining Steps] Player {testPlayerId}, Piece {testPieceId + 1}은(는) InBoard 상태가 아니거나 찾을 수 없습니다.",
+-            this);
++        output.AppendLine($"], 업힌수={carried}, 그룹전체={total}");
+     }
++    private static bool IsSameBoardStack(PlayerRuntimeData.PieceRuntimeData piece, PlayerRuntimeData.PieceRuntimeData member) =>
++        member.State == PieceState.InBoard && member.IsStacked && member.StackGroupId == piece.StackGroupId &&
++        member.StackLeaderPieceId == piece.StackLeaderPieceId;
+ }
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/test.cs b/unity/INDIE-GO/Assets/Scripts/InGame/test.cs
+deleted file mode 100644
+index f163cfe..0000000
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/test.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-using YutArena.Common;
+-using UnityEngine;
+-
+-//namespace YutArena.Managers{
+-    public class test : MonoBehaviour
+-    {
+-        YutResult yutResult = YutResult.Nak;
+-        private void Start()
+-        {
+-            Debug.Log((int)yutResult);
+-            Debug.Log(yutResult);
+-        }
+-        //Github notebook -- PC connect git push and pull test
+-        //notebook Git pull ok
+-        //notebook to PC Git push test
+-        //notebook to PC Git push test 2
+-    }
+-//}
+-
+-
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/test.cs.meta b/unity/INDIE-GO/Assets/Scripts/InGame/test.cs.meta
+deleted file mode 100644
+index 155e091..0000000
+--- a/unity/INDIE-GO/Assets/Scripts/InGame/test.cs.meta
++++ /dev/null
+@@ -1,2 +0,0 @@
+-fileFormatVersion: 2
+-guid: 9803d6ec89e682f40b58f26f9302899e
+\ No newline at end of file
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs
+index 61eb086..3834691 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs
+@@ -14,6 +14,27 @@ public sealed class PieceMovementManager : MonoBehaviour
+ 
+     public event System.Action<int, IReadOnlyList<int>, IReadOnlyList<BoardTileId>> OnVisualMoveResolved;
+ 
++    /// <summary>
++    /// Read-only geometric distance: stop at junctions to take shortcuts, then pass the shared start to finish.
++    /// Separate from Escape's fixed distance score. Does not simulate CC, skills, captures, or throws.
++    /// </summary>
++    internal static bool TryCountMinimumGoalSteps(BoardTileId current, BoardTileId previous, out int remaining)
++    {
++        remaining = -1;
++        // The longest normal route is shorter than this bound; corrupt data must not loop in the QA poll.
++        for (int steps = 1; steps <= 32; steps++)
++        {
++            if (current == BoardTileId.None) { remaining = steps; return true; }
++            if (current < BoardTileId.Outer01 || current > BoardTileId.Inner08 || current == BoardTileId.Corner04)
++                return false;
++            // On this board, stopping at each junction permits the shortest forward shortcut.
++            BoardTileId next = GetNextForwardTile(current, previous, true, true);
++            previous = current;
++            current = next;
++        }
++        return false;
++    }
++
+     /// <summary>
+     /// 현재 보드 위에 있는 지정 말의 골인까지 남은 칸 수를 반환합니다.
+     /// Escape 제한시간 동점 판정에서 사용합니다.
+@@ -235,7 +256,7 @@ public sealed class PieceMovementManager : MonoBehaviour
+             NotifyVisualMoveResolved(playerId, movingPieces, path);
+             //수정: 완주한 이동도 이동 완료 이벤트에서 누락되지 않도록 전달합니다.
+             NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
+-            Debug.Log($"Player {playerId}, Piece {pieceId + 1} reached Goal.", this);
++            QaDebugLog.Event($"[완주] {QaDebugLog.Piece(playerId, pieceId)} | 실제 말 수={movingPieces.Count}", this);
+             return true;
+         }
+ 
+@@ -258,10 +279,6 @@ public sealed class PieceMovementManager : MonoBehaviour
+         if (mapManager != null && selectedPiece.CurrentTileId == landingTile)
+             mapManager.ResolveSpecialTile(player, selectedPiece, movingPieces.Count, this);
+ 
+-        Debug.Log(
+-            $"Player {playerId}, Piece {pieceId + 1}: {startingTile} -> " +
+-            $"{selectedPiece.CurrentTileId} ({moveCount} spaces)",
+-            this);
+         return true;
+     }
+ 
+@@ -360,12 +377,15 @@ public sealed class PieceMovementManager : MonoBehaviour
+                     wouldGrantExtraThrow);
+                 CharacterCaptureDecision decision =
+                     CharacterSkillRegistry.EvaluateIncomingCapture(request);
++                string qaTargets = QaDebugLog.Stack(otherPlayer.PlayerId, targetPiece);
+ 
+                 //수정: 방어, 분신 소모, 부품 전환 결과면 기본 잡기를 실행하지 않습니다.
+                 if (decision == CharacterCaptureDecision.Prevent ||
+                     decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+                     decision == CharacterCaptureDecision.ConvertToParts)
+                 {
++                    if (wasStackLeader[targetPiece.PieceId])
++                        QaDebugLog.Capture(request, decision, qaTargets, false);
+                     continue;
+                 }
+ 
+@@ -387,6 +407,7 @@ public sealed class PieceMovementManager : MonoBehaviour
+                 //수정: 표식 보상 및 CC 적용은 Character 효과 처리기에 위임합니다.
+                 CcEffectService.RewardMarks(targetPiece, request);
+                 targetPiece.SetCaptured(captureCc);
++                QaDebugLog.Capture(request, decision, qaTargets, targetPiece.State == PieceState.Waiting);
+                 //수정: 실제 잡기 이후 방어자 퇴장과 공격자 잡기 완료를 알립니다.
+                 CharacterSkillRegistry.NotifyCaptureCompleted(request);
+             }
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/PlayerManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/PlayerManager.cs
+index 56b5c4e..a11df91 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/PlayerManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/PlayerManager.cs
+@@ -88,7 +88,6 @@ public sealed class PlayerManager : MonoBehaviour
+             return;
+         }
+ 
+-        Debug.Log($"Player {playerIndex + 1}: {characterData.char_Name} -> {characterData.piecePrefab.name} 말 프리팹 적용", player);
+     }
+ 
+     public bool TryGetPlayer(int playerId, out PlayerController player)
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/TestGameManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/TestGameManager.cs
+index 188cb5f..f7a5ff7 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/TestGameManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/TestGameManager.cs
+@@ -123,7 +123,7 @@ namespace YutArena.Managers
+ 
+         private IEnumerator CharacterSelectCountdownRoutine()
+         {
+-            Debug.Log("[캐릭터선택] " + characterSelectCountdownSeconds + "초 후 자동으로 게임 시작");
++            QaDebugLog.Event("[캐릭터선택] " + characterSelectCountdownSeconds + "초 후 자동으로 게임 시작");
+             yield return new WaitForSeconds(characterSelectCountdownSeconds);
+             characterSelectCountdownCoroutine = null;
+             StartGame(); // 카운트다운 끝나면 자동으로 진짜 게임 시작
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/TestTurnManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/TestTurnManager.cs
+index 6e89cca..29a677e 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/TestTurnManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/TestTurnManager.cs
+@@ -39,6 +39,10 @@ namespace YutArena.Managers
+         private int pendingSkillThrows = 0;
+         //수정: 기본/윷·모로 이미 확보한 던지기는 잡기·스킬 보너스와 별도로 소비합니다.
+         private bool pendingRegularThrow = true;
++        // 읽기 전용 QA/UI 조회. 잔여 던지기 원인을 분리해서 표시합니다.
++        public bool HasPendingRegularThrow => pendingRegularThrow;
++        public int PendingCaptureThrows => pendingCaptureThrows;
++        public int PendingSkillThrows => pendingSkillThrows;
+         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
+         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
+         private GameStartSettings settings;
+@@ -94,7 +98,6 @@ namespace YutArena.Managers
+                 order = determinedOrder,
+                 currentIndex = 0
+             };
+-            Debug.Log("[실제 게임] 확정된 순서: " + string.Join(" -> ", determinedOrder)); // 테스트용, 진짜 게임이 쓰는 순서를 딱 한 번 찍음
+             seatOrder = new List<PlayerSlot>(determinedOrder); // 라운드 계산용 (IsNewRound 참고)
+             CurrentTurn.roundNumber = 1;
+             CurrentTurn.turnNumber = 1;
+@@ -172,14 +175,14 @@ namespace YutArena.Managers
+         public void TestDetermineOrder()
+         {
+             var result = DetermineOrder(TurnOrder.order);
+-            Debug.Log("정해진 순서: " + string.Join(" -> ", result));
++            QaDebugLog.Event("정해진 순서: " + string.Join(" -> ", result));
+         }
+         // 테스트용: 인스펙터 우클릭으로 팀 단위 순서정하기 전체 과정을 확인
+         [ContextMenu("테스트: 팀 단위 순서 다시 정하기")]
+         public void TestDetermineTeamBasedOrder()
+         {
+             var result = DetermineTeamBasedOrder(TurnOrder.order);
+-            Debug.Log("팀 단위로 정해진 순서: " + string.Join(" -> ", result));
++            QaDebugLog.Event("팀 단위로 정해진 순서: " + string.Join(" -> ", result));
+         }
+         private void BeginTurnFor(PlayerSlot player)
+         {
+@@ -240,14 +243,14 @@ namespace YutArena.Managers
+                 return;
+             }
+             var first = pendingResults[0];
+-            Debug.Log("이동 요청 보냄: " + first.result);
++            QaDebugLog.Event("이동 요청 보냄: " + first.result);
+             RequestMovePiece(0, first.result); //  테스트용 pieceId를 0으로 (영서 코드는 pieceId가 0부터 시작함)
+-            Debug.Log("이동 요청 처리 끝, 현재 단계: " + CurrentTurn.currentPhase);
++            QaDebugLog.Event("이동 요청 처리 끝, 현재 단계: " + CurrentTurn.currentPhase);
+         }
+         [ContextMenu("테스트: 현재 상태 보기")]
+         public void TestPrintCurrentPhase()
+         {
+-            Debug.Log("현재 단계: " + CurrentTurn.currentPhase
++            QaDebugLog.Event("현재 단계: " + CurrentTurn.currentPhase
+                 + " / 결과묶음 개수: " + pendingResults.Count
+                 + " / 현재 플레이어: " + CurrentTurn.currentPlayer);
+         }
+@@ -275,7 +278,6 @@ namespace YutArena.Managers
+             bool isSkillBonusThrow = !pendingRegularThrow && !isCaptureBonusThrow && pendingSkillThrows > 0;
+             SetPhase(TurnPhase.Throwing);
+             YutResult result = yutRuleManager.Throw(CurrentTurn.currentPlayer);
+-            Debug.Log("[던지기] " + CurrentTurn.currentPlayer + " → " + result); // 던진 결과 확인용
+             CurrentTurn.lastYutResult = result;
+             SetPhase(TurnPhase.SaveThrowResult);
+             if (YutResultRule.IsTurnCancelResult(result))
+@@ -451,7 +453,7 @@ namespace YutArena.Managers
+                 int finishedBeforeForcedMove = CountFinishedPieces(playerId);
+                 SetPhase(TurnPhase.MovePiece);
+                 if (!forcedMoveOwner.ExecutePendingForcedMove())
+-                    Debug.Log("[턴] 윤누리 추가 1칸 이동 못 함 (업힘 등) → 건너뜀");
++                    QaDebugLog.Event("[턴] 윤누리 추가 1칸 이동 못 함 (업힘 등) → 건너뜀");
+                 ResolveAfterMove(playerId, finishedBeforeForcedMove);
+                 return;
+             }
+@@ -557,14 +559,14 @@ namespace YutArena.Managers
+             // 이번 턴에 잡기/스킬로 얻은 보너스 던지기가 남아 있으면, 못 쓰는 결과만 버리고 던지러 감
+             if (pendingCaptureThrows > 0 || pendingSkillThrows > 0)
+             {
+-                Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
++                QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
+                 pendingResults.Clear();
+                 OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+                 SetPhase(TurnPhase.WaitThrow);
+                 return;
+             }
+ 
+-            Debug.Log("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
++            QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
+             EndTurn();
+         }
+ 
+@@ -702,7 +704,7 @@ namespace YutArena.Managers
+                 CurrentTurn.roundNumber >= settings.maxTurnCount)
+             {
+                 maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
+-                Debug.Log("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
++                QaDebugLog.Event("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
+                 winConditionManager.HandleTimeLimitReached();
+                 if (CurrentTurn.isGameEnded) return; // 턴제한 함수
+             }
+@@ -741,7 +743,7 @@ namespace YutArena.Managers
+             pendingCaptureThrows = 0;
+             pendingSkillThrows = 0;
+             OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+-            Debug.Log("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
++            QaDebugLog.Event("[턴] " + CurrentTurn.currentPlayer + " 순위 확정으로 게임에서 빠짐 -> 남은 결과 버리고 턴 종료");
+             EndTurn();
+         }
+ 
+@@ -966,7 +968,7 @@ namespace YutArena.Managers
+                 turnTimerRemainingSeconds -= Time.deltaTime;
+             }
+             turnTimerCoroutine = null;
+-            Debug.Log("[타이머] 턴 제한시간 초과, 턴 강제 종료");
++            QaDebugLog.Event("[타이머] 턴 제한시간 초과, 턴 강제 종료");
+             EndTurn();
+         }
+     }
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/TestWinConditionManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/TestWinConditionManager.cs
+index 84d8bdd..2d477db 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/TestWinConditionManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/TestWinConditionManager.cs
+@@ -93,8 +93,10 @@ namespace YutArena.Managers
+             if (!isFinished) return; // 완주가 아니면 여기서 할 일 없음
+             int bonus = GetEscapeBonus(team);
+             AddEscapeCount(team, finishedCount + bonus); // 탈출한 말 개수 + 보너스 = 이번에 얻은 점수
+-            Debug.Log("[점수] " + team + " 탈출 " + finishedCount + "개 + 보너스 " + bonus +
+-                " -> 총 " + GetEscapeCount(team) + "/" + settings.targetEscapeCount + "점"); // 확인용 로그
++            if (settings.gameMode == GameMode.Escape)
++                QaDebugLog.Event($"[탈출] {player}/{team} | 실제 말 수={finishedCount}, 보너스={bonus}, 점수={GetEscapeCount(team)}/{settings.targetEscapeCount}");
++            else
++                QaDebugLog.Event($"[완주 판정] {player}/{team} | 이번 완주 말 수={finishedCount}");
+             CheckWinCondition(team); // 점수 올랐으니 승리 조건 채웠는지 바로 확인
+         }
+         // ===================================================================
+@@ -113,7 +115,7 @@ namespace YutArena.Managers
+             {
+                 firstEscapeBonusGiven = true;
+                 bonus += 1;
+-                Debug.Log("[점수] " + team + " 첫 탈출 보너스 +1");
++                QaDebugLog.Event("[점수] " + team + " 첫 탈출 보너스 +1");
+             }
+ 
+             scoringStreak = team == lastScoringTeam ? scoringStreak + 1 : 1;
+@@ -121,7 +123,7 @@ namespace YutArena.Managers
+             if (scoringStreak >= 2 && (ConsecutiveBonusEveryTime || scoringStreak == 2))
+             {
+                 bonus += 1;
+-                Debug.Log("[점수] " + team + " 연속 탈출 보너스 +1 (" + scoringStreak + "연속)");
++                QaDebugLog.Event("[점수] " + team + " 연속 탈출 보너스 +1 (" + scoringStreak + "연속)");
+             }
+             return bonus;
+         }
+@@ -166,7 +168,7 @@ namespace YutArena.Managers
+                 // 턴 순서에서 이 팀 플레이어들을 빼달라고 TurnManager한테 부탁
+                 turnManager.RemovePlayersOfTeam(team, settings);
+                 ClearBoardPiecesOfTeam(team);
+-                Debug.Log(team + " 목표 달성! " + finishedRanking.Count + "등으로 기록, 남은 " + activeTeams.Count + "팀으로 게임 계속");
++                QaDebugLog.Event(team + " 목표 달성! " + finishedRanking.Count + "등으로 기록, 남은 " + activeTeams.Count + "팀으로 게임 계속");
+             }
+         }
+         // ===================================================================
+@@ -229,7 +231,7 @@ namespace YutArena.Managers
+                 winningPlayer = FindSoloWinningPlayer(displayedWinner), // displayedWinner 소속이 1명뿐이면(개인전) 그 사람을, 팀전이면 None을 채움
+                 finalRanking = finalRanking
+             };
+-            Debug.Log("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
++            QaDebugLog.Event("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
+                 " / settings.matchComposition=" + settings.matchComposition + " / settings.playerCount=" + settings.playerCount); // 확인용 로그
+             gameManager.EndGame(result);
+         }
+@@ -338,7 +340,7 @@ namespace YutArena.Managers
+                 activeTeams.Remove(team);
+                 turnManager.RemovePlayersOfTeam(team, settings); // 남은 팀원(있다면)도 마저 순서에서 제거
+                 ClearBoardPiecesOfTeam(team);
+-                Debug.Log(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
++                QaDebugLog.Event(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
+             }
+         }
+         // ===================================================================
+@@ -370,7 +372,7 @@ namespace YutArena.Managers
+                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 턴 제한 승부 미구현");
+                 return;
+             }
+-            Debug.Log("[승리조건2] " + settings.gameMode + " 턴 수 도달, 순위 판정 시작"); // 확인용 로그
++            QaDebugLog.Event("[승리조건2] " + settings.gameMode + " 턴 수 도달, 순위 판정 시작"); // 확인용 로그
+ 
+             // 버그 수정: 예전엔 타이브레이커를 시작해도 턴이 멈추지 않아서 바로 다음 턴이 시작됐음.
+             // 순위가 다 정해질 때까지 턴 진행을 먼저 멈춤 (타이브레이커 결과가 나올 때까지 이 상태로 대기)
+@@ -388,7 +390,7 @@ namespace YutArena.Managers
+                 .ToList();
+ 
+             foreach (var team in sorted)
+-                Debug.Log("[승리조건2] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
++                QaDebugLog.Event("[승리조건2] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
+                     (distanceByTeam[team] == int.MaxValue ? "판 위 말 없음" : distanceByTeam[team] + "칸"));
+ 
+             // 점수와 거리가 둘 다 같은 팀끼리 한 묶음으로 나눔 (혼자면 1팀짜리 묶음)
+@@ -429,7 +431,7 @@ namespace YutArena.Managers
+ 
+             // 모든 순위가 정해짐 -> 게임 종료
+             if (turnLimitRanking.Count == 0) return; // 방어 처리 (남은 팀이 없을 수는 없음)
+-            Debug.Log("[승리조건2] 순위 확정: " + string.Join(" > ", turnLimitRanking));
++            QaDebugLog.Event("[승리조건2] 순위 확정: " + string.Join(" > ", turnLimitRanking));
+             Declare(turnLimitRanking[0], GameResultType.TimeOver, new List<TeamSlot>(turnLimitRanking));
+         }
+ 
+@@ -470,7 +472,7 @@ namespace YutArena.Managers
+                     tieBreakerPendingPlayers.Add(p);
+             }
+             int rank = finishedRanking.Count + turnLimitRanking.Count + 1; // 이번 묶음이 몇 등 자리를 다투는지
+-            Debug.Log("[타이브레이커] " + rank + "등 결정전 시작! 대상 팀: " + string.Join(", ", tiedTeams) +
++            QaDebugLog.Event("[타이브레이커] " + rank + "등 결정전 시작! 대상 팀: " + string.Join(", ", tiedTeams) +
+                 " / 던져야 할 사람: " + string.Join(", ", tieBreakerPendingPlayers));
+             OnTieBreakerRoundStarted?.Invoke(new List<TeamSlot>(tiedTeams), new List<PlayerSlot>(tieBreakerPendingPlayers));
+         }
+@@ -508,7 +510,7 @@ namespace YutArena.Managers
+             YutResult result = yutRuleManager.ThrowForTieBreaker(); // 낙 없는 전용 확률표 사용
+             tieBreakerResults[player] = result;
+             tieBreakerPendingPlayers.Remove(player);
+-            Debug.Log("[타이브레이커] " + player + " 던짐 → " + result +
++            QaDebugLog.Event("[타이브레이커] " + player + " 던짐 → " + result +
+                 " (남은 사람: " + tieBreakerPendingPlayers.Count + "명)");
+             OnTieBreakerThrown?.Invoke(player, result);
+ 
+@@ -529,7 +531,7 @@ namespace YutArena.Managers
+                 sumByTeam[team] = sum;
+             }
+             foreach (var kv in sumByTeam)
+-                Debug.Log("[타이브레이커] " + kv.Key + " 합산 결과: " + kv.Value);
++                QaDebugLog.Event("[타이브레이커] " + kv.Key + " 합산 결과: " + kv.Value);
+ 
+             // 합이 큰 순서대로 다시 묶음을 나눠서, 지금 묶음 자리에 끼워 넣음
+             // 예: A 5, B 5, C 2 -> [A,B] [C] -> A·B는 다시 타이브레이커, C는 그 다음 순위로 확정
+@@ -539,7 +541,7 @@ namespace YutArena.Managers
+                 .Select(g => g.ToList())
+                 .ToList();
+             if (splitGroups.Count == 1)
+-                Debug.Log("[타이브레이커] 또 동점, 재던지기 라운드 시작");
++                QaDebugLog.Event("[타이브레이커] 또 동점, 재던지기 라운드 시작");
+ 
+             isTieBreakerActive = false;
+             pendingRankGroups.RemoveAt(0);
+diff --git a/unity/INDIE-GO/Assets/Scripts/Managers/TestYutRuleManager.cs b/unity/INDIE-GO/Assets/Scripts/Managers/TestYutRuleManager.cs
+index bd475ed..cd47204 100644
+--- a/unity/INDIE-GO/Assets/Scripts/Managers/TestYutRuleManager.cs
++++ b/unity/INDIE-GO/Assets/Scripts/Managers/TestYutRuleManager.cs
+@@ -119,14 +119,14 @@ namespace YutArena.Managers
+         [ContextMenu("테스트: 순서정하기 던지기")]
+         public void TestThrowForOrder()
+         {
+-            Debug.Log("순서정하기 결과: " + ThrowForOrder());
++            QaDebugLog.Event("순서정하기 결과: " + ThrowForOrder());
+         }
+ 
+         // 테스트용: 인스펙터 우클릭으로 타이브레이커 확률표가 잘 도는지 확인
+         [ContextMenu("테스트: 타이브레이커 던지기")]
+         public void TestThrowForTieBreaker()
+         {
+-            Debug.Log("타이브레이커 결과: " + ThrowForTieBreaker());
++            QaDebugLog.Event("타이브레이커 결과: " + ThrowForTieBreaker());
+         }
+     }
+ }
+\ No newline at end of file
+diff --git a/docs/QA_DEBUG_CHANGELOG.md b/docs/QA_DEBUG_CHANGELOG.md
+new file mode 100644
+--- /dev/null
++++ b/docs/QA_DEBUG_CHANGELOG.md
+@@ -0,0 +1,200 @@
++# 인게임 QA 디버그 변경 로그 — 2026-11-03
++
++브랜치: `dev/Debug`. 아래 내용은 최신 구현 기준이다.
++코드 차이는 `QA_DEBUG_CODE_CHANGES.patch`, 실행 원문은 `QA_DEBUG_VERIFICATION_LOG.txt`에 있다.
++
++## 1. 이번 재확인에서 찾은 원인
++
++- 긴 다중 행 로그의 첫 부분이 게임 설정이어서 Console 목록에서는 플레이어/말 상세가 보이지 않았다.
++  실제 Editor.log에는 P1~P4와 보드 위 말의 위치·CC가 기록되어 있었다.
++- 턴/SP/말 위치가 바뀔 때마다 메시지 전체가 달라져 Console의 Collapse로 합쳐지지 않았다.
++- 상태 창이 떠 있는 별도 창으로 열려 게임을 가렸다.
++- 턴 매니저는 존재하지만 아직 Settings가 없을 때 로비 설정으로 대체하지 않는 초기화 공백이 있었다.
++
++## 2. 실제 사용 흐름
++
++**StartScene → 로비 설정/플레이어 수 확정 → 캐릭터 선택 → InGameScene**을 기준으로 한다.
++
++1. StartScene에서 Play 후 평소처럼 게임에 들어간다.
++2. 인게임의 기존 DataDebuger가 실제 PlayerManager/TurnManager 데이터를 수집한다.
++3. **Playing Debug** 탭이 Console 옆에 자동으로 표시된다. 게임 화면을 가리지 않는다.
++   직접 열기: `Tools > QA > Playing Debug` 또는 Ctrl+Shift+Q.
++4. 이 탭의 현재 상태가 같은 자리에 갱신된다. Console에는 기본적으로 특별 행동만 쌓인다.
++5. 현재 상태를 Console에 남기려면 **현재 상태 Console 출력**을 누른다.
++   **상태 + 행동 복사**, **게임 일시정지/계속**, **행동 기록 비우기**도 제공한다.
++6. 수집/Console 설정은 접힌 옵션 안에 있다. **상태 변경도 Console에 누적**은 기본 OFF다.
++   이 옵션을 켜면 상태 기록이 다시 누적되며, 변한 메시지는 Collapse로 합쳐지지 않는다.
++
++디버그가 로비 설정, 선택 캐릭터, 말 위치, 턴을 새로 만들거나 덮어쓰지 않는다.
++설정은 `turnManager.Settings ?? GameStartSettingsHolder.Current`에서 읽는다.
++플레이어는 실제 초기화된 `PlayerManager.ActivePlayers`를 사용한다.
++초기화 전에는 대기 문구를 표시한다.
++
++## 3. 상시 표시
++
++표시 순서:
++
++```text
++[게임 설정] 모드 / 선택 맵 / 실제 로드된 맵 / 인원 / 옵션
++[턴 순서] PlayerN → …
++[턴 진행] 라운드 / 전체 턴 / 현재 플레이어·팀 / 현재 단계
++  현재 턴의 단계 진행 이력 / 최근 윷 / 남은 결과·던지기
++
++[P1] 선택 캐릭터 | 현재/최대 SP | 모드별 점수·말 수 | 팀 | 액티브 CD
++  말1(id=0) | 상태 / 현재·이전 칸 / 남은칸 / 업기 / 패시브 CD / 스킬 가능 / 전체 CC
++  (보드 위 말만)
++
++[P2] …
++… Pn까지 …
++
++──── 특별 행동 ────
++발동/잡기/완주/승리 등 발생 기록
++```
++
++- 플레이어마다 독립된 패널로 표시하고, 긴 말/CC 정보는 패널 폭에 맞춰 줄바꿈한다.
++- 대기/완주한 말의 개별 상세 행은 숨긴다. 보드 위 말이 없으면 **보드 위 말 없음**을 표시한다.
++- 플레이어 헤더는 보드 위 말이 없어도 유지한다.
++- Classic: 완주/전체 말 수, 남은 말 수, 보드/대기 말 수.
++- Escape: 실제 승리 매니저의 점수/목표 점수. 팀전이면 팀 점수로 표시한다.
++- Classic은 기존 게임 규칙상 캐릭터 스킬을 사용하지 않아 SP가 0/0이다.
++  로비의 스킬 설정값과 **실제스킬사용** 여부를 함께 표시해 이 차이를 구별한다.
++- Random 맵도 선택값과 실제 로드된 맵을 구별한다.
++- `말1(id=0)`은 사용자 번호와 코드 ID를 함께 표시한 것이다.
++- 전체 CC: ID, 남은 소유자 턴, 값, 횟수, 출처 플레이어/말, 경로.
++  CC 턴=0은 소비/명시적 해제까지 지속하는 효과를 포함한다.
++- 업힌 말도 실제 보드 말로 표시한다. 유효 CC는 기존 선두 공유 규칙에 따른다.
++- 검색은 플레이어 패널 전체를 남겨 말의 소유자를 함께 확인할 수 있다.
++
++## 4. 특별 행동 기록과 삭제한 로그
++
++특별 행동은 발생 순간의 라운드/턴/단계 및 unscaled time을 붙인다.
++
++- 모든 액티브 요청 성공/실패, 실제 시전자/지정 대상, 스킬명/실패 이유.
++- 액티브 효과와 패시브: 실제 시전자 → 대상 스택, 요청 효과/값/턴, 처리 결과, 최종 상태/위치.
++- 분신 방어, 면역, 부품 구출.
++- 일반 이동/스킬 공통 이동의 잡기: 공격 말 → 방어 스택, 잡힘/차단/분신 소모 판정.
++- 모든 맵 특수 이벤트: MapManager의 공통 실행 지점에서 맵/칸/대상/설정값/성공 여부 기록.
++  예제 LogMapSpecialTileEvent는 중복 출력하지 않는다.
++- 완주, Escape 점수, 승리 판정, 타이브레이커, 시간/라운드 제한, 강제 결과 폐기 등 특별 판정.
++
++삭제/정리:
++
++- 정상 말 프리팹 적용, 마커 생성/hover, 목적지 결과 나열, 로비 시작 시 JSON 덤프.
++- 캐릭터별 중복 성공 로그, 저수준 CC 덤프, SP/쿨다운 중복 로그.
++- 일반 이동/윷 결과/초기 턴 순서의 별도 이벤트, SP 변경 이벤트 구독.
++- 참조 없는 `InGame/test.cs`와 meta, 기존 디버거의 임의 이동 시험 메뉴/입력 필드.
++- 기존 `LogAllPieceData()`는 수동 전체 상태 출력으로 유지한다.
++- 경고/오류는 보존한다. 명시적 개발 검증기의 PASS/FAIL도 유지한다.
++
++## 5. 성능과 범위
++
++- 기본 0.5초 조회, 허용 0.25~10초. 게임 상태 조회는 매 프레임 실행하지 않는다.
++- 기본 설정에서 상태 변화는 Console 항목을 추가하지 않는다.
++- 단계 변화는 이벤트로 기록해 조회 사이에 지나간 단계도 보존한다(현재 턴 최근 16단계).
++- 특별 행동 큐/화면 이력은 각각 최근 64개. 폭주 시 오래된 항목과 생략 수를 표시한다.
++- Editor 창은 캐시 문자열만 읽는다. 내용/창 폭이 바뀔 때 패널 높이를 다시 계산한다.
++- QA 정보 로그만 NoStacktrace, 경고/오류 설정 유지.
++- Editor/Development Build에서만 수집. 일반 빌드에서는 수집 비활성 및 조건부 QA 호출 제거.
++- 전용 상태 창은 Editor 전용이다. Development Build에는 특별 행동 Console과 수동 상태 출력 경로가 남는다.
++- 일반 빌드 조건 컴파일을 확인했으며, 실제 플레이어 빌드/플랫폼 성능 측정은 이번 검사에 포함하지 않았다.
++- Profiler 표식: `QA.StatePoll`.
++
++## 6. 코드 변경 로그
++
++| 파일 | 변경 |
++|---|---|
++| Scripts/InGame/PlayerDataDebugTester.cs | 모든 플레이어 고정 상태, 보드 위 말만 상세, 모드별 점수/말 수, 단계 이력, 전체 상태/특별 행동 별도 출력, SP 중복 구독 제거 |
++| Scripts/InGame/QaDebugLog.cs + meta | 공통 조건부 이벤트 로거, 캐릭터/말/스택 식별, 액티브·패시브·잡기 형식 |
++| Scripts/Editor/QaPlayingDebugWindow.cs + meta / Editor.meta | 자동 상태 탭, 플레이어별 패널/줄바꿈, 기본 Console 도킹, 검색/복사/일시정지, Inspector 바로가기 |
++| Scripts/InGame/QaDebugVerification.cs + meta | 명시적 플레이 모드 QA 통합 검증, 기존 캐릭터 검증 연계 |
++| Scripts/Managers/TestTurnManager.cs | 잔여 던지기 읽기 API 3개, 기존 정보 로그 공통화 |
++| Scripts/Managers/TestGameManager.cs, TestWinConditionManager.cs, TestYutRuleManager.cs | 의미 있는 단발 이벤트 공통화 |
++| Scripts/Managers/PieceMovementManager.cs | 일반 잡기 양쪽 ID/스택/판정, 완주 이벤트, 평범한 이동 로그 삭제 |
++| Scripts/Managers/PlayerManager.cs, Scripts/InGame/PlayerController.cs | 프리팹 정상 적용 중복 로그 삭제 |
++| Character/Char_Scripts/CharacterSkillRegistry.cs | 모든 액티브 요청 성공/실패 공통 관찰, 중복 SP/CD 로그 삭제 |
++| Character/Char_Scripts/CharacterStatusBehaviour.cs | 설정 효과 적용을 공통 관찰해 패시브·액티브 실제 대상/결과 기록 |
++| Character/Char_Scripts/CcEffectService.cs | 저수준 중복 덤프 삭제, 면역/부품 구출 기록 |
++| Character/Char_Scripts/CharacterBoardUtility.cs | 캐릭터 공통 잡기 성공/차단 기록 |
++| Character/Char_Info/CHAR_001_1, 001_2, 002, 005~010_Status.cs | 중복 정보 로그 삭제 |
++| Character/Char_Info/CHAR_003_Status.cs | 실제 분신 방어 발동 기록 |
++| Scripts/InGame/MoveMarker.cs, MoveDestinationSelector.cs | 불필요한 표현 계층 정보 로그 삭제 |
++| Scripts/InGame/LobbySettingsDebugViewer.cs | 자동 JSON 덤프 제거, 수동 도구로 정리 |
++| Scripts/InGame/MapManager.cs, MapSpecialTileEvent.cs, LogMapSpecialTileEvent.cs | 모든 맵 기믹의 공통 발동 기록 및 표시 이름, 예제 이벤트 중복 출력 제거 |
++| Scripts/InGame/test.cs + meta | 참조 없는 출력 전용 샘플 삭제 |
++| Scenes/InGameScene.unity | 기존 DataDebuger 연결 유지, 새 자동 조회 설정 3개 적용 |
++| Character/Char_Scripts/CharacterSkillRuntimeVerifier.cs | 스택 전체 퇴장 후 재업기 준비 데이터 보완, 유가람 실패 상세 수치 추가 |
++| Scripts/Editor/QaStartFlowVerification.cs + meta | StartScene의 실제 UI 진입을 관찰하는 읽기 전용 검사. 설정/캐릭터/말/턴을 생성하거나 변경하지 않음 |
++
++## 7. 최신 검증 결과
++
++### 정상 시작 흐름
++
++두 경우 모두 실제 Unity UI에서 StartScene부터 로비/캐릭터 선택을 거쳐 진입했다.
++
++- **Escape / 2인 / Basic:** 로비 설정·플레이어 수·선택 캐릭터·SP·상태 패널·턴 흐름·Console 상태 누적 방지 등 10개 PASS.
++  이 실행의 보드 진입 관찰은 PENDING으로 남겼다.
++- **Classic / 4인 / Random → Korean / 로비 턴 제한 60초:** 위 항목과 실제 보드 진입까지 **11개 PASS**.
++  UI에서 윷을 던지고 2P의 첫 말을 이동시켜, P2 패널에 `말1(id=0)`, `Outer02`, 업기/CC 상태가 표시되는 것을 화면으로 확인했다.
++- 떠 있던 상태 창을 Console 옆 탭으로 옮기는 수정 후 Edit Mode에서 실제 도킹을 확인했다.
++  도킹 API는 Unity의 공개 `EditorWindow.GetWindow`/`ShowTab`을 사용한다.
++- 최종 보완한 탭 선택/실제 스킬 사용 표시는 컴파일로 추가 확인했다.
++- 최신 C# 런타임 / Editor / 일반 빌드 조건 컴파일: 오류·경고 없이 PASS.
++- 검사 후 Play 종료, StartScene 복귀. 자동 검사 플래그 없음.
++
++읽기 전용 재검사:
++`StartScene`을 연 Edit Mode → `Tools > QA > Verify StartScene Flow (read only)` → 평소처럼 UI 진행.
++원문은 `Temp/qa-start-flow-verification.log`에 저장된다. 이 검사는 플레이 행동을 대신 입력하지 않는다.
++
++### 이전 검사와 미해결 사항
++
++- 이전 QA 통합 검사 40 PASS / 1 연계 FAIL, 캐릭터 검사 121 PASS / 1 FAIL은 과거 구현의 참고 결과다.
++- 남은 캐릭터 실패는 **CHAR_001_2 유가람 업기 SP 패시브**다.
++  업힌 시전자의 이동 완료 콜백 제외와 SP 지급 시점 불일치가 남아 있다. 이번 진단 표시 변경으로 해결된 것은 아니다.
++- 기존 InGame 전용 fixture 검증기는 명시적 메뉴/플래그로만 실행된다.
++  최신 확장 fixture 전체를 이번 정상 시작 검사 결과로 취급하지 않는다.
++- 이번 두 정상 플레이에서는 모든 캐릭터의 액티브/패시브/맵 기믹/완주를 각각 재발동시키지 않았다.
++  해당 공통 로그 경로는 코드 검토했으며, 이전 검사 원문을 별도로 보존한다.
++- 추가 관찰: Random에서 Korean이 선택된 Classic 실행에서 타일 외형이 표시되지 않았다.
++  논리 좌표에 따른 말 이동은 성공했다. 맵 외형 구성은 추가 확인 대상이며 이번 QA 변경에서 수정하지 않았다.
++
++참조: [Unity EditorWindow 구현](https://github.com/Unity-Technologies/UnityCsReference/blob/master/Editor/Mono/EditorWindow.cs).
++
++## 8. 추가 요청 — 말별 업기/팀/골인 정보 (기존 항목 유지)
++
++기존 말 상태 줄과 `남은칸`, 업기 그룹/선두, 쿨다운, CC 출력은 그대로 두고 그 아래에 상세 한 줄을 추가했다.
++
++추가 항목:
++- `팀`: 해당 말 소유 플레이어의 로비 팀 배정. 기존 플레이어 헤더와 같은 값을 말마다 표시한다.
++- `업기역할`: 단독 / 리더 / 업힌 말.
++- `리더말`: 실제 업은 말의 플레이어·말 번호·코드 ID. 보드에서 찾지 못하면 경고 문구를 붙인다.
++- `업힌말`: 리더와 구분한 실제 업힌 말 목록.
++- `업힌수`: 리더를 제외한 업힌 말 개수. 같은 그룹의 각 말에서 같은 수를 표시한다.
++- `그룹전체`: 리더를 포함한 실제 보드 위 그룹 말 개수.
++- `골인까지`: 지름길 분기에서 멈춰 지름길을 이용하는 최단 전진 칸 수. 참먹이를 통과하는 마지막 1칸을 포함한다.
++  주사위 횟수나 CC/스킬/맵 기믹의 향후 효과는 예측하지 않는다.
++
++예시(Outer01의 3개 말 그룹):
++```text
++말1(id=0) | 상태=InBoard, 위치=Outer01, … 남은칸=10, 업기그룹=0, 선두=말1, … CC=[]
++  팀=TeamA, 골인까지=11칸(최단), 업기역할=리더, 리더말=P1/말1(id=0), 업힌말=[P1/말2(id=1), P1/말3(id=2)], 업힌수=2, 그룹전체=3
++말2(id=1) | (기존 상태 줄)
++  팀=TeamA, 골인까지=11칸(최단), 업기역할=업힌 말, 리더말=P1/말1(id=0), 업힌말=[P1/말2(id=1), P1/말3(id=2)], 업힌수=2, 그룹전체=3
++```
++
++기존 `남은칸`은 Escape 동점 판정용 고정 거리 점수다. 이 계산과 승리 판정은 변경하지 않았다.
++새 `골인까지`는 별도의 표시 전용 조회이며 게임 이동/스킬/업기/골인 처리에 연결하지 않았다.
++같은 칸의 단독 말이나 대기·완주한 말은 그룹 개수에 포함하지 않는다. 그룹 ID는 소유 플레이어 안에서 조회한다.
++
++변경 코드:
++- `PlayerDataDebugTester.AppendPieceDetails`: 기존 줄 아래에 상세 정보 추가.
++- `PieceMovementManager.TryCountMinimumGoalSteps`: 원래 전진 타일 조회를 이용한 읽기 전용 계산 추가.
++- `QaDebugVerification.cs / QaPieceFieldsVerification`: 씬/로비/실제 플레이 데이터와 분리된 일반 데이터 검사 추가.
++
++검증:
++- 추가 필드 검사 **18 PASS / 0 FAIL**. 리더/업힌 말/단독, 개수, 같은 칸의 비그룹 말, 대기 말 제외,
++  누락 리더, 팀, 지름길·참먹이 경계 거리, 비정상 칸, 데이터 불변을 확인했다.
++- 이전 코드 패치에서 변경 전 소스를 복원해 대조했다. 새 추가 부분을 제외한 기존 이동 매니저와 상태 출력 코드는 동일했다.
++- 런타임/Editor/일반 빌드 조건 컴파일 모두 PASS.
++- 이번 검사는 Play 진입 없이 고립된 테스트 데이터로 실행했다. StartScene 정상 진입 결과는 위의 이전 검사 기록이다.
++- 재검사 메뉴: `Tools > QA > Verify Piece Status Fields`.
++- 원문: `Temp/qa-piece-fields-verification.log`, `Temp/qa-piece-fields-scope.log`.
+diff --git a/docs/QA_DEBUG_VERIFICATION_LOG.txt b/docs/QA_DEBUG_VERIFICATION_LOG.txt
+new file mode 100644
+--- /dev/null
++++ b/docs/QA_DEBUG_VERIFICATION_LOG.txt
+@@ -0,0 +1,244 @@
++ADDITIVE PIECE STATUS FIELDS — 2026-11-03
++Existing status fields and gameplay rules preserved. No Play Mode entry for these plain-data checks.
++Runtime / Editor / release-define compilation: PASS (0 errors / 0 warnings).
++
++PASS Solo piece has zero carried pieces and no stack leader
++PASS Leader is distinct from carried members
++PASS Carried row identifies the actual carrier
++PASS Carried count excludes the leader
++PASS Unstacked piece on the same tile is excluded
++PASS Each piece exposes the supplied lobby team
++PASS Off-board stale group members are excluded
++PASS Missing leader is visible instead of fabricating a board piece
++PASS Minimum goal distance None
++PASS Minimum goal distance Outer16
++PASS Minimum goal distance Inner08
++PASS Minimum goal distance Center
++PASS Minimum goal distance Corner01
++PASS Minimum goal distance Corner02
++PASS Minimum goal distance Outer01
++PASS Minimum goal distance Inner03
++PASS Undefined tiles do not produce a fake distance
++PASS Formatting does not change piece state or stack data
++
++PASS Previous implementation is unchanged after removing the new display-only additions: unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs
++PASS Previous implementation is unchanged after removing the new display-only additions: unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs
++
++---- PREVIOUS QA RECHECK ----
++LATEST QA RECHECK — 2026-11-03 / dev/Debug
++
++Runtime compilation: PASS (0 errors / 0 warnings)
++Editor compilation: PASS (0 errors / 0 warnings)
++Release-define compilation: PASS (0 errors / 0 warnings; not a player build)
++Console dock migration: observed in Edit Mode after the layout correction.
++Latest small additions (ShowTab and effective-skill flag): compile verified after the two Play runs.
++Automatic test flags: absent; editor returned to StartScene / Edit Mode.
++
++ESCAPE / 2 players / Basic (real StartScene UI flow):
++READ-ONLY StartScene flow verification
++Scenes: StartScene -> LocalLobbyScene -> ChampionPickScene -> InGameScene
++PASS Started in StartScene
++PASS Traversed lobby and character selection
++PASS In-game settings match the lobby selection
++PASS Player count matches the saved lobby setting
++PASS Actual selected characters survive the scene transition
++PASS Every player has their actual character and SP header
++PASS Only board pieces appear under their own player
++PASS Round, turn and current phase stay visible
++PASS Default status updates add no Console history
++PASS Automatic live window has a separate panel for every player
++PENDING Observed a piece entering the board through normal play
++Console action batches observed: 8
++
++CLASSIC / 4 players / Random -> Korean / 60-second lobby setting (real StartScene UI flow):
++READ-ONLY StartScene flow verification
++Scenes: StartScene -> LocalLobbyScene -> ChampionPickScene -> InGameScene
++PASS Started in StartScene
++PASS Traversed lobby and character selection
++PASS In-game settings match the lobby selection
++PASS Player count matches the saved lobby setting
++PASS Actual selected characters survive the scene transition
++PASS Every player has their actual character and SP header
++PASS Only board pieces appear under their own player
++PASS Round, turn and current phase stay visible
++PASS Default status updates add no Console history
++PASS Automatic live window has a separate panel for every player
++PASS Observed a piece entering the board through normal play
++Console action batches observed: 3
++
++VISUAL: P2 piece 0 entered Outer02; P2 panel showed its position, stack state and CC.
++LIMIT: All character skills, map events and finish conditions were not replayed in these two flows.
++KNOWN: CHAR_001_2 stacking SP passive remains unresolved (previous character test).
++OBSERVED: Korean map tiles were not visible in the Classic run; logical movement succeeded.
++
++---- PREVIOUS IMPLEMENTATION RESULTS ----
++2026-11-03 / dev/Debug
++
++QA verification (40 PASS; 1 linked character-regression failure)
++PASS Character integration report updated
++FAIL Character integration has no failures
++PASS Existing DataDebuger automatically connected
++PASS Stable state generates no extra Console batches
++PASS Snapshot includes SP, cooldown and all-CC section
++PASS Direct-scene fallback header uses the registered character
++PASS Direct runtime data changes are detected
++PASS Human piece numbers expose zero-based ids
++PASS Multiple simultaneous effects and their sources are visible
++PASS Active trace 001_1
++PASS Passive trace 001_1
++PASS Active trace 001_2
++PASS Passive trace 001_2
++PASS Active trace 002
++PASS Passive trace 002
++PASS Active trace 003
++PASS Passive trace 003
++PASS Active trace 004
++PASS Passive trace 004
++PASS Active trace 005
++PASS Passive trace 005
++PASS Active trace 006
++PASS Passive trace 006
++PASS Active trace 007
++PASS Passive trace 007
++PASS Active trace 008
++PASS Passive trace 008
++PASS Active trace 009
++PASS Passive trace 009
++PASS Active trace 010
++PASS Passive trace 010
++PASS Passive effects identify source and target
++PASS Immunity passive identifies the attacker
++PASS Capture traces include both pieces and the decision
++PASS Blocked captures are distinguishable
++PASS SP event identifies gain/spend cause
++PASS Burst events use a single bounded batch
++PASS Console can be muted while live view still updates
++PASS Default polling is bounded to 0.5 seconds
++MEASURE stable poll average_ms=0.1381
++PASS Disabled monitor unsubscribes
++PASS Reenabled monitor reconnects once
++
++Character integration (the same existing CHAR_001_2 issue)
++SUMMARY | Passed=121 Failed=1
++PASS | Scene managers are available
++PASS | CHAR_001_1 prefab loads
++PASS | CHAR_001_1 registers four pieces for every player
++PASS | CHAR_001_1 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_001_1 passive
++PASS | CHAR_001_1 active succeeds
++PASS | CHAR_001_1 active spends configured SP
++PASS | CHAR_001_1 cooldown is isolated per player
++PASS | CHAR_001_2 prefab loads
++PASS | CHAR_001_2 registers four pieces for every player
++PASS | CHAR_001_2 visual is empty or a model, never a recursive gameplay prefab
++FAIL | CHAR_001_2 passive | SP=0/1/2, moves=True/True/True, stacked=True
++PASS | CHAR_001_2 active succeeds
++PASS | CHAR_001_2 active spends configured SP
++PASS | CHAR_001_2 cooldown is isolated per player
++PASS | CHAR_002 prefab loads
++PASS | CHAR_002 registers four pieces for every player
++PASS | CHAR_002 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_002 passive
++PASS | CHAR_002 active succeeds
++PASS | CHAR_002 active spends configured SP
++PASS | CHAR_002 cooldown is isolated per player
++PASS | CHAR_003 prefab loads
++PASS | CHAR_003 registers four pieces for every player
++PASS | CHAR_003 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_003 passive
++PASS | CHAR_003 active succeeds
++PASS | CHAR_003 active spends configured SP
++PASS | CHAR_003 cooldown is isolated per player
++PASS | CHAR_004 prefab loads
++PASS | CHAR_004 registers four pieces for every player
++PASS | CHAR_004 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_004 passive
++PASS | CHAR_004 active succeeds
++PASS | CHAR_004 active spends configured SP
++PASS | CHAR_004 hide blocks ordinary landing capture
++PASS | CHAR_004 cooldown is isolated per player
++PASS | CHAR_005 prefab loads
++PASS | CHAR_005 registers four pieces for every player
++PASS | CHAR_005 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_005 passive
++PASS | CHAR_005 active succeeds
++PASS | CHAR_005 active spends configured SP
++PASS | CHAR_005 cooldown is isolated per player
++PASS | CHAR_006 prefab loads
++PASS | CHAR_006 registers four pieces for every player
++PASS | CHAR_006 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_006 passive
++PASS | CHAR_006 active succeeds
++PASS | CHAR_006 active spends configured SP
++PASS | CHAR_006 retires both tiles and grants one throw per enemy
++PASS | CHAR_006 cooldown is isolated per player
++PASS | CHAR_007 prefab loads
++PASS | CHAR_007 registers four pieces for every player
++PASS | CHAR_007 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_007 passive
++PASS | CHAR_007 active succeeds
++PASS | CHAR_007 active spends configured SP
++PASS | CHAR_007 uses SP instead of a turn cooldown
++PASS | CHAR_007 cannot be reused without another 3 SP
++PASS | CHAR_007 cooldown is isolated per player
++PASS | CHAR_008 prefab loads
++PASS | CHAR_008 registers four pieces for every player
++PASS | CHAR_008 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_008 passive
++PASS | CHAR_008 active succeeds
++PASS | CHAR_008 active spends configured SP
++PASS | CHAR_008 cooldown is isolated per player
++PASS | CHAR_009 prefab loads
++PASS | CHAR_009 registers four pieces for every player
++PASS | CHAR_009 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_009 passive
++PASS | CHAR_009 active succeeds
++PASS | CHAR_009 active spends configured SP
++PASS | CHAR_009 cooldown is isolated per player
++PASS | CHAR_010 prefab loads
++PASS | CHAR_010 registers four pieces for every player
++PASS | CHAR_010 visual is empty or a model, never a recursive gameplay prefab
++PASS | CHAR_010 passive
++PASS | CHAR_010 active succeeds
++PASS | CHAR_010 active spends configured SP
++PASS | CHAR_010 retreat ends the owner's turn
++PASS | CHAR_010 cooldown is isolated per player
++PASS | Mixed CHAR_002 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_002 prefab loads
++PASS | Mixed CHAR_002 prefab loads
++PASS | Talisman blocks enemy Sword Aura retirement
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_007 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Hero ignores Orc path stun
++PASS | Mixed CHAR_009 prefab loads
++PASS | Mixed CHAR_005 prefab loads
++PASS | Mixed CHAR_009 prefab loads
++PASS | Mixed CHAR_009 prefab loads
++PASS | Samurai retirement converts Robot to Parts without capture bonus
++PASS | Robot revives only on its tile and can later become Parts again
++PASS | Mixed CHAR_008 prefab loads
++PASS | Mixed CHAR_004 prefab loads
++PASS | Mixed CHAR_008 prefab loads
++PASS | Mixed CHAR_008 prefab loads
++PASS | Wind extra movement does not capture its landing enemy
++PASS | Runtime simple movement does not retrigger Wind
++PASS | Runtime Wind stack retains both original and extra landing
++PASS | Mixed CHAR_003 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_003 prefab loads
++PASS | Mixed CHAR_003 prefab loads
++PASS | Runtime clone capacity rejects a fourth clone
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_004 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Mixed CHAR_006 prefab loads
++PASS | Team Sword Aura preserves allies and grants no throws
++PASS | InGameScene has a ClassicModeRule source
++PASS | Classic goal move for piece 0
++PASS | Classic goal move for piece 1
++PASS | Classic goal move for piece 2
++PASS | Classic goal move for piece 3
++PASS | Classic reaches EndGame
+diff --git a/unity/INDIE-GO/Assets/Scripts/Editor.meta b/unity/INDIE-GO/Assets/Scripts/Editor.meta
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/Editor.meta
+@@ -0,0 +1,3 @@
++fileFormatVersion: 2
++guid: 764d9ef07f954ac9a1f0409d3e5509af
++folderAsset: yes
+diff --git a/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs b/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs
+@@ -0,0 +1,186 @@
++#if UNITY_EDITOR
++using System;
++using System.Collections.Generic;
++using UnityEditor;
++using UnityEngine;
++
++// Cached status is drawn in separate panels; Console retains exceptional actions.
++public sealed class QaPlayingDebugWindow : EditorWindow
++{
++    private sealed class Block
++    {
++        public string Text;
++        public float Height;
++    }
++    private PlayerDataDebugTester monitor;
++    private Vector2 scroll;
++    private double nextRefresh;
++    private string filter = "", cachedFilter, cachedSnapshot, cachedEvents;
++    private bool showEvents = true, showOptions;
++    private float measuredWidth;
++    private bool measureDirty = true;
++    private GUIStyle textStyle;
++    private readonly List<Block> statusBlocks = new List<Block>();
++    private readonly List<Block> eventBlocks = new List<Block>();
++    internal string CachedStatus => cachedSnapshot;
++    internal int VisibleStatusBlockCount => statusBlocks.Count;
++    [MenuItem("Tools/QA/Playing Debug %#q")]
++    public static void Open() => ShowWindow(true);
++    internal static void ShowWindow(bool focus)
++    {
++        Type dockTarget = typeof(EditorWindow).Assembly.GetType("UnityEditor.ConsoleWindow");
++        QaPlayingDebugWindow previous = null;
++        foreach (var existing in Resources.FindObjectsOfTypeAll<EditorWindow>())
++        {
++            if (existing.GetType().Name == "ConsoleWindow") dockTarget = existing.GetType();
++            if (existing is QaPlayingDebugWindow qa) previous = qa;
++        }
++        // GetWindow keeps an existing floating instance; recreate it when migrating to the Console dock.
++        if (previous != null && !previous.docked && dockTarget != null) previous.Close();
++        var window = dockTarget != null
++            ? GetWindow<QaPlayingDebugWindow>("Playing Debug", focus, dockTarget)
++            : GetWindow<QaPlayingDebugWindow>(false, "Playing Debug", focus);
++        window.minSize = new Vector2(680, 360);
++        if (!window.docked)
++        {
++            Rect main = EditorGUIUtility.GetMainWindowPosition();
++            Rect area = window.position;
++            area.width = Mathf.Min(Mathf.Max(area.width, 960), Mathf.Max(680, main.width - 60));
++            area.height = Mathf.Min(Mathf.Max(area.height, 640), Mathf.Max(360, main.height - 100));
++            area.x = Mathf.Clamp(area.x, main.x, Mathf.Max(main.x, main.xMax - area.width));
++            area.y = Mathf.Clamp(area.y, main.y + 40, Mathf.Max(main.y + 40, main.yMax - area.height));
++            window.position = area;
++        }
++        window.ShowTab();
++    }
++    private void OnEnable() => EditorApplication.update += Refresh;
++    private void OnDisable() => EditorApplication.update -= Refresh;
++    private void Refresh()
++    {
++        if (EditorApplication.timeSinceStartup < nextRefresh) return;
++        nextRefresh = EditorApplication.timeSinceStartup + 0.5;
++        if (monitor == null)
++        {
++            monitor = FindFirstObjectByType<PlayerDataDebugTester>();
++            cachedSnapshot = null; cachedEvents = null;
++            scroll = Vector2.zero;
++        }
++        if (monitor != null && (cachedSnapshot != monitor.CurrentSnapshot || cachedEvents != monitor.RecentEvents || cachedFilter != filter))
++        {
++            cachedSnapshot = monitor.CurrentSnapshot; cachedEvents = monitor.RecentEvents; cachedFilter = filter;
++            RebuildBlocks();
++        }
++        Repaint();
++    }
++    private void RebuildBlocks()
++    {
++        statusBlocks.Clear(); eventBlocks.Clear();
++        if (cachedSnapshot != null)
++        {
++            var sections = cachedSnapshot.Replace("\r\n", "\n").Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
++            for (int i = 0; i < sections.Length; i++)
++                if (i == 0 || Matches(sections[i])) statusBlocks.Add(new Block { Text = sections[i].TrimEnd() });
++        }
++        if (cachedEvents != null)
++            foreach (string entry in cachedEvents.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
++                if (Matches(entry)) eventBlocks.Add(new Block { Text = entry.TrimEnd() });
++        measureDirty = true;
++    }
++    private bool Matches(string value) => string.IsNullOrWhiteSpace(filter) || value.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
++    private void OnGUI()
++    {
++        if (textStyle == null) textStyle = new GUIStyle(EditorStyles.textArea) { wordWrap = true, fontSize = 12 };
++        if (!EditorApplication.isPlaying)
++        {
++            EditorGUILayout.HelpBox("StartScene에서 Play → 로비 → 캐릭터 선택 → 인게임으로 진행하면 실제 상태가 여기에 표시됩니다.", MessageType.Info);
++            return;
++        }
++        if (monitor == null)
++        {
++            EditorGUILayout.HelpBox("인게임 진입 대기 중입니다. 로비에서 저장한 설정과 생성된 플레이어를 자동으로 연결합니다.", MessageType.Info);
++            return;
++        }
++        using (new EditorGUILayout.HorizontalScope())
++        {
++            if (GUILayout.Button(EditorApplication.isPaused ? "게임 계속" : "게임 일시정지"))
++            {
++                monitor.PollNow();
++                EditorApplication.isPaused = !EditorApplication.isPaused;
++            }
++            if (GUILayout.Button("상태 + 행동 복사")) GUIUtility.systemCopyBuffer = monitor.CurrentSnapshot + "\n" + monitor.RecentEvents;
++            if (GUILayout.Button("현재 상태 Console 출력")) monitor.LogAllPieceData();
++            if (GUILayout.Button("행동 기록 비우기")) monitor.ClearEventHistory();
++        }
++        filter = EditorGUILayout.TextField("플레이어/상태 검색", filter);
++        showOptions = EditorGUILayout.Foldout(showOptions, "수집 / Console 설정");
++        if (showOptions)
++        {
++            monitor.enabled = EditorGUILayout.Toggle("QA 수집 활성화", monitor.enabled);
++            monitor.LogGameplayEvents = EditorGUILayout.Toggle("Console 특별 행동", monitor.LogGameplayEvents);
++            monitor.LogStateChanges = EditorGUILayout.Toggle("상태 변경도 Console에 누적", monitor.LogStateChanges);
++            if (monitor.LogStateChanges)
++                EditorGUILayout.HelpBox("값이 바뀐 로그는 Unity Console의 Collapse로 합쳐지지 않습니다. 상시 상태는 아래 고정 패널에서 확인하세요.", MessageType.Warning);
++            monitor.RefreshInterval = EditorGUILayout.Slider("갱신 간격(초)", monitor.RefreshInterval, 0.25f, 10f);
++            showEvents = EditorGUILayout.Toggle("특별 행동 표시 (최대 64개)", showEvents);
++            EditorGUILayout.LabelField($"조회 {monitor.PollCount}회 / Console 출력 {monitor.ConsoleBatchCount}회");
++        }
++        float width = Mathf.Max(100, position.width - 36);
++        if (measureDirty || !Mathf.Approximately(measuredWidth, width))
++        {
++            foreach (var block in statusBlocks) block.Height = Mathf.Max(22, textStyle.CalcHeight(new GUIContent(block.Text), width));
++            foreach (var block in eventBlocks) block.Height = Mathf.Max(22, textStyle.CalcHeight(new GUIContent(block.Text), width));
++            measuredWidth = width; measureDirty = false;
++        }
++        scroll = EditorGUILayout.BeginScrollView(scroll);
++        EditorGUILayout.LabelField("상시 STATUS — 설정 / 턴 흐름 / 플레이어별 보드 위 말", EditorStyles.boldLabel);
++        foreach (var block in statusBlocks)
++            EditorGUILayout.SelectableLabel(block.Text, textStyle, GUILayout.Width(width), GUILayout.Height(block.Height));
++        if (showEvents)
++        {
++            EditorGUILayout.Space();
++            EditorGUILayout.LabelField("──── 특별 행동 ────", EditorStyles.boldLabel);
++            if (eventBlocks.Count == 0) EditorGUILayout.LabelField("아직 기록된 특별 행동이 없습니다.");
++            foreach (var block in eventBlocks)
++                EditorGUILayout.SelectableLabel(block.Text, textStyle, GUILayout.Width(width), GUILayout.Height(block.Height));
++        }
++        EditorGUILayout.EndScrollView();
++    }
++}
++
++// Opens once when the real in-game monitor appears, including scene transitions from StartScene.
++[InitializeOnLoad]
++internal static class QaPlayingDebugAutoOpen
++{
++    private static bool opened;
++    private static double nextScan;
++    static QaPlayingDebugAutoOpen()
++    {
++        EditorApplication.playModeStateChanged += state =>
++        {
++            if (state == PlayModeStateChange.EnteredPlayMode) { opened = false; nextScan = 0; }
++            if (state == PlayModeStateChange.ExitingPlayMode) opened = true;
++        };
++        EditorApplication.update += TryOpen;
++    }
++    private static void TryOpen()
++    {
++        if (!EditorApplication.isPlaying || opened || EditorApplication.timeSinceStartup < nextScan) return;
++        nextScan = EditorApplication.timeSinceStartup + 0.5;
++        if (UnityEngine.Object.FindFirstObjectByType<PlayerDataDebugTester>() == null) return;
++        opened = true;
++        QaPlayingDebugWindow.ShowWindow(false);
++    }
++}
++[CustomEditor(typeof(PlayerDataDebugTester))]
++internal sealed class PlayerDataDebugTesterEditor : Editor
++{
++    public override void OnInspectorGUI()
++    {
++        DrawDefaultInspector();
++        if (GUILayout.Button("플레이 디버그 창 열기")) QaPlayingDebugWindow.Open();
++        EditorGUILayout.HelpBox("상시 상태는 Playing Debug에서 갱신합니다. Console은 특별 행동을 기록합니다.", MessageType.Info);
++        if (EditorApplication.isPlaying && GUILayout.Button("현재 상태 Console 한 번 출력"))
++            ((PlayerDataDebugTester)target).LogAllPieceData();
++    }
++}
++#endif
+diff --git a/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs.meta b/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs.meta
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/Editor/QaPlayingDebugWindow.cs.meta
+@@ -0,0 +1,2 @@
++fileFormatVersion: 2
++guid: 2668ec30e8974cd3858db506b4a1eb5e
+diff --git a/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs b/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs
+@@ -0,0 +1,128 @@
++#if UNITY_EDITOR
++using System;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using UnityEditor;
++using UnityEngine;
++using UnityEngine.SceneManagement;
++using YutArena.Common;
++using YutArena.Managers;
++
++// Observes the real UI flow. Does not create settings, select characters, move pieces, or change turns.
++[InitializeOnLoad]
++internal static class QaStartFlowVerification
++{
++    private const string Flag = "Temp/verify-qa-start-flow.flag";
++    private const string Report = "Temp/qa-start-flow-verification.log";
++    private static bool active, sawBoardPiece;
++    private static double nextPoll;
++    private static string lobbySettings, previousReport;
++    private static int automaticStatusLogs, actionLogs;
++    private static readonly List<string> scenes = new List<string>();
++    private static readonly Dictionary<string, bool> checks = new Dictionary<string, bool>();
++    static QaStartFlowVerification()
++    {
++        EditorApplication.playModeStateChanged += OnPlayMode;
++        EditorApplication.update += Observe;
++        SceneManager.sceneLoaded += SceneLoaded;
++        Application.logMessageReceived += LogReceived;
++    }
++    [MenuItem("Tools/QA/Verify StartScene Flow (read only)")]
++    private static void Begin()
++    {
++        if (EditorApplication.isPlayingOrWillChangePlaymode || SceneManager.GetActiveScene().name != "StartScene")
++        {
++            Debug.LogWarning("StartScene을 연 Edit Mode에서 실행하고, 평소처럼 로비와 캐릭터 선택을 진행하세요.");
++            return;
++        }
++        File.WriteAllText(Flag, "run");
++        EditorApplication.isPlaying = true;
++    }
++    private static void OnPlayMode(PlayModeStateChange state)
++    {
++        if (state == PlayModeStateChange.EnteredPlayMode && File.Exists(Flag))
++        {
++            File.Delete(Flag);
++            active = true; sawBoardPiece = false; nextPoll = 0;
++            lobbySettings = null; previousReport = null;
++            automaticStatusLogs = 0; actionLogs = 0; checks.Clear(); scenes.Clear();
++            string start = SceneManager.GetActiveScene().name;
++            scenes.Add(start);
++            checks["Started in StartScene"] = start == "StartScene";
++            WriteReport();
++        }
++        if (state == PlayModeStateChange.ExitingPlayMode && active) { WriteReport(); active = false; }
++    }
++    private static void SceneLoaded(Scene scene, LoadSceneMode mode)
++    {
++        if (!active) return;
++        scenes.Add(scene.name);
++        if (scene.name == "ChampionPickScene") lobbySettings = JsonUtility.ToJson(GameStartSettingsHolder.Current);
++        WriteReport();
++    }
++    private static void LogReceived(string message, string stack, LogType type)
++    {
++        if (!active) return;
++        if (message.StartsWith("[QA][상태 변경 기록]", StringComparison.Ordinal)) automaticStatusLogs++;
++        if (message.StartsWith("[QA][특별 행동]", StringComparison.Ordinal)) actionLogs++;
++    }
++    private static void Observe()
++    {
++        if (!active || !EditorApplication.isPlaying || EditorApplication.timeSinceStartup < nextPoll) return;
++        nextPoll = EditorApplication.timeSinceStartup + 0.5;
++        if (SceneManager.GetActiveScene().name != "InGameScene") return;
++        var monitor = UnityEngine.Object.FindFirstObjectByType<PlayerDataDebugTester>();
++        var players = UnityEngine.Object.FindFirstObjectByType<PlayerManager>();
++        var turns = UnityEngine.Object.FindFirstObjectByType<TestTurnManager>();
++        var settings = GameStartSettingsHolder.Current;
++        if (monitor == null || players == null || turns?.Settings == null || settings == null || turns.CurrentTurn.roundNumber < 1) return;
++        monitor.PollNow();
++        string snapshot = monitor.CurrentSnapshot;
++        var sections = snapshot.Replace("\r\n", "\n").Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
++        checks["Traversed lobby and character selection"] = scenes.Contains("LocalLobbyScene") && scenes.Contains("ChampionPickScene");
++        checks["In-game settings match the lobby selection"] = lobbySettings != null && lobbySettings == JsonUtility.ToJson(settings) &&
++            lobbySettings == JsonUtility.ToJson(turns.Settings);
++        checks["Player count matches the saved lobby setting"] = players.ActivePlayers.Count == settings.playerCount;
++        bool characters = true, headers = true, pieces = true;
++        foreach (var player in players.ActivePlayers)
++        {
++            string section = sections.FirstOrDefault(s => s.StartsWith("[P" + player.PlayerId + "]", StringComparison.Ordinal)) ?? "";
++            characters &= CharacterSelectionResult.TryGetCharacterData(player.PlayerId - 1, out var chosen) && chosen == player.SelectedCharacter;
++            headers &= section.Contains(player.SelectedCharacter != null ? player.SelectedCharacter.char_Name : "미등록") &&
++                section.Contains($"SP={CharacterSkillRegistry.GetSkillPoints(player.PlayerId)}/{CharacterSkillRegistry.GetMaxSkillPoints(player.PlayerId)}");
++            int board = 0;
++            foreach (var piece in player.RuntimeData.Pieces)
++            {
++                if (piece.State != PieceState.InBoard) continue;
++                board++; sawBoardPiece = true;
++                string label = $"말{piece.PieceId + 1}(id={piece.PieceId}) | 상태=InBoard, 위치={piece.CurrentTileId}";
++                pieces &= section.Contains(label);
++            }
++            if (board == 0) pieces &= section.Contains("보드 위 말 없음");
++            pieces &= !section.Contains("상태=Waiting") && !section.Contains("상태=Goal");
++        }
++        checks["Actual selected characters survive the scene transition"] = characters;
++        checks["Every player has their actual character and SP header"] = headers;
++        checks["Only board pieces appear under their own player"] = pieces;
++        checks["Round, turn and current phase stay visible"] = snapshot.Contains($"라운드={turns.CurrentTurn.roundNumber}, 전체턴={turns.CurrentTurn.turnNumber}") &&
++            snapshot.Contains($"단계={turns.CurrentTurn.currentPhase}");
++        checks["Default status updates add no Console history"] = automaticStatusLogs == 0 && !monitor.LogStateChanges;
++        var window = Resources.FindObjectsOfTypeAll<QaPlayingDebugWindow>().FirstOrDefault();
++        if (window != null && window.CachedStatus == snapshot)
++            checks["Automatic live window has a separate panel for every player"] = window.VisibleStatusBlockCount == settings.playerCount + 1;
++        WriteReport();
++    }
++    private static void WriteReport()
++    {
++        string body = "READ-ONLY StartScene flow verification\nScenes: " + string.Join(" -> ", scenes) + "\n" +
++            string.Join("\n", checks.Select(c => (c.Value ? "PASS " : "FAIL ") + c.Key)) + "\n" +
++            (sawBoardPiece ? "PASS " : "PENDING ") + "Observed a piece entering the board through normal play\n" +
++            "Console action batches observed: " + actionLogs + "\n" +
++            (checks.ContainsKey("Automatic live window has a separate panel for every player") ? "" : "PENDING Live window binding\n");
++        if (body == previousReport) return;
++        previousReport = body;
++        File.WriteAllText(Report, body);
++    }
++}
++#endif
+diff --git a/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs.meta b/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs.meta
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/Editor/QaStartFlowVerification.cs.meta
+@@ -0,0 +1,2 @@
++fileFormatVersion: 2
++guid: b84c0abde3564c12a57df201400f9c2a
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs
+@@ -0,0 +1,55 @@
++using System;
++using System.Diagnostics;
++using System.Text;
++using UnityEngine;
++using YutArena.InGame;
++
++// QA events only. Calls and interpolated arguments are omitted in release builds.
++public static class QaDebugLog
++{
++    internal static Action<string> Receiver;
++    public static bool Enabled => Receiver != null;
++    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
++    private static void Reset() => Receiver = null;
++
++    [Conditional("UNITY_EDITOR"), Conditional("DEVELOPMENT_BUILD")]
++    public static void Event(string message, UnityEngine.Object context = null)
++    {
++        if (Enabled) Receiver.Invoke($"[이벤트][{Time.unscaledTime:F2}s] {message}");
++    }
++    public static string Piece(int playerId, int pieceId)
++    {
++        if (playerId <= 0) return "시스템";
++        if (pieceId < 0) return $"P{playerId}(플레이어 전체)";
++        string name = CharacterSkillRegistry.TryGet(playerId, pieceId, out var skill) && skill.Data != null
++            ? skill.Data.char_Name + "/" + skill.GetType().Name.Replace("_Status", "") : "캐릭터 미등록";
++        return $"P{playerId}/말{pieceId + 1}(id={pieceId}, {name})";
++    }
++    public static string Stack(int playerId, PlayerRuntimeData.PieceRuntimeData piece)
++    {
++        if (!Enabled || piece == null) return "-";
++        var text = new StringBuilder(Piece(playerId, piece.PieceId));
++        var owner = CcEffectService.FindOwner(piece);
++        if (owner != null && piece.IsStacked)
++            foreach (var member in owner.RuntimeData.Pieces)
++                if (member != piece && member.State == PieceState.InBoard && member.StackGroupId == piece.StackGroupId)
++                    text.Append(" + ").Append(Piece(playerId, member.PieceId));
++        return text.ToString();
++    }
++    [Conditional("UNITY_EDITOR"), Conditional("DEVELOPMENT_BUILD")]
++    public static void Skill(string kind, int sourcePlayer, int sourcePiece, int targetPlayer,
++        int targetPiece, string detail)
++    {
++        if (!Enabled) return;
++        string skillName = "-";
++        if (CharacterSkillRegistry.TryGet(sourcePlayer, sourcePiece, out var skill) && skill.Data != null)
++            skillName = kind.StartsWith("패시브", StringComparison.Ordinal) ? skill.Data.passive_Name : skill.Data.active_Name;
++        Event($"[{kind}] {Piece(sourcePlayer, sourcePiece)} -> {Piece(targetPlayer, targetPiece)} | 스킬={skillName}, {detail}");
++    }
++    [Conditional("UNITY_EDITOR"), Conditional("DEVELOPMENT_BUILD")]
++    public static void Capture(CharacterCaptureRequest request, CharacterCaptureDecision decision, string targets, bool captured)
++    {
++        if (Enabled) Event($"[잡기] {Piece(request.AttackerPlayerId, request.AttackerPieceId)} -> {targets} | " +
++            $"결과={(captured ? "잡힘" : "잡히지 않음")}, 방어판정={decision}, 공격 말 수={request.AttackingPieceCount}");
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs.meta b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs.meta
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugLog.cs.meta
+@@ -0,0 +1,2 @@
++fileFormatVersion: 2
++guid: b25fbd1c3b9a4940be4b5d70b9582758
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs
+@@ -0,0 +1,283 @@
++#if UNITY_EDITOR
++using System;
++using System.Collections;
++using System.Collections.Generic;
++using System.IO;
++using System.Linq;
++using System.Text;
++using UnityEditor;
++using UnityEngine;
++using YutArena.Common;
++using YutArena.InGame;
++using YutArena.Managers;
++
++// Plain-data checks: no scene loading, lobby writes, or changes to the current game's pieces.
++[InitializeOnLoad]
++internal static class QaPieceFieldsVerification
++{
++    private const string Flag = "Temp/verify-qa-piece-fields.flag";
++    static QaPieceFieldsVerification()
++    {
++        EditorApplication.delayCall += () => { if (File.Exists(Flag)) Run(); };
++    }
++    [MenuItem("Tools/QA/Verify Piece Status Fields")]
++    private static void Run()
++    {
++        if (File.Exists(Flag)) File.Delete(Flag);
++        var checks = new List<string>();
++        void Check(string name, bool value) => checks.Add((value ? "PASS " : "FAIL ") + name);
++        var owner = new PlayerRuntimeData(1, "QA isolated data", 4);
++        foreach (var piece in owner.Pieces) piece.MoveTo(BoardTileId.Outer01);
++        string Format(int id, TeamSlot team = TeamSlot.TeamA)
++        {
++            var output = new StringBuilder();
++            PlayerDataDebugTester.AppendPieceDetails(output, owner, owner.Pieces[id], team);
++            return output.ToString();
++        }
++        Check("Solo piece has zero carried pieces and no stack leader", Format(3).Contains("업기역할=단독, 리더말=-, 업힌말=[], 업힌수=0, 그룹전체=1"));
++        for (int i = 0; i < 3; i++) owner.Pieces[i].SetStackGroup(0, 0);
++        string leader = Format(0), passenger = Format(1);
++        Check("Leader is distinct from carried members", leader.Contains("업기역할=리더, 리더말=P1/말1(id=0), 업힌말=[P1/말2(id=1), P1/말3(id=2)]"));
++        Check("Carried row identifies the actual carrier", passenger.Contains("업기역할=업힌 말, 리더말=P1/말1(id=0)"));
++        Check("Carried count excludes the leader", leader.Contains("업힌수=2, 그룹전체=3") && passenger.Contains("업힌수=2, 그룹전체=3"));
++        Check("Unstacked piece on the same tile is excluded", !leader.Contains("말4(id=3)"));
++        Check("Each piece exposes the supplied lobby team", Format(0, TeamSlot.TeamB).StartsWith("    팀=TeamB,"));
++        owner.Pieces[2].State = PieceState.Waiting;
++        Check("Off-board stale group members are excluded", Format(0).Contains("업힌말=[P1/말2(id=1)], 업힌수=1, 그룹전체=2"));
++        owner.Pieces[0].State = PieceState.Goal;
++        Check("Missing leader is visible instead of fabricating a board piece", Format(1).Contains("[보드에서 찾지 못함]"));
++
++        foreach (var sample in new[] {
++            (BoardTileId.None, 1), (BoardTileId.Outer16, 2), (BoardTileId.Inner08, 2),
++            (BoardTileId.Center, 4), (BoardTileId.Corner01, 7), (BoardTileId.Corner02, 7),
++            (BoardTileId.Outer01, 11), (BoardTileId.Inner03, 8) })
++            Check("Minimum goal distance " + sample.Item1,
++                PieceMovementManager.TryCountMinimumGoalSteps(sample.Item1, BoardTileId.None, out int distance) && distance == sample.Item2);
++        Check("Undefined tiles do not produce a fake distance", !PieceMovementManager.TryCountMinimumGoalSteps((BoardTileId)999, BoardTileId.None, out _));
++        Check("Formatting does not change piece state or stack data", owner.Pieces[1].State == PieceState.InBoard &&
++            owner.Pieces[1].CurrentTileId == BoardTileId.Outer01 && owner.Pieces[1].StackGroupId == 0 && owner.Pieces[1].StackLeaderPieceId == 0);
++        File.WriteAllLines("Temp/qa-piece-fields-verification.log", checks);
++        Debug.Log($"[QA Piece Fields] {checks.Count(c => c.StartsWith("PASS"))} passed / {checks.Count(c => c.StartsWith("FAIL"))} failed.");
++    }
++}
++
++// Explicit opt-in integration test. Never runs in a shipped build or normal play.
++[InitializeOnLoad]
++internal static class QaVerificationGate
++{
++    internal const string Flag = "Temp/verify-qa.flag";
++    static QaVerificationGate()
++    {
++        EditorApplication.delayCall += () =>
++        {
++            if (File.Exists(Flag) && !EditorApplication.isPlayingOrWillChangePlaymode) Begin();
++        };
++    }
++    [MenuItem("Tools/QA/Verify InGame QA Logging")]
++    public static void Begin()
++    {
++        if (EditorApplication.isPlayingOrWillChangePlaymode ||
++            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "InGameScene")
++        {
++            Debug.LogWarning("QA 검증은 InGameScene을 연 Edit Mode에서 실행하세요.");
++            return;
++        }
++        File.WriteAllText(Flag, "run");
++        File.WriteAllText(Path.Combine(Path.GetTempPath(), "indiego-character-runtime-verifier.flag"), "run");
++        EditorApplication.isPlaying = true;
++    }
++}
++internal sealed class QaDebugVerification : MonoBehaviour
++{
++    private readonly List<string> traces = new List<string>();
++    private readonly List<string> checks = new List<string>();
++    private DateTime entered;
++    private bool hadInitialQaListener;
++    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
++    private static void Install()
++    {
++        if (!File.Exists(QaVerificationGate.Flag)) return;
++        File.Delete(QaVerificationGate.Flag);
++        new GameObject("QA Verification (temporary)").AddComponent<QaDebugVerification>();
++    }
++    private void Awake()
++    {
++        entered = DateTime.UtcNow;
++        hadInitialQaListener = QaDebugLog.Enabled;
++        QaDebugLog.Receiver += Capture;
++    }
++    private void OnDestroy() => QaDebugLog.Receiver -= Capture;
++    private void Capture(string line) { if (traces.Count < 4096) traces.Add(line); }
++    private void Check(string name, bool passed) => checks.Add((passed ? "PASS " : "FAIL ") + name);
++    private IEnumerator Start()
++    {
++        string report = Path.Combine(Path.GetTempPath(), "indiego-character-runtime-verifier.log");
++        float deadline = Time.realtimeSinceStartup + 60;
++        while ((!File.Exists(report) || File.GetLastWriteTimeUtc(report) < entered) && Time.realtimeSinceStartup < deadline)
++            yield return null;
++        Check("Character integration report updated", File.Exists(report) && File.GetLastWriteTimeUtc(report) >= entered);
++        if (File.Exists(report)) Check("Character integration has no failures", File.ReadLines(report).First().Contains("Failed=0"));
++        var monitor = FindFirstObjectByType<PlayerDataDebugTester>();
++        var players = FindFirstObjectByType<PlayerManager>();
++        Check("Existing DataDebuger automatically connected", monitor != null && hadInitialQaListener);
++        if (monitor != null && players != null)
++        {
++            // Timers are stopped by the character verifier's end-game check.
++            monitor.PollNow();
++            int batches = monitor.ConsoleBatchCount;
++            for (int i = 0; i < 10; i++) monitor.PollNow();
++            Check("Stable state generates no extra Console batches", monitor.ConsoleBatchCount == batches);
++            Check("All player headers remain visible even with no board pieces",
++                players.ActivePlayers.All(p => monitor.CurrentSnapshot.Contains("[P" + p.PlayerId + "]")));
++            Check("Settings and order precede the permanent turn flow",
++                monitor.CurrentSnapshot.IndexOf("[게임 설정]", StringComparison.Ordinal) < monitor.CurrentSnapshot.IndexOf("[턴 순서]", StringComparison.Ordinal) &&
++                monitor.CurrentSnapshot.IndexOf("[턴 순서]", StringComparison.Ordinal) < monitor.CurrentSnapshot.IndexOf("[턴 진행]", StringComparison.Ordinal));
++            CharacterSkillRegistry.TryGet(1, 0, out var registeredCharacter);
++            var displayedCharacter = players.ActivePlayers[0].SelectedCharacter ?? registeredCharacter.Data;
++            Check("Direct-scene fallback header uses the registered character",
++                monitor.CurrentSnapshot.Contains("[P1] " + displayedCharacter.char_Name));
++            var member = players.ActivePlayers[0].RuntimeData.Pieces[0];
++            member.Reset(); member.MoveTo(BoardTileId.Outer01);
++            monitor.PollNow();
++            Check("Direct runtime data changes are detected", monitor.CurrentSnapshot.Contains("위치=Outer01"));
++            Check("Human piece numbers expose zero-based ids", monitor.CurrentSnapshot.Contains("말1(id=0)"));
++            Func<int, string> playerBlock = id => monitor.CurrentSnapshot.Replace("\r\n", "\n")
++                .Split(new[] { "\n\n" }, StringSplitOptions.None).First(s => s.StartsWith("[P" + id + "]", StringComparison.Ordinal));
++            var otherMember = players.ActivePlayers[1].RuntimeData.Pieces[2];
++            otherMember.Reset(); otherMember.MoveTo(BoardTileId.Outer09); monitor.PollNow();
++            Check("Board pieces from multiple players appear in their own sections",
++                playerBlock(1).Contains("위치=Outer01") && playerBlock(2).Contains("말3(id=2)") && playerBlock(2).Contains("위치=Outer09"));
++            otherMember.Reset(); monitor.PollNow();
++            Check("Only pieces currently on the board have status rows",
++                !monitor.CurrentSnapshot.Contains("상태=Waiting") && !monitor.CurrentSnapshot.Contains("상태=Goal"));
++            // Exercise simultaneous effects without gameplay-trigger setup assumptions.
++            member.Cc.Add(new CcState(CcDefine.Sturn, 2, 1, 2, 0, member.CurrentTileId, null, -1));
++            member.Cc.Add(new CcState(CcDefine.Silence, 3, 1, 2, 0, member.CurrentTileId, null, -1));
++            monitor.PollNow();
++            Check("Multiple simultaneous effects and their sources are visible",
++                monitor.CurrentSnapshot.Contains("Sturn(") && monitor.CurrentSnapshot.Contains("Silence(") &&
++                monitor.CurrentSnapshot.Contains("출처=P2/id=0"));
++            Check("Snapshot includes SP, cooldown and all-CC section",
++                monitor.CurrentSnapshot.Contains("SP=") && monitor.CurrentSnapshot.Contains("액티브CD=") && monitor.CurrentSnapshot.Contains("CC=["));
++            var turns = FindFirstObjectByType<TestTurnManager>();
++            var originalMode = turns.Settings.gameMode;
++            int originalTarget = turns.Settings.targetEscapeCount;
++            turns.Settings.gameMode = GameMode.Classic;
++            monitor.PollNow();
++            int finished = players.ActivePlayers[0].RuntimeData.Pieces.Count(p => p.IsFinished);
++            int total = players.ActivePlayers[0].RuntimeData.Pieces.Count;
++            Check("Classic status shows finished and remaining piece counts",
++                monitor.CurrentSnapshot.Contains($"완주={finished}/{total}") &&
++                monitor.CurrentSnapshot.Contains($"남은말={total - finished}") &&
++                !monitor.CurrentSnapshot.Contains("| 점수=") && !monitor.CurrentSnapshot.Contains("| 팀점수="));
++            turns.Settings.gameMode = GameMode.Escape; turns.Settings.targetEscapeCount = 5;
++            monitor.PollNow();
++            var scoreTeam = MatchCompositionRule.GetTeamSlot(turns.Settings, (PlayerSlot)players.ActivePlayers[0].PlayerId);
++            int score = FindFirstObjectByType<TestWinConditionManager>().GetEscapeCount(scoreTeam);
++            Check("Escape status uses the mode's score and target",
++                playerBlock(1).Contains($"{(turns.Settings.isTeamMode ? "팀점수" : "점수")}={score}/5") &&
++                !playerBlock(1).Contains("남은말="));
++            turns.Settings.gameMode = originalMode; turns.Settings.targetEscapeCount = originalTarget;
++            int previousTurn = turns.CurrentTurn.turnNumber;
++            var previousPhase = turns.CurrentTurn.currentPhase;
++            turns.CurrentTurn.turnNumber++;
++            foreach (var phase in new[] { TurnPhase.Throwing, TurnPhase.SaveThrowResult, TurnPhase.CheckExtraThrow, TurnPhase.WaitAction })
++            {
++                turns.CurrentTurn.currentPhase = phase;
++                turns.OnTurnPhaseChanged?.Invoke(turns.CurrentTurn);
++            }
++            monitor.PollNow();
++            Check("Turn flow retains phases completed between polls", monitor.CurrentSnapshot.Contains("Throwing → SaveThrowResult → CheckExtraThrow → WaitAction"));
++            turns.CurrentTurn.turnNumber = previousTurn; turns.CurrentTurn.currentPhase = previousPhase;
++            monitor.PollNow();
++            var console = new List<string>();
++            Application.LogCallback captureConsole = (message, stack, type) => { if (message.StartsWith("[QA]", StringComparison.Ordinal)) console.Add(message); };
++            Application.logMessageReceived += captureConsole;
++            try
++            {
++                member.MoveTo(BoardTileId.Outer02); monitor.PollNow();
++                Check("Status updates do not accumulate in Console by default", console.Count == 0 && !monitor.LogStateChanges);
++                monitor.LogAllPieceData();
++                string full = console.LastOrDefault(m => m.StartsWith("[QA][현재 상태]", StringComparison.Ordinal));
++                Check("Manual Console snapshot contains the complete player layout", full != null && full.Contains("[게임 설정]") &&
++                    players.ActivePlayers.All(p => full.Contains("[P" + p.PlayerId + "]")));
++                QaDebugLog.Event("[QA-test special action]"); monitor.PollNow();
++                Check("Special actions and current status use separate Console entries",
++                    console.Any(m => m.StartsWith("[QA][특별 행동]", StringComparison.Ordinal) && !m.Contains("[게임 설정]")));
++            }
++            finally { Application.logMessageReceived -= captureConsole; }
++            member.Reset(); monitor.PollNow();
++            Check("Retired pieces disappear from permanent status", !playerBlock(1).Contains("말1(id=0) | 상태=InBoard"));
++            member.MoveTo(BoardTileId.Outer01); monitor.PollNow();
++            foreach (string id in new[] {"001_1", "001_2", "002", "003", "004", "005", "006", "007", "008", "009", "010"})
++            {
++                Check("Active trace " + id, traces.Any(t => t.Contains("[액티브 요청]") && t.Contains("CHAR_" + id + ")") && t.Contains("성공=True")));
++                Check("Passive trace " + id, traces.Any(t => t.Contains("[패시브") && t.Contains("CHAR_" + id + ")")));
++            }
++            Check("Passive effects identify source and target", traces.Any(t => t.Contains("[패시브]") && t.Contains(" -> P") && t.Contains("처리성공=True")));
++            Check("Immunity passive identifies the attacker", traces.Any(t => t.Contains("[패시브/면역]") && t.Contains(" -> P")));
++            Check("Capture traces include both pieces and the decision", traces.Any(t => t.Contains("[잡기]") && t.Contains(" -> P") && t.Contains("방어판정=")));
++            Check("Blocked captures are distinguishable", traces.Any(t => t.Contains("[잡기]") && t.Contains("잡히지 않음")));
++            Check("Ordinary SP changes are not duplicated as action spam", !traces.Any(t => t.Contains("[SP]")));
++            Check("Normal movement is not duplicated as action spam", !traces.Any(t => t.Contains(" spaces)")));
++            var map = FindFirstObjectByType<MapManager>();
++            if (map != null)
++            {
++                var fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
++                var tiles = (Dictionary<BoardTileId, MapSpecialTileSetting>)typeof(MapManager).GetField("specialTileSettings", fields).GetValue(map);
++                var enabledField = typeof(MapManager).GetField("useSpecialTiles", fields);
++                bool wasEnabled = (bool)enabledField.GetValue(map);
++                tiles.TryGetValue(BoardTileId.Corner01, out var oldSetting);
++                var mapEvent = ScriptableObject.CreateInstance<LogMapSpecialTileEvent>();
++                try
++                {
++                    enabledField.SetValue(map, true);
++                    tiles[BoardTileId.Corner01] = new MapSpecialTileSetting { tileId = BoardTileId.Corner01, tileEvent = mapEvent, value = 7 };
++                    member.MoveTo(BoardTileId.Corner01);
++                    int beforeMap = traces.Count(t => t.Contains("[맵 기믹]"));
++                    map.ResolveSpecialTile(players.ActivePlayers[0], member, 1, FindFirstObjectByType<PieceMovementManager>());
++                    Check("Every map event emits one common action trace", traces.Count(t => t.Contains("[맵 기믹]")) == beforeMap + 1 &&
++                        traces.Last(t => t.Contains("[맵 기믹]")).Contains("대상=P1/말1"));
++                }
++                finally
++                {
++                    enabledField.SetValue(map, wasEnabled);
++                    if (oldSetting == null) tiles.Remove(BoardTileId.Corner01); else tiles[BoardTileId.Corner01] = oldSetting;
++                    DestroyImmediate(mapEvent);
++                }
++                monitor.PollNow();
++            }
++
++            for (int i = 0; i < 80; i++) QaDebugLog.Event("burst-" + i);
++            batches = monitor.ConsoleBatchCount;
++            monitor.PollNow();
++            Check("Burst events use a single bounded batch", monitor.ConsoleBatchCount == batches + 1 &&
++                monitor.RecentEvents.Split(new[] {'\n'}, StringSplitOptions.RemoveEmptyEntries).Length == 64);
++            monitor.LogStateChanges = false; monitor.LogGameplayEvents = false;
++            batches = monitor.ConsoleBatchCount;
++            member.MoveTo(BoardTileId.Outer02); QaDebugLog.Event("muted event"); monitor.PollNow();
++            Check("Console can be muted while live view still updates", monitor.ConsoleBatchCount == batches &&
++                monitor.CurrentSnapshot.Contains("위치=Outer02"));
++            monitor.LogStateChanges = false; monitor.LogGameplayEvents = true;
++            int polls = monitor.PollCount;
++            yield return new WaitForSecondsRealtime(1.1f);
++            Check("Default polling is bounded to 0.5 seconds", monitor.PollCount - polls <= 3 && monitor.PollCount - polls >= 1);
++
++            // Informational measurement in this editor; not a hardware-independent performance guarantee.
++            var watch = System.Diagnostics.Stopwatch.StartNew();
++            for (int i = 0; i < 100; i++) monitor.PollNow();
++            watch.Stop();
++            checks.Add("MEASURE stable poll average_ms=" + (watch.Elapsed.TotalMilliseconds / 100).ToString("F4"));
++            monitor.enabled = false;
++            Check("Disabled monitor unsubscribes", !QaDebugLog.Receiver.GetInvocationList().Any(d => ReferenceEquals(d.Target, monitor)));
++            monitor.enabled = true;
++            QaDebugLog.Event("reenabled observer"); monitor.PollNow();
++            Check("Reenabled monitor reconnects once", monitor.RecentEvents.Contains("reenabled observer") &&
++                QaDebugLog.Receiver.GetInvocationList().Count(d => ReferenceEquals(d.Target, monitor)) == 1);
++        }
++        File.WriteAllLines("Temp/qa-verification.log", checks);
++        Debug.Log("[QA Verification] " + checks.Count(t => t.StartsWith("PASS")) + " passed / " + checks.Count(t => t.StartsWith("FAIL")) + " failed. Temp/qa-verification.log");
++        EditorApplication.isPlaying = false;
++    }
++}
++#endif
+diff --git a/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs.meta b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs.meta
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/InGame/QaDebugVerification.cs.meta
+@@ -0,0 +1,2 @@
++fileFormatVersion: 2
++guid: 63f9ba4d0a2a42778b75994165a73264

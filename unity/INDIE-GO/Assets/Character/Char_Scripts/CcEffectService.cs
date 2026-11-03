@@ -250,7 +250,11 @@ namespace YutArena.InGame
             if (owner != null &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, effectivePieceId, out var status) &&
                 status.IsImmuneToEffect(type))
+            {
+                QaDebugLog.Skill("패시브/면역", owner.PlayerId, effectivePieceId,
+                    sourcePlayerId, sourcePieceId, $"차단한 효과={GetSkillId(type)}");
                 return false;
+            }
 
             // 보호는 잡기뿐 아니라 직접 부여되는 해로운 상태이상도 막습니다.
             if ((type == CcDefine.Sturn || type == CcDefine.Binding ||
@@ -319,9 +323,6 @@ namespace YutArena.InGame
                 piece.CurrentTileId, path, charges);
             piece.Cc.Add(state);
             Changed?.Invoke(piece, state, true);
-            Debug.Log($"[CC][Apply] Player={owner?.PlayerId}, Piece={piece.PieceId}, " +
-                $"Effect={GetSkillId(type)}, Turns={turns}, Value={value}, Charges={charges}, " +
-                $"Source={sourcePlayerId}/{sourcePieceId}");
             bool succeeded = true;
             switch (type)
             {
@@ -553,6 +554,8 @@ namespace YutArena.InGame
                     if (parts == null || piece.PieceId == record.PieceId || record.To != parts.Tile) continue;
                     var arrived = StackLeader(movedPiece);
                     var rescued = StackMembers(piece);
+                    QaDebugLog.Skill("패시브/부품 구출", record.PlayerId, arrived.PieceId,
+                        record.PlayerId, piece.PieceId, $"부활 및 업기, 위치={parts.Tile}, 부활 말 수={rescued.Count}");
                     Remove(piece, parts);
                     int groupId = arrived.IsStacked
                         ? arrived.StackGroupId : movedOwner.RuntimeData.CreateStackGroupId();

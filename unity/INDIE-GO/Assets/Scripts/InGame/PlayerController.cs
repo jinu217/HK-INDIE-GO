@@ -60,10 +60,6 @@ public sealed class PlayerController : MonoBehaviour
         selectedCharacter = characterData;
         jobPiecePrefab = characterData != null ? characterData.piecePrefab : defaultJobPiecePrefab;
 
-        Debug.Log(
-            $"{name}: 선택 챔피언 '{(characterData != null ? characterData.char_Name : "없음")}'의 Job Piece Prefab을 " +
-            $"'{(jobPiecePrefab != null ? jobPiecePrefab.name : "없음")}'으로 적용했습니다.",
-            this);
     }
 
     /// <summary>

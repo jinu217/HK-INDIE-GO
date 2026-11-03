@@ -123,7 +123,7 @@ namespace YutArena.Managers
 
         private IEnumerator CharacterSelectCountdownRoutine()
         {
-            Debug.Log("[캐릭터선택] " + characterSelectCountdownSeconds + "초 후 자동으로 게임 시작");
+            QaDebugLog.Event("[캐릭터선택] " + characterSelectCountdownSeconds + "초 후 자동으로 게임 시작");
             yield return new WaitForSeconds(characterSelectCountdownSeconds);
             characterSelectCountdownCoroutine = null;
             StartGame(); // 카운트다운 끝나면 자동으로 진짜 게임 시작

@@ -15,6 +15,27 @@ public sealed class PieceMovementManager : MonoBehaviour
     public event System.Action<int, IReadOnlyList<int>, IReadOnlyList<BoardTileId>> OnVisualMoveResolved;
 
     /// <summary>
+    /// Read-only geometric distance: stop at junctions to take shortcuts, then pass the shared start to finish.
+    /// Separate from Escape's fixed distance score. Does not simulate CC, skills, captures, or throws.
+    /// </summary>
+    internal static bool TryCountMinimumGoalSteps(BoardTileId current, BoardTileId previous, out int remaining)
+    {
+        remaining = -1;
+        // The longest normal route is shorter than this bound; corrupt data must not loop in the QA poll.
+        for (int steps = 1; steps <= 32; steps++)
+        {
+            if (current == BoardTileId.None) { remaining = steps; return true; }
+            if (current < BoardTileId.Outer01 || current > BoardTileId.Inner08 || current == BoardTileId.Corner04)
+                return false;
+            // On this board, stopping at each junction permits the shortest forward shortcut.
+            BoardTileId next = GetNextForwardTile(current, previous, true, true);
+            previous = current;
+            current = next;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// 현재 보드 위에 있는 지정 말의 골인까지 남은 칸 수를 반환합니다.
     /// Escape 제한시간 동점 판정에서 사용합니다.
     /// PieceId는 플레이어별로 다시 0부터 시작하므로 playerId와 함께 전달해야 합니다.
@@ -235,7 +256,7 @@ public sealed class PieceMovementManager : MonoBehaviour
             NotifyVisualMoveResolved(playerId, movingPieces, path);
             //수정: 완주한 이동도 이동 완료 이벤트에서 누락되지 않도록 전달합니다.
             NotifyMoveCompleted(playerId, movingPieces, startingTile, path);
-            Debug.Log($"Player {playerId}, Piece {pieceId + 1} reached Goal.", this);
+            QaDebugLog.Event($"[완주] {QaDebugLog.Piece(playerId, pieceId)} | 실제 말 수={movingPieces.Count}", this);
             return true;
         }
 
@@ -258,10 +279,6 @@ public sealed class PieceMovementManager : MonoBehaviour
         if (mapManager != null && selectedPiece.CurrentTileId == landingTile)
             mapManager.ResolveSpecialTile(player, selectedPiece, movingPieces.Count, this);
 
-        Debug.Log(
-            $"Player {playerId}, Piece {pieceId + 1}: {startingTile} -> " +
-            $"{selectedPiece.CurrentTileId} ({moveCount} spaces)",
-            this);
         return true;
     }
 
@@ -360,12 +377,15 @@ public sealed class PieceMovementManager : MonoBehaviour
                     wouldGrantExtraThrow);
                 CharacterCaptureDecision decision =
                     CharacterSkillRegistry.EvaluateIncomingCapture(request);
+                string qaTargets = QaDebugLog.Stack(otherPlayer.PlayerId, targetPiece);
 
                 //수정: 방어, 분신 소모, 부품 전환 결과면 기본 잡기를 실행하지 않습니다.
                 if (decision == CharacterCaptureDecision.Prevent ||
                     decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
                     decision == CharacterCaptureDecision.ConvertToParts)
                 {
+                    if (wasStackLeader[targetPiece.PieceId])
+                        QaDebugLog.Capture(request, decision, qaTargets, false);
                     continue;
                 }
 
@@ -387,6 +407,7 @@ public sealed class PieceMovementManager : MonoBehaviour
                 //수정: 표식 보상 및 CC 적용은 Character 효과 처리기에 위임합니다.
                 CcEffectService.RewardMarks(targetPiece, request);
                 targetPiece.SetCaptured(captureCc);
+                QaDebugLog.Capture(request, decision, qaTargets, targetPiece.State == PieceState.Waiting);
                 //수정: 실제 잡기 이후 방어자 퇴장과 공격자 잡기 완료를 알립니다.
                 CharacterSkillRegistry.NotifyCaptureCompleted(request);
             }
