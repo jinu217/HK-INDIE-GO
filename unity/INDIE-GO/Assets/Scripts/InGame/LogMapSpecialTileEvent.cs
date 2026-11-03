@@ -7,14 +7,11 @@ namespace YutArena.InGame
     public sealed class LogMapSpecialTileEvent : MapSpecialTileEvent
     {
         [SerializeField] private string message = "특수 타일 이벤트 발동";
+        public override string DebugLabel => message;
 
         public override void Execute(MapSpecialTileContext context)
         {
-            Debug.Log(
-                $"[MapEvent] {message}: Map={context.Map.CurrentMap.name}, " +
-                $"Tile={context.TileId}, Player={context.Player.PlayerId}, " +
-                $"Piece={context.Piece.PieceId}, Count={context.MovingPieceCount}, Value={context.Value}",
-                context.Map);
+            // MapManager emits one common trace for every map event, including this example.
         }
     }
 }

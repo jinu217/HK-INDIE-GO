@@ -20,6 +20,10 @@ public sealed class CHAR_003_Status : CharacterStatusBehaviour
         int defendingCount = CcBoardEffects.CountStackUnits(Owner, target);
         bool limitCapture = defendingCount > request.AttackingPieceCount && IsPassiveReady;
         int clones = target.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0;
+        if (limitCapture || clones > 0)
+            QaDebugLog.Skill("패시브/분신 방어", PlayerId, PieceId,
+                request.AttackerPlayerId, request.AttackerPieceId,
+                $"방어수={defendingCount}, 공격수={request.AttackingPieceCount}, 분신소모={Math.Min(clones, request.AttackingPieceCount)}, 방어성공={limitCapture || clones >= request.AttackingPieceCount}");
         if (limitCapture) TryStartPassiveCooldown();
         if (clones > 0)
         {

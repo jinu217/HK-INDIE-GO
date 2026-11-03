@@ -79,7 +79,7 @@ namespace YutArena.InGame
         [SerializeField] private float topUiPixels = 140f;
 
         [Header("Debug")]
-        [SerializeField] private bool verboseLog = true;
+        [SerializeField] private bool verboseLog = false;
 
         private readonly List<MoveMarker> pieceArrows = new List<MoveMarker>();
         private readonly List<MoveMarker> destMarkers = new List<MoveMarker>();
@@ -273,7 +273,6 @@ namespace YutArena.InGame
                 // (결과는 작은 것부터 처리됨). 예전엔 여러 깃발을 옆으로 벌리다 옆 칸으로 밀려나 헷갈렸음.
                 if (escapeFlagCount > 0)
                 {
-                    if (verboseLog) Debug.Log($"[MoveSelector]   {result}: 탈출 깃발은 이미 있음 (더 작은 결과로 탈출) → 생략", this);
                     return false;
                 }
                 escapeFlagCount++;
@@ -338,7 +337,6 @@ namespace YutArena.InGame
             marker.OutlineIsLarge = IsLargeTile(reachesFinish ? BoardTileId.Start : landingTile);
             ApplyOutlineShape(marker); // 큰 칸 크기 + 위치 보정 적용
             destMarkers.Add(marker);
-            if (verboseLog) Debug.Log($"[MoveSelector]   {result} → {landingTile} finish={reachesFinish} piece={pieceOnTile} {tilePos}", this);
             return true;
         }
 

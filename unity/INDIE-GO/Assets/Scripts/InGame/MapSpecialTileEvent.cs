@@ -39,6 +39,7 @@ namespace YutArena.InGame
     /// </summary>
     public abstract class MapSpecialTileEvent : ScriptableObject
     {
+        public virtual string DebugLabel => name;
         public abstract void Execute(MapSpecialTileContext context);
     }
 }

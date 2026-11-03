@@ -1,0 +1,244 @@
+ADDITIVE PIECE STATUS FIELDS — 2026-11-03
+Existing status fields and gameplay rules preserved. No Play Mode entry for these plain-data checks.
+Runtime / Editor / release-define compilation: PASS (0 errors / 0 warnings).
+
+PASS Solo piece has zero carried pieces and no stack leader
+PASS Leader is distinct from carried members
+PASS Carried row identifies the actual carrier
+PASS Carried count excludes the leader
+PASS Unstacked piece on the same tile is excluded
+PASS Each piece exposes the supplied lobby team
+PASS Off-board stale group members are excluded
+PASS Missing leader is visible instead of fabricating a board piece
+PASS Minimum goal distance None
+PASS Minimum goal distance Outer16
+PASS Minimum goal distance Inner08
+PASS Minimum goal distance Center
+PASS Minimum goal distance Corner01
+PASS Minimum goal distance Corner02
+PASS Minimum goal distance Outer01
+PASS Minimum goal distance Inner03
+PASS Undefined tiles do not produce a fake distance
+PASS Formatting does not change piece state or stack data
+
+PASS Previous implementation is unchanged after removing the new display-only additions: unity/INDIE-GO/Assets/Scripts/Managers/PieceMovementManager.cs
+PASS Previous implementation is unchanged after removing the new display-only additions: unity/INDIE-GO/Assets/Scripts/InGame/PlayerDataDebugTester.cs
+
+---- PREVIOUS QA RECHECK ----
+LATEST QA RECHECK — 2026-11-03 / dev/Debug
+
+Runtime compilation: PASS (0 errors / 0 warnings)
+Editor compilation: PASS (0 errors / 0 warnings)
+Release-define compilation: PASS (0 errors / 0 warnings; not a player build)
+Console dock migration: observed in Edit Mode after the layout correction.
+Latest small additions (ShowTab and effective-skill flag): compile verified after the two Play runs.
+Automatic test flags: absent; editor returned to StartScene / Edit Mode.
+
+ESCAPE / 2 players / Basic (real StartScene UI flow):
+READ-ONLY StartScene flow verification
+Scenes: StartScene -> LocalLobbyScene -> ChampionPickScene -> InGameScene
+PASS Started in StartScene
+PASS Traversed lobby and character selection
+PASS In-game settings match the lobby selection
+PASS Player count matches the saved lobby setting
+PASS Actual selected characters survive the scene transition
+PASS Every player has their actual character and SP header
+PASS Only board pieces appear under their own player
+PASS Round, turn and current phase stay visible
+PASS Default status updates add no Console history
+PASS Automatic live window has a separate panel for every player
+PENDING Observed a piece entering the board through normal play
+Console action batches observed: 8
+
+CLASSIC / 4 players / Random -> Korean / 60-second lobby setting (real StartScene UI flow):
+READ-ONLY StartScene flow verification
+Scenes: StartScene -> LocalLobbyScene -> ChampionPickScene -> InGameScene
+PASS Started in StartScene
+PASS Traversed lobby and character selection
+PASS In-game settings match the lobby selection
+PASS Player count matches the saved lobby setting
+PASS Actual selected characters survive the scene transition
+PASS Every player has their actual character and SP header
+PASS Only board pieces appear under their own player
+PASS Round, turn and current phase stay visible
+PASS Default status updates add no Console history
+PASS Automatic live window has a separate panel for every player
+PASS Observed a piece entering the board through normal play
+Console action batches observed: 3
+
+VISUAL: P2 piece 0 entered Outer02; P2 panel showed its position, stack state and CC.
+LIMIT: All character skills, map events and finish conditions were not replayed in these two flows.
+KNOWN: CHAR_001_2 stacking SP passive remains unresolved (previous character test).
+OBSERVED: Korean map tiles were not visible in the Classic run; logical movement succeeded.
+
+---- PREVIOUS IMPLEMENTATION RESULTS ----
+2026-11-03 / dev/Debug
+
+QA verification (40 PASS; 1 linked character-regression failure)
+PASS Character integration report updated
+FAIL Character integration has no failures
+PASS Existing DataDebuger automatically connected
+PASS Stable state generates no extra Console batches
+PASS Snapshot includes SP, cooldown and all-CC section
+PASS Direct-scene fallback header uses the registered character
+PASS Direct runtime data changes are detected
+PASS Human piece numbers expose zero-based ids
+PASS Multiple simultaneous effects and their sources are visible
+PASS Active trace 001_1
+PASS Passive trace 001_1
+PASS Active trace 001_2
+PASS Passive trace 001_2
+PASS Active trace 002
+PASS Passive trace 002
+PASS Active trace 003
+PASS Passive trace 003
+PASS Active trace 004
+PASS Passive trace 004
+PASS Active trace 005
+PASS Passive trace 005
+PASS Active trace 006
+PASS Passive trace 006
+PASS Active trace 007
+PASS Passive trace 007
+PASS Active trace 008
+PASS Passive trace 008
+PASS Active trace 009
+PASS Passive trace 009
+PASS Active trace 010
+PASS Passive trace 010
+PASS Passive effects identify source and target
+PASS Immunity passive identifies the attacker
+PASS Capture traces include both pieces and the decision
+PASS Blocked captures are distinguishable
+PASS SP event identifies gain/spend cause
+PASS Burst events use a single bounded batch
+PASS Console can be muted while live view still updates
+PASS Default polling is bounded to 0.5 seconds
+MEASURE stable poll average_ms=0.1381
+PASS Disabled monitor unsubscribes
+PASS Reenabled monitor reconnects once
+
+Character integration (the same existing CHAR_001_2 issue)
+SUMMARY | Passed=121 Failed=1
+PASS | Scene managers are available
+PASS | CHAR_001_1 prefab loads
+PASS | CHAR_001_1 registers four pieces for every player
+PASS | CHAR_001_1 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_001_1 passive
+PASS | CHAR_001_1 active succeeds
+PASS | CHAR_001_1 active spends configured SP
+PASS | CHAR_001_1 cooldown is isolated per player
+PASS | CHAR_001_2 prefab loads
+PASS | CHAR_001_2 registers four pieces for every player
+PASS | CHAR_001_2 visual is empty or a model, never a recursive gameplay prefab
+FAIL | CHAR_001_2 passive | SP=0/1/2, moves=True/True/True, stacked=True
+PASS | CHAR_001_2 active succeeds
+PASS | CHAR_001_2 active spends configured SP
+PASS | CHAR_001_2 cooldown is isolated per player
+PASS | CHAR_002 prefab loads
+PASS | CHAR_002 registers four pieces for every player
+PASS | CHAR_002 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_002 passive
+PASS | CHAR_002 active succeeds
+PASS | CHAR_002 active spends configured SP
+PASS | CHAR_002 cooldown is isolated per player
+PASS | CHAR_003 prefab loads
+PASS | CHAR_003 registers four pieces for every player
+PASS | CHAR_003 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_003 passive
+PASS | CHAR_003 active succeeds
+PASS | CHAR_003 active spends configured SP
+PASS | CHAR_003 cooldown is isolated per player
+PASS | CHAR_004 prefab loads
+PASS | CHAR_004 registers four pieces for every player
+PASS | CHAR_004 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_004 passive
+PASS | CHAR_004 active succeeds
+PASS | CHAR_004 active spends configured SP
+PASS | CHAR_004 hide blocks ordinary landing capture
+PASS | CHAR_004 cooldown is isolated per player
+PASS | CHAR_005 prefab loads
+PASS | CHAR_005 registers four pieces for every player
+PASS | CHAR_005 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_005 passive
+PASS | CHAR_005 active succeeds
+PASS | CHAR_005 active spends configured SP
+PASS | CHAR_005 cooldown is isolated per player
+PASS | CHAR_006 prefab loads
+PASS | CHAR_006 registers four pieces for every player
+PASS | CHAR_006 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_006 passive
+PASS | CHAR_006 active succeeds
+PASS | CHAR_006 active spends configured SP
+PASS | CHAR_006 retires both tiles and grants one throw per enemy
+PASS | CHAR_006 cooldown is isolated per player
+PASS | CHAR_007 prefab loads
+PASS | CHAR_007 registers four pieces for every player
+PASS | CHAR_007 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_007 passive
+PASS | CHAR_007 active succeeds
+PASS | CHAR_007 active spends configured SP
+PASS | CHAR_007 uses SP instead of a turn cooldown
+PASS | CHAR_007 cannot be reused without another 3 SP
+PASS | CHAR_007 cooldown is isolated per player
+PASS | CHAR_008 prefab loads
+PASS | CHAR_008 registers four pieces for every player
+PASS | CHAR_008 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_008 passive
+PASS | CHAR_008 active succeeds
+PASS | CHAR_008 active spends configured SP
+PASS | CHAR_008 cooldown is isolated per player
+PASS | CHAR_009 prefab loads
+PASS | CHAR_009 registers four pieces for every player
+PASS | CHAR_009 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_009 passive
+PASS | CHAR_009 active succeeds
+PASS | CHAR_009 active spends configured SP
+PASS | CHAR_009 cooldown is isolated per player
+PASS | CHAR_010 prefab loads
+PASS | CHAR_010 registers four pieces for every player
+PASS | CHAR_010 visual is empty or a model, never a recursive gameplay prefab
+PASS | CHAR_010 passive
+PASS | CHAR_010 active succeeds
+PASS | CHAR_010 active spends configured SP
+PASS | CHAR_010 retreat ends the owner's turn
+PASS | CHAR_010 cooldown is isolated per player
+PASS | Mixed CHAR_002 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_002 prefab loads
+PASS | Mixed CHAR_002 prefab loads
+PASS | Talisman blocks enemy Sword Aura retirement
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_007 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Hero ignores Orc path stun
+PASS | Mixed CHAR_009 prefab loads
+PASS | Mixed CHAR_005 prefab loads
+PASS | Mixed CHAR_009 prefab loads
+PASS | Mixed CHAR_009 prefab loads
+PASS | Samurai retirement converts Robot to Parts without capture bonus
+PASS | Robot revives only on its tile and can later become Parts again
+PASS | Mixed CHAR_008 prefab loads
+PASS | Mixed CHAR_004 prefab loads
+PASS | Mixed CHAR_008 prefab loads
+PASS | Mixed CHAR_008 prefab loads
+PASS | Wind extra movement does not capture its landing enemy
+PASS | Runtime simple movement does not retrigger Wind
+PASS | Runtime Wind stack retains both original and extra landing
+PASS | Mixed CHAR_003 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_003 prefab loads
+PASS | Mixed CHAR_003 prefab loads
+PASS | Runtime clone capacity rejects a fourth clone
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_004 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Mixed CHAR_006 prefab loads
+PASS | Team Sword Aura preserves allies and grants no throws
+PASS | InGameScene has a ClassicModeRule source
+PASS | Classic goal move for piece 0
+PASS | Classic goal move for piece 1
+PASS | Classic goal move for piece 2
+PASS | Classic goal move for piece 3
+PASS | Classic reaches EndGame

@@ -271,6 +271,18 @@ public static class CharacterSkillRegistry
 
     public static CharacterActiveResult TryUseActive(CharacterActiveRequest request)
     {
+        var result = TryUseActiveCore(request);
+        QaDebugLog.Skill("액티브 요청", request.PlayerId, request.CasterPieceId,
+            request.HasTarget ? request.TargetPlayerId : request.PlayerId,
+            request.HasTarget ? request.TargetPieceId :
+                TryGet(request.PlayerId, request.CasterPieceId, out var caster) && caster.RequiresCasterPieceSelection
+                    ? request.CasterPieceId : -1,
+            $"성공={result.Succeeded}, {result.Message}");
+        return result;
+    }
+
+    private static CharacterActiveResult TryUseActiveCore(CharacterActiveRequest request)
+    {
         if (!AreSkillsEnabled)
             return CharacterActiveResult.Failure("Character skills are disabled for the current game settings.");
         if (!TryGet(request.PlayerId, request.CasterPieceId, out CharacterStatusBehaviour behaviour))
@@ -301,10 +313,6 @@ public static class CharacterSkillRegistry
             int previousPoints = GetSkillPoints(request.PlayerId);
             int remainingPoints = previousPoints - skillPointCost;
             SkillPoints[request.PlayerId] = remainingPoints;
-            UnityEngine.Debug.Log(
-                $"[CharacterSkill][SkillPoint] Spent {skillPointCost}. " +
-                $"Player={request.PlayerId}, Remaining={remainingPoints}",
-                behaviour);
             NotifySkillPointChanged(
                 request.PlayerId,
                 previousPoints,
@@ -316,10 +324,6 @@ public static class CharacterSkillRegistry
         if (behaviour.ActiveCooldownTurns > 0)
         {
             ActiveCooldowns[(request.PlayerId, behaviour.Data)] = behaviour.ActiveCooldownTurns;
-            UnityEngine.Debug.Log(
-                $"[CharacterSkill][Cooldown] Started {behaviour.ActiveCooldownTurns} turn(s). " +
-                $"Player={request.PlayerId}, Character={behaviour.Data.char_Name}",
-                behaviour);
         }
 
         // 결과 처리도 UI와 독립적으로 실행합니다(아이템/테스트/API 호출과 동일한 경로).
@@ -390,9 +394,6 @@ public static class CharacterSkillRegistry
 
         int total = current + gained;
         SkillPoints[playerId] = total;
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][SkillPoint] Gained {gained}. " +
-            $"Player={playerId}, Total={total}/{maximum}, Source={source}");
         SkillPointRequested?.Invoke(playerId, gained);
         NotifySkillPointChanged(playerId, current, total, gained, source);
     }

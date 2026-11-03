@@ -439,6 +439,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                 int pointsAfterStackMove = CharacterSkillRegistry.GetSkillPoints(1);
                 CcEffectService.Apply(caster, CcDefine.Retire);
                 caster.MoveTo(BoardTileId.Outer02);
+                // Retire removes the entire real stack; prepare a new ally landing.
+                ally.MoveTo(BoardTileId.Outer04);
                 bool stackedAgain = movement.TryMovePiece(1, 0, 2);
                 ok = skill.PassiveStatus == CharacterSkillStatus.Get_point &&
                      stacked && caster.IsStacked &&
@@ -447,6 +449,8 @@ internal sealed class CharacterSkillRuntimeVerifier : MonoBehaviour
                      stackedAgain && CharacterSkillRegistry.GetSkillPoints(1) ==
                          System.Math.Min(pointsAfterStack + 1,
                              CharacterSkillRegistry.GetMaxSkillPoints(1));
+                detail = $"SP={garamPointsBefore}/{pointsAfterStack}/{pointsAfterStackMove}, " +
+                    $"moves={stacked}/{movedExistingStack}/{stackedAgain}, stacked={caster.IsStacked}";
                 break;
             case "CHAR_002":
                 skill.OnPieceEnteredBoard();

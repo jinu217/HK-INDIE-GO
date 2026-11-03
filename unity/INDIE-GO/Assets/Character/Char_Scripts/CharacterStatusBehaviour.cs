@@ -270,13 +270,6 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
         if (!IsPassiveReady) return false;
 
         remainingPassiveCooldownTurns = PassiveCooldownTurns;
-        if (remainingPassiveCooldownTurns > 0)
-        {
-            Debug.Log(
-                $"[CharacterSkill][PassiveCooldown] Started " +
-                $"{remainingPassiveCooldownTurns} turn(s). Player={PlayerId}, Piece={PieceId}",
-                this);
-        }
 
         return true;
     }
@@ -351,7 +344,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     {
         target = CcEffectService.StackLeader(target);
         return target != null && CanReceivePassiveEffect(target, index) &&
-            ApplyConfiguredEffect(PassiveEffect(index), target, path, amount);
+            ApplyConfiguredEffect(PassiveEffect(index), target, path, amount, "패시브");
     }
 
     protected bool ApplyPassiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
@@ -361,13 +354,26 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     protected bool ApplyActiveEffect(int index = 0, PlayerRuntimeData.PieceRuntimeData target = null,
         IReadOnlyList<BoardTileId> path = null, int? amount = null) =>
         ApplyConfiguredEffect(ActiveEffect(index),
-            target ?? CcEffectService.GetPiece(PlayerId, PieceId), path, amount);
+            target ?? CcEffectService.GetPiece(PlayerId, PieceId), path, amount, "액티브 효과");
 
     private bool ApplyConfiguredEffect(CharacterEffectDefinition effect,
-        PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount) =>
-        CharacterSkillRegistry.AreSkillsEnabled && effect != null && effect.IsValid &&
-        CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
+        PlayerRuntimeData.PieceRuntimeData target, IReadOnlyList<BoardTileId> path, int? amount, string kind)
+    {
+        if (!CharacterSkillRegistry.AreSkillsEnabled || effect == null || !effect.IsValid) return false;
+        // 이동/퇴장 뒤에도 적용 당시 대상과 위치를 정확히 남깁니다.
+        var leader = QaDebugLog.Enabled ? CcEffectService.StackLeader(target) : null;
+        var owner = CcEffectService.FindOwner(leader);
+        string targets = QaDebugLog.Stack(owner != null ? owner.PlayerId : -1, leader);
+        var from = leader != null ? leader.CurrentTileId : BoardTileId.None;
+        bool applied = CcEffectService.Apply(target, effect.id, effect.ownerTurnTicks, amount ?? effect.amount,
             PlayerId, PieceId, path, effect.isSimpleMove, effect.charges, effect.ignoresInstalledItems);
+        if (QaDebugLog.Enabled)
+            QaDebugLog.Event($"[{kind}] {QaDebugLog.Piece(PlayerId, PieceId)} -> {targets} | " +
+                $"스킬={(kind == "패시브" ? characterData.passive_Name : characterData.active_Name)}, " +
+                $"요청효과={CcEffectService.GetSkillId(effect.id)}, 처리성공={applied}, 값={amount ?? effect.amount}, " +
+                $"턴={effect.ownerTurnTicks}, 결과상태={leader?.State}, 위치={from}->{leader?.CurrentTileId}");
+        return applied;
+    }
 
     // 발동 조건과 선택 순서는 스킬이 정의하고 UI는 입력/강조만 담당합니다.
     public virtual CharacterSkillInputStep GetNextInputStep(bool selectionStarted,

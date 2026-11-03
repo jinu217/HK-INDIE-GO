@@ -88,7 +88,6 @@ public sealed class PlayerManager : MonoBehaviour
             return;
         }
 
-        Debug.Log($"Player {playerIndex + 1}: {characterData.char_Name} -> {characterData.piecePrefab.name} 말 프리팹 적용", player);
     }
 
     public bool TryGetPlayer(int playerId, out PlayerController player)

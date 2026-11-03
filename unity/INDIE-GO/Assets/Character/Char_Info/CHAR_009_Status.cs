@@ -51,10 +51,6 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
             if (reference.Piece.State == PieceState.Waiting) retiredCount += realPieceCount;
         }
 
-        UnityEngine.Debug.Log(
-            $"[CharacterSkill][Active] {nameof(CHAR_009_Status)} activated and retired " +
-            $"{retiredCount} piece(s). Player={PlayerId}, Piece={PieceId}",
-            this);
         return CharacterActiveResult.Success(
             $"Self Destruct retired {retiredCount} piece(s) on this tile and all connected adjacent tiles.",
             suppressExtraThrow: true);

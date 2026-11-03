@@ -146,13 +146,18 @@ namespace YutArena.InGame
 
             // 이벤트가 다시 말을 이동시키더라도 특수 타일 이벤트가 무한 연쇄되지 않게 합니다.
             isResolvingSpecialTile = true;
+            var origin = piece.CurrentTileId;
+            string qaTargets = QaDebugLog.Enabled ? QaDebugLog.Stack(player.PlayerId, piece) : "";
             try
             {
                 setting.tileEvent.Execute(new MapSpecialTileContext(
                     this, player, piece, movingPieceCount, setting.value, movement));
+                QaDebugLog.Event($"[맵 기믹] {setting.tileEvent.DebugLabel} | 맵={CurrentMap?.name}, 칸={origin}, " +
+                    $"대상={qaTargets}, 말 수={movingPieceCount}, 값={setting.value}, 성공=True");
             }
             catch (System.Exception exception)
             {
+                QaDebugLog.Event($"[맵 기믹] {setting.tileEvent.DebugLabel} | 칸={origin}, 대상={qaTargets}, 성공=False");
                 Debug.LogException(exception, setting.tileEvent);
             }
             finally

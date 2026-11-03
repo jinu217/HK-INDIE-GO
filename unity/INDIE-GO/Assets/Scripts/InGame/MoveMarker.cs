@@ -184,7 +184,6 @@ namespace YutArena.InGame
             DestroyTileHulls();
             if (tileVisual == null)
             {
-                Debug.Log($"[MoveMarker] {Result} 테두리 생략: 칸 Transform 없음");
                 return;
             }
 
@@ -193,7 +192,6 @@ namespace YutArena.InGame
             {
                 outlineUsesTileHull = true;
                 SetTileHullsActive(false);
-                Debug.Log($"[MoveMarker] {Result} 칸 윤곽선 생성: 칸='{tileVisual.name}' 모델 {tileHullPivots.Count}개");
                 return;
             }
             outlineUsesTileHull = false;
@@ -220,7 +218,6 @@ namespace YutArena.InGame
             outlineRingSr.sortingOrder = 45;
             frameObject.SetActive(false);
 
-            Debug.Log($"[MoveMarker] {Result} 테두리 생성: 칸='{tileVisual.name}' size={frameBaseScale.x:0.00} angle={angleDeg:0} order=45");
         }
 
         // 칸 Anchor 아래의 칸 3D 모델마다, 같은 메시를 모델 중심 기준으로 (1 + 굵기)배 키운 복사본을 만든다.
@@ -447,7 +444,6 @@ namespace YutArena.InGame
             bool show = hasPieceOnTile || isHovered;
             if (show == highlightOn) return;
             highlightOn = show;
-            Debug.Log($"[MoveMarker] {Result} 강조 {(show ? "ON" : "OFF")} (hover={isHovered}, hull={outlineUsesTileHull}, ring={(outlineRing != null)})");
             if (outlineUsesTileHull) SetTileHullsActive(show);
             else if (outlineRing != null) outlineRing.gameObject.SetActive(show);
         }
