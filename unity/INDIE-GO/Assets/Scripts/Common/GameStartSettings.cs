@@ -2,6 +2,12 @@
 
 namespace YutArena.Common
 {
+    public enum TeamMode
+    {
+        TeamMode1 = 0,
+        TeamMode2 = 1
+    }
+
     public enum GameMode
     {
         Classic,
@@ -30,6 +36,8 @@ namespace YutArena.Common
         public MapType mapType;
         public MatchComposition matchComposition;
         public bool isTeamMode;
+        // isTeamMode가 true일 때 적용하는 팀전 세부 모드
+        public TeamMode teamMode = TeamMode.TeamMode1;
         public int[] playerTeams;
 
         public int playerCount;

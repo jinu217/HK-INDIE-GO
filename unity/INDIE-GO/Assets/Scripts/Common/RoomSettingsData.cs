@@ -15,6 +15,7 @@ namespace YutArena.Common
         public int maxTurnCount;
         public int turnTimeSeconds;
         public bool isTeamMode;
+        public TeamMode teamMode = TeamMode.TeamMode1;
         public int[] playerTeams;
 
         public GameStartSettings ToGameStartSettings()
@@ -25,6 +26,7 @@ namespace YutArena.Common
                 mapType = (MapType)mapType,
                 matchComposition = (MatchComposition)matchComposition,
                 isTeamMode = isTeamMode,
+                teamMode = teamMode,
                 playerTeams = playerTeams != null ? (int[])playerTeams.Clone() : null,
                 playerCount = playerCount,
                 pieceCountPerPlayer = pieceCountPerPlayer > 0

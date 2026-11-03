@@ -39,6 +39,10 @@ namespace YutArena.UI
         [SerializeField] private TMP_Text escapeTargetValueText;
 
         [Header("Players")]
+        [Tooltip("개인전 플레이어 수 설정 영역")]
+        [SerializeField] private GameObject playerCountPanel;
+        [Tooltip("팀전 설정 영역")]
+        [SerializeField] private GameObject teamModePanel;
         [Tooltip("플레이어 수 감소 버튼")]
         [SerializeField] private Button playerCountLeftButton;
         [Tooltip("플레이어 수 증가 버튼")]
@@ -51,6 +55,13 @@ namespace YutArena.UI
         [SerializeField] private GameObject soloModeOff;
         [SerializeField] private GameObject teamModeOn;
         [SerializeField] private GameObject teamModeOff;
+        [Tooltip("Team1Btn 및 Team2Btn 순서의 선택 버튼")]
+        [SerializeField] private Button[] teamOptionButtons;
+        [Tooltip("팀 선택 버튼별 ON 표시")]
+        [SerializeField] private GameObject[] teamOptionOn;
+        [Tooltip("팀 선택 버튼별 OFF 표시")]
+        [SerializeField] private GameObject[] teamOptionOff;
+        private TeamMode selectedTeamOption = TeamMode.TeamMode1;
         [Tooltip("1P 입력 장치 이전 버튼")]
         [SerializeField] private Button sharedInputLeftButton;
         [Tooltip("1P 입력 장치 다음 버튼")]
@@ -201,6 +212,16 @@ namespace YutArena.UI
             AddClick(playerCountRightButton, NextPlayerCount);
             AddClick(soloModeButton, () => SelectTeamMode(false));
             AddClick(teamModeButton, () => SelectTeamMode(true));
+            if (teamOptionButtons != null)
+                for (int i = 0; i < teamOptionButtons.Length; i++)
+                {
+                    int option = i;
+                    AddClick(teamOptionButtons[i], () =>
+                    {
+                        selectedTeamOption = (TeamMode)option;
+                        RefreshTeamOptionSelection();
+                    });
+                }
             AddClick(sharedInputLeftButton, ToggleSharedInput);
             AddClick(sharedInputRightButton, ToggleSharedInput);
             AddClick(mapLeftButton, PreviousMap);
@@ -281,8 +302,19 @@ namespace YutArena.UI
 
         private void SelectTeamMode(bool teamMode)
         {
+            if (teamMode) selectedPlayerCount = GameRuleDefine.DefaultPlayerCount;
             isTeamMode = teamMode && CanUseTeamMode();
             RefreshUI();
+        }
+
+        private void RefreshTeamOptionSelection()
+        {
+            if (teamOptionOn != null)
+                for (int i = 0; i < teamOptionOn.Length; i++)
+                    SetActive(teamOptionOn[i], i == (int)selectedTeamOption);
+            if (teamOptionOff != null)
+                for (int i = 0; i < teamOptionOff.Length; i++)
+                    SetActive(teamOptionOff[i], i != (int)selectedTeamOption);
         }
 
         private void RefreshMap()
@@ -353,10 +385,13 @@ namespace YutArena.UI
             SetInteractable(escapeTargetLeftButton, targetEscapeCount > GameRuleDefine.MinTargetEscapeCount);
             SetInteractable(escapeTargetRightButton, targetEscapeCount < GameRuleDefine.MaxTargetEscapeCount);
             SetText(playerCountValueText, selectedPlayerCount + " Players");
+            SetActive(playerCountPanel, !isTeamMode);
+            SetActive(teamModePanel, isTeamMode);
             SetActive(soloModeOn, !isTeamMode);
             SetActive(soloModeOff, isTeamMode);
             SetActive(teamModeOn, isTeamMode);
             SetActive(teamModeOff, !isTeamMode);
+            RefreshTeamOptionSelection();
             RefreshMap();
             SetText(turnLengthValueText, turnLength + " Turns");
             SetText(turnTimeValueText, turnTimeOptions[turnTimeIndex] + " Seconds");
@@ -364,7 +399,7 @@ namespace YutArena.UI
             SetInteractable(playerCountLeftButton, selectedPlayerCount > GameRuleDefine.MinDemoPlayerCount);
             SetInteractable(playerCountRightButton, selectedPlayerCount < GameRuleDefine.MaxDemoPlayerCount);
             SetInteractable(soloModeButton, true);
-            SetInteractable(teamModeButton, CanUseTeamMode());
+            SetInteractable(teamModeButton, true);
             SetInteractable(turnLengthLeftButton, turnLength > GameRuleDefine.MinMaxTurnCount);
             SetInteractable(turnLengthRightButton, turnLength < GameRuleDefine.MaxMaxTurnCount);
             SetInteractable(turnTimeLeftButton, turnTimeIndex > 0);
@@ -526,6 +561,7 @@ namespace YutArena.UI
                 maxTurnCount = SelectedGameMode == GameMode.Classic ? 0 : turnLength,
                 turnTimeSeconds = turnTimeOptions[turnTimeIndex],
                 isTeamMode = isTeamMode,
+                teamMode = selectedTeamOption,
                 playerTeams = CreatePlayerTeamData()
             };
         }
