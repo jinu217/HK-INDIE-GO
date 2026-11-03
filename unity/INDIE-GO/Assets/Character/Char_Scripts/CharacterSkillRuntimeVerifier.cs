@@ -854,6 +854,7 @@ internal static class CcArchitectureVerifier
             Check("Retiring a leader retires every real member", !carried.IsStacked &&
                 piece.State == PieceState.Waiting && carried.State == PieceState.Waiting);
             VerifyStackState(p1, p2, movement);
+            VerifyTeamInteractions(manager, movement, turns, p1, p2);
 
             string[] ids = { "001_1", "001_2", "002", "003", "004", "005", "006",
                 "007", "008", "009", "010" };
@@ -1346,6 +1347,140 @@ internal static class CcArchitectureVerifier
         Run();
         if (File.Exists(Report)) File.Copy(Report, "CharacterVerificationReport.log", true);
         EditorApplication.Exit(results.Count == 0 || results.Exists(line => line.StartsWith("FAIL")) ? 1 : 0);
+    }
+
+    private static void VerifyTeamInteractions(PlayerManager manager, PieceMovementManager movement,
+        TestTurnManager turns, PlayerController p1, PlayerController p2)
+    {
+        var settings = turns.Settings;
+        var previousTeams = settings.playerTeams;
+        var previousComposition = settings.matchComposition;
+        var previousMode = settings.teamMode;
+        var previousGameMode = settings.gameMode;
+        bool previousTeamMode = settings.isTeamMode;
+        var players = (List<PlayerController>)Get(manager, "activePlayers");
+        var p3 = new GameObject("Team Test P3").AddComponent<PlayerController>();
+        var p4 = new GameObject("Team Test P4").AddComponent<PlayerController>();
+        p3.Initialize(3, "Test 3", 4); p4.Initialize(4, "Test 4", 4);
+        players.Add(p3); players.Add(p4);
+        GameObject host = null;
+        CharacterData data = null;
+        try
+        {
+            settings.isTeamMode = true;
+            settings.matchComposition = MatchComposition.TwoVsTwo;
+            settings.playerTeams = new[] { 1, 2, 1, 2 };
+            foreach (TeamMode mode in new[] { TeamMode.TeamMode1, TeamMode.TeamMode2 })
+            {
+                settings.teamMode = mode;
+                p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+                p3.RuntimeData.ResetPieces(); p4.RuntimeData.ResetPieces();
+                var mover = p1.RuntimeData.Pieces[0];
+                var ally = p3.RuntimeData.Pieces[0];
+                var enemy = p2.RuntimeData.Pieces[0];
+                var secondEnemy = p4.RuntimeData.Pieces[0];
+                mover.MoveTo(BoardTileId.Outer01);
+                ally.MoveTo(BoardTileId.Outer02);
+                enemy.MoveTo(BoardTileId.Outer02);
+                secondEnemy.MoveTo(BoardTileId.Outer02);
+                CcEffectService.Apply(ally, CcDefine.protect, 3, charges: 1);
+                CcEffectService.Apply(ally, CcDefine.Stack_fake);
+                var friendlyRequest = new CharacterCaptureRequest(1, 0, 3, 0, 1, true);
+                Check(mode + " custom teams override composition", CharacterBoardUtility.AreAllies(1, 3) &&
+                    !CharacterBoardUtility.AreAllies(1, 2));
+                Check(mode + " allied direct capture is rejected",
+                    !CcBoardEffects.TryCapture(1, 0, new CharacterPieceReference(p3, ally), 1, true, out var decision) &&
+                    decision == CharacterCaptureDecision.Prevent);
+                Check(mode + " allied capture preserves protection and clones",
+                    CcEffectService.ResolveCapture(ally, friendlyRequest) == CharacterCaptureDecision.Prevent &&
+                    ally.Cc.Get(CcDefine.protect)?.Charges == 1 && ally.Cc.Get(CcDefine.Stack_fake)?.Value == 1);
+                Check(mode + " landing captures both opponents and preserves teammate",
+                    movement.TryMovePiece(1, 0, 1) && ally.State == PieceState.InBoard &&
+                    enemy.State == PieceState.Waiting && secondEnemy.State == PieceState.Waiting &&
+                    ally.Cc.Get(CcDefine.protect)?.Charges == 1 && ally.Cc.Get(CcDefine.Stack_fake)?.Value == 1 &&
+                    !CcEffectService.ConsumeCapture(ally));
+                Check(mode + " two opposing players grant one team capture bonus",
+                    (int)typeof(TestTurnManager).GetMethod("ConsumeCaptureResults", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(turns, new object[] { 1, false }) == 1);
+                settings.gameMode = GameMode.Classic;
+                Check(mode + " Classic also rejects allied capture",
+                    CharacterSkillRegistry.EvaluateIncomingCapture(friendlyRequest) == CharacterCaptureDecision.Prevent);
+                settings.gameMode = previousGameMode;
+            }
+
+            foreach (string id in new[] { "002", "005", "006", "007", "008" })
+            {
+                ResetRegistry();
+                PrepareActiveAttempt(turns, p1, p2);
+                p3.RuntimeData.ResetPieces(); p4.RuntimeData.ResetPieces();
+                host = new GameObject("Team Test Character " + id);
+                host.transform.SetParent(p1.transform);
+                var skill = (CharacterStatusBehaviour)host.AddComponent(Type.GetType("CHAR_" + id + "_Status, Assembly-CSharp"));
+                data = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<CharacterData>(
+                    "Assets/Character/Char_Info/CHAR_" + id + "_SO.asset"));
+                data.visualModelPrefab = null;
+                skill.Initialize(data);
+                typeof(CharacterStatusBehaviour).GetMethod("TryRegisterRuntime", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(skill, null);
+                CharacterSkillRegistry.RequestSkillPoint(1, 10);
+                var caster = p1.RuntimeData.Pieces[0]; caster.MoveTo(BoardTileId.Outer01);
+                var ally = p3.RuntimeData.Pieces[0]; ally.MoveTo(BoardTileId.Outer02);
+                var enemy = p2.RuntimeData.Pieces[0]; enemy.MoveTo(BoardTileId.Outer02);
+                var secondEnemy = p4.RuntimeData.Pieces[0]; secondEnemy.MoveTo(BoardTileId.Outer03);
+                if (id == "002")
+                {
+                    Check("Talisman implicit settings find teammate", CharacterBoardUtility.FindNearestAlly(
+                        manager, 1, 0, caster.CurrentTileId)?.Player == p3);
+                    settings.isTeamMode = false;
+                    Check("FFA talisman excludes other players despite team composition",
+                        !CharacterBoardUtility.FindNearestAlly(manager, 1, 0, caster.CurrentTileId, settings).HasValue);
+                    settings.isTeamMode = true;
+                    skill.OnPieceEnteredBoard();
+                    Check("Talisman protects teammate but not opponents", ally.Cc.Has(CcDefine.protect) &&
+                        !enemy.Cc.Has(CcDefine.protect) && !secondEnemy.Cc.Has(CcDefine.protect));
+                }
+                else
+                {
+                    if (id == "008")
+                    {
+                        int points = CharacterSkillRegistry.GetSkillPoints(1);
+                        Check("Spirit Arrow teammate rejection spends no SP or cooldown",
+                            !skill.CanSelectActiveTarget(3, 0) &&
+                            !CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0, 3, 0)).Succeeded &&
+                            CharacterSkillRegistry.GetSkillPoints(1) == points &&
+                            CharacterSkillRegistry.GetRemainingActiveCooldown(1, data) == 0);
+                    }
+                    var result = CharacterSkillRegistry.TryUseActive(new CharacterActiveRequest(1, 0, 2, 0));
+                    Check(id + " real team active executes without friendly fire", result.Succeeded &&
+                        ally.State == PieceState.InBoard && !ally.Cc.Has(CcDefine.Sturn) &&
+                        !ally.Cc.Has(CcDefine.Binding) && !CcEffectService.ConsumeCapture(ally), result.Message);
+                    Check(id + " real team active affects opponent", id == "007" ? enemy.Cc.Has(CcDefine.Sturn) :
+                        id == "008" ? enemy.Cc.Has(CcDefine.Binding) : enemy.State == PieceState.Waiting);
+                }
+                UnityEngine.Object.DestroyImmediate(host); host = null;
+                UnityEngine.Object.DestroyImmediate(data); data = null;
+            }
+            settings.playerTeams = new[] { 1, 1, 2, 2 };
+            Check("Changed team assignment is applied immediately", CharacterBoardUtility.AreAllies(1, 2) &&
+                !CharacterBoardUtility.AreAllies(1, 3));
+            settings.isTeamMode = false;
+            Check("FFA never treats a different player as allied", !CharacterBoardUtility.AreAllies(1, 2));
+        }
+        finally
+        {
+            if (host != null) UnityEngine.Object.DestroyImmediate(host);
+            if (data != null) UnityEngine.Object.DestroyImmediate(data);
+            settings.playerTeams = previousTeams;
+            settings.matchComposition = previousComposition;
+            settings.teamMode = previousMode;
+            settings.gameMode = previousGameMode;
+            settings.isTeamMode = previousTeamMode;
+            players.Remove(p3); players.Remove(p4);
+            UnityEngine.Object.DestroyImmediate(p3.gameObject);
+            UnityEngine.Object.DestroyImmediate(p4.gameObject);
+            p1.RuntimeData.ResetPieces(); p2.RuntimeData.ResetPieces();
+            ResetRegistry();
+        }
     }
 
     private static void VerifyStackState(PlayerController owner, PlayerController attacker,

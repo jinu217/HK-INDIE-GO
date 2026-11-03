@@ -191,6 +191,12 @@ public static class CharacterSkillRegistry
 
     public static CharacterCaptureDecision EvaluateIncomingCapture(CharacterCaptureRequest request)
     {
+        // 아군 접촉은 방어/분신 패시브를 소비하기 전에 차단합니다. Classic에도 적용됩니다.
+        if (CharacterBoardUtility.AreAllies(request.AttackerPlayerId, request.TargetPlayerId))
+        {
+            CcEffectService.PrepareCapture(request, null, CharacterCaptureDecision.Prevent);
+            return CharacterCaptureDecision.Prevent;
+        }
         var piece = CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId);
         var leader = CcEffectService.StackLeader(piece);
         var effective = new CharacterCaptureRequest(request.AttackerPlayerId, request.AttackerPieceId,

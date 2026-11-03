@@ -52,10 +52,11 @@ public static class CharacterBoardUtility
 
     public static List<CharacterPieceReference> GetEnemiesOnBoard(
         PlayerManager players,
-        int ownerPlayerId)
+        int ownerPlayerId,
+        GameStartSettings settings = null)
     {
         List<CharacterPieceReference> all = GetPiecesOnBoard(players);
-        all.RemoveAll(reference => AreAllies(ownerPlayerId, reference.Player.PlayerId));
+        all.RemoveAll(reference => AreAllies(ownerPlayerId, reference.Player.PlayerId, settings));
         return all;
     }
 
@@ -64,7 +65,8 @@ public static class CharacterBoardUtility
     {
         if (firstPlayerId == secondPlayerId) return true;
         if (settings == null)
-            settings = UnityEngine.Object.FindFirstObjectByType<YutArena.Managers.TestTurnManager>()?.Settings;
+            settings = UnityEngine.Object.FindFirstObjectByType<YutArena.Managers.TestTurnManager>()?.Settings
+                ?? GameStartSettingsHolder.Current;
         if (settings == null || !settings.isTeamMode) return false;
         TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)firstPlayerId);
         return team != TeamSlot.None &&
@@ -83,16 +85,10 @@ public static class CharacterBoardUtility
 
         CharacterPieceReference? nearest = null;
         int nearestDistance = int.MaxValue;
-        TeamSlot sourceTeam = settings != null
-            ? MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)ownerPlayerId)
-            : TeamSlot.None;
-
         foreach (PlayerController player in players.ActivePlayers)
         {
             if (player == null || player.RuntimeData == null ||
-                (player.PlayerId != ownerPlayerId &&
-                 (sourceTeam == TeamSlot.None ||
-                  MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)player.PlayerId) != sourceTeam)))
+                !AreAllies(ownerPlayerId, player.PlayerId, settings))
                 continue;
 
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)

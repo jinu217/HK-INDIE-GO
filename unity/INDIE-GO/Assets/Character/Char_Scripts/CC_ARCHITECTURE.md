@@ -135,6 +135,15 @@ foreach (CcState state in target.Cc.Effects)
 
 protect는 잡기·직접 Retire·해로운 상태를 막는다. Charm은 잡기 판정만 막으며 직접 Retire/상태이상을 막지 않는다. Stealth는 지정 대상/일반 잡기를 막지만 범위 Retire에는 별도 면역을 주지 않는다. 여러 출처의 protect 중 기간 보호를 먼저 사용하여 횟수 보호를 낭비하지 않는다.
 
+## 팀전의 스킬·잡기 대상 판정
+
+- `CharacterBoardUtility.AreAllies`가 아군 판정의 기준이다. 같은 소유자는 항상 아군이며, 다른 소유자는 팀전이 활성화되어 있고 소속 팀이 같을 때만 아군이다.
+- 팀 배정은 `MatchCompositionRule.GetTeamSlot(settings, player)`로 조회하여 로비의 `playerTeams`를 반영한다. 명시적 설정이 없으면 현재 턴 매니저, `GameStartSettingsHolder.Current` 순서로 조회한다.
+- 일반 잡기와 스킬 잡기는 `CharacterSkillRegistry.EvaluateIncomingCapture`에서 아군을 먼저 차단한다. 스킬 비활성/Classic에도 적용하며 보호 횟수, 부적, 분신, 방어 패시브를 소비하지 않는다. 직접 CC 잡기 판정도 같은 기준을 적용한다.
+- 적 대상 액티브의 후보 탐색·선택·실행은 같은 아군 판정을 사용한다. 전우치 부적과 엘프 바람길은 다른 팀원의 말에도 적용된다. 로봇 자폭의 자신/아군/적 전체 퇴장 규칙은 유지한다.
+- 이 변경의 범위는 캐릭터 스킬과 잡기 상호작용이다. 팀원 간 업기 구조, 2인 1조의 말·SP·쿨타임 공유, 로비·턴·승리 플로우는 별도 구현 대상이다.
+- `CcArchitectureVerifier`는 두 팀전 방식의 4인 커스텀 팀 배정, 아군 잡기 차단과 방어 보존, 적 팀원 동시 잡기 보너스, 실제 공격 스킬, 팀원 부적, 개인전 격리를 검증한다.
+
 ## 설치형 효과와 검증
 
 BOARD_TILE_RUNTIME_SKILL_GUIDE의 보드 설치 정보 API는 계속 사용할 수 있다. WindPath는 실제 말의 Cc에 설치 경로를 저장한다. 엘프에 자동으로 붙는 ElfWindPathVisuals가 이 상태를 읽고 해당 타일에 청록색 회전 바람 이펙트를 표시한다. 텍스트·디버그 라벨·콜라이더는 생성하지 않는다. 경로 교체·효과 제거·업기 리더 변경·비활성화 시 표시도 갱신하며, Classic 등 스킬 비활성 모드에서는 표시하지 않는다. 색·반경·회전 속도·표시 여부는 런타임 컴포넌트 Inspector에서 조정할 수 있다.

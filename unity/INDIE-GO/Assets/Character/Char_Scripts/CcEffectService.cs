@@ -407,6 +407,8 @@ namespace YutArena.InGame
         public static CharacterCaptureDecision ResolveCapture(PlayerRuntimeData.PieceRuntimeData piece,
             CharacterCaptureRequest request)
         {
+            if (CharacterBoardUtility.AreAllies(request.AttackerPlayerId, request.TargetPlayerId))
+                return CharacterCaptureDecision.Prevent;
             piece = StackLeader(piece);
             if (piece == null) return CharacterCaptureDecision.Proceed;
             if (!IsTargetable(piece)) return CharacterCaptureDecision.Prevent;
