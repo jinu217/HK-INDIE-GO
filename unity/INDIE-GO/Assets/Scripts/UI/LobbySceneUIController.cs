@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -218,8 +218,7 @@ namespace YutArena.UI
                     int option = i;
                     AddClick(teamOptionButtons[i], () =>
                     {
-                        selectedTeamOption = (TeamMode)option;
-                        RefreshTeamOptionSelection();
+                        SelectTeamOption((TeamMode)option);
                     });
                 }
             AddClick(sharedInputLeftButton, ToggleSharedInput);
@@ -255,14 +254,17 @@ namespace YutArena.UI
         {
             if (index < 0 || index >= gameModeOptions.Length) return;
             gameModeIndex = index;
+            if (SelectedGameMode == GameMode.Classic) selectedTeamOption = TeamMode.TeamMode1;
+            NormalizeStartPieceCount();
             RefreshUI();
         }
 
         private void ChangeStartPieceCount(int step)
         {
             if (SelectedGameMode != GameMode.Escape) return;
-            startPieceCount = Mathf.Clamp(startPieceCount + step,
-                GameRuleDefine.MinPieceCountPerPlayer, GameRuleDefine.MaxPieceCountPerPlayer);
+            var options = GetStartPieceCountOptions();
+            int index = System.Array.IndexOf(options, startPieceCount);
+            startPieceCount = options[Mathf.Clamp(index + step, 0, options.Length - 1)];
             RefreshUI();
         }
 
@@ -302,13 +304,49 @@ namespace YutArena.UI
 
         private void SelectTeamMode(bool teamMode)
         {
+            bool enteringTeamMode = teamMode && !isTeamMode;
             if (teamMode) selectedPlayerCount = GameRuleDefine.DefaultPlayerCount;
             isTeamMode = teamMode && CanUseTeamMode();
+            if (enteringTeamMode && SelectedGameMode == GameMode.Escape)
+            {
+                selectedTeamOption = TeamMode.TeamMode2;
+                startPieceCount = 3;
+            }
+            if (SelectedGameMode == GameMode.Classic) selectedTeamOption = TeamMode.TeamMode1;
+            NormalizeStartPieceCount();
             RefreshUI();
+        }
+
+        private void SelectTeamOption(TeamMode option)
+        {
+            if (SelectedGameMode == GameMode.Classic && option == TeamMode.TeamMode2) return;
+            selectedTeamOption = option;
+            startPieceCount = option == TeamMode.TeamMode1 ? 4 : 3;
+            RefreshUI();
+        }
+
+        private int[] GetStartPieceCountOptions()
+        {
+            if (isTeamMode)
+                return selectedTeamOption == TeamMode.TeamMode1
+                    ? new[] { 2, 4, 6, 8 } : new[] { 2, 3, 4 };
+            var options = new int[GameRuleDefine.MaxPieceCountPerPlayer - GameRuleDefine.MinPieceCountPerPlayer + 1];
+            for (int i = 0; i < options.Length; i++) options[i] = GameRuleDefine.MinPieceCountPerPlayer + i;
+            return options;
+        }
+
+        private void NormalizeStartPieceCount()
+        {
+            var options = GetStartPieceCountOptions();
+            if (System.Array.IndexOf(options, startPieceCount) < 0)
+                startPieceCount = isTeamMode && selectedTeamOption == TeamMode.TeamMode1 ? 4 : options[0];
         }
 
         private void RefreshTeamOptionSelection()
         {
+            if (teamOptionButtons != null)
+                for (int i = 0; i < teamOptionButtons.Length; i++)
+                    SetInteractable(teamOptionButtons[i], i != 1 || SelectedGameMode != GameMode.Classic);
             if (teamOptionOn != null)
                 for (int i = 0; i < teamOptionOn.Length; i++)
                     SetActive(teamOptionOn[i], i == (int)selectedTeamOption);
@@ -380,8 +418,9 @@ namespace YutArena.UI
             SetActive(killTheKingRules, SelectedGameMode == GameMode.KillTheKing);
             SetText(startPieceCountValueText, startPieceCount.ToString());
             SetText(escapeTargetValueText, targetEscapeCount.ToString());
-            SetInteractable(startPieceCountLeftButton, startPieceCount > GameRuleDefine.MinPieceCountPerPlayer);
-            SetInteractable(startPieceCountRightButton, startPieceCount < GameRuleDefine.MaxPieceCountPerPlayer);
+            var pieceOptions = GetStartPieceCountOptions();
+            SetInteractable(startPieceCountLeftButton, startPieceCount > pieceOptions[0]);
+            SetInteractable(startPieceCountRightButton, startPieceCount < pieceOptions[pieceOptions.Length - 1]);
             SetInteractable(escapeTargetLeftButton, targetEscapeCount > GameRuleDefine.MinTargetEscapeCount);
             SetInteractable(escapeTargetRightButton, targetEscapeCount < GameRuleDefine.MaxTargetEscapeCount);
             SetText(playerCountValueText, selectedPlayerCount + " Players");

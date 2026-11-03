@@ -4,8 +4,8 @@ namespace YutArena.Common
 {
     public enum TeamMode
     {
-        TeamMode1 = 0,
-        TeamMode2 = 1
+        TeamMode1 = 0, // 2인1팀
+        TeamMode2 = 1  // 2대2
     }
 
     public enum GameMode
