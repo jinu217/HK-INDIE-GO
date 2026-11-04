@@ -6,8 +6,8 @@ public sealed class CHAR_009_Status : CharacterStatusBehaviour
 {
     private bool partsAlreadyActive;
 
-    // CcEffectService calls this only for an actual Retire effect. A Kill does
-    // not become Parts, and expired Parts cannot immediately recreate itself.
+    // 일반 잡기(Capture/Kill)와 Retire 모두 퇴장 전에 부품으로 대체합니다.
+    // 부품 만료는 이 경로를 거치지 않으므로 다시 부품을 생성하지 않습니다.
     internal override bool TryReplaceRetire(PlayerRuntimeData.PieceRuntimeData piece)
     {
         if (partsAlreadyActive || piece.State != PieceState.InBoard ||

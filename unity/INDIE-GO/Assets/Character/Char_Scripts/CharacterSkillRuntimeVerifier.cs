@@ -1323,6 +1323,7 @@ internal static class CcArchitectureVerifier
                 {
                     VerifyRobotSelfDestructRange(skill, turns, p1, p2);
                     VerifyRobotPartsLifecycle(skill, movement, turns, p1, p2);
+                    VerifyRobotCaptureTriggers(skill, movement, turns, p1, p2);
                 }
                 CharacterSkillRegistry.Unregister(skill);
                 UnityEngine.Object.DestroyImmediate(host);
@@ -1690,6 +1691,17 @@ internal static class CcArchitectureVerifier
                         movement.TryMovePiece(2, 0, 4) && leader.State == PieceState.InBoard &&
                         cargo.State == PieceState.InBoard && leader.Cc.Has(CcDefine.Robot_part) &&
                         cargo.Cc.Has(CcDefine.Robot_part) && !leader.Cc.Has(CcDefine.Kill));
+                    owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+                    first.OnPieceRetired(); second.OnPieceRetired();
+                    leader.MoveTo(BoardTileId.Outer03); cargo.MoveTo(BoardTileId.Outer03);
+                    leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
+                    attacker.RuntimeData.Pieces[0].MoveTo(BoardTileId.Outer02);
+                    Check(label + " Do capture converts the whole stack even when cargo is evaluated first",
+                        movement.TryMovePiece(2, 0, 1) && leader.State == PieceState.InBoard &&
+                        cargo.State == PieceState.InBoard && leader.CurrentTileId == BoardTileId.Outer03 &&
+                        cargo.CurrentTileId == BoardTileId.Outer03 && leader.Cc.Has(CcDefine.Robot_part) &&
+                        ReferenceEquals(leader.Cc.Get(CcDefine.Robot_part), cargo.Cc.Get(CcDefine.Robot_part)) &&
+                        !CcEffectService.ConsumeCapture(leader) && !CcEffectService.ConsumeCapture(cargo));
                     owner.RuntimeData.ResetPieces(); first.OnPieceRetired(); second.OnPieceRetired();
                     leader.MoveTo(BoardTileId.Outer03); cargo.MoveTo(BoardTileId.Outer03);
                     leader.SetStackGroup(group, leaderId); cargo.SetStackGroup(group, leaderId);
@@ -1894,6 +1906,70 @@ internal static class CcArchitectureVerifier
         Check("Revived cargo survives its former expiry and travels with the rescuing leader",
             movement.TryMovePiece(1, 1, 1) && robot.State == PieceState.InBoard &&
             robot.CurrentTileId == ally.CurrentTileId && robot.CurrentTileId == BoardTileId.Corner01);
+        owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
+        skill.OnPieceRetired();
+    }
+
+    private static void VerifyRobotCaptureTriggers(CharacterStatusBehaviour skill, PieceMovementManager movement,
+        TestTurnManager turns, PlayerController owner, PlayerController attacker)
+    {
+        var robot = owner.RuntimeData.Pieces[0];
+        var enemy = attacker.RuntimeData.Pieces[0];
+        var cases = new[]
+        {
+            (move: -1, from: BoardTileId.Outer04, target: BoardTileId.Outer03),
+            (move: 1, from: BoardTileId.Outer03, target: BoardTileId.Outer04),
+            (move: 2, from: BoardTileId.Outer02, target: BoardTileId.Outer04),
+            (move: 3, from: BoardTileId.Outer01, target: BoardTileId.Outer04),
+            (move: 4, from: BoardTileId.None, target: BoardTileId.Outer04),
+            (move: 5, from: BoardTileId.None, target: BoardTileId.Corner01)
+        };
+        foreach (var test in cases)
+        {
+            PrepareActiveAttempt(turns, owner, attacker);
+            skill.OnPieceRetired();
+            robot.MoveTo(test.target);
+            if (test.from != BoardTileId.None) enemy.MoveTo(test.from);
+            Check($"Robot capture move={test.move} converts to Parts at its original tile without bonus",
+                movement.TryMovePiece(attacker.PlayerId, enemy.PieceId, test.move) &&
+                robot.State == PieceState.InBoard && robot.CurrentTileId == test.target &&
+                robot.Cc.Get(CcDefine.Robot_part)?.RemainingOwnerTurns == 3 &&
+                !CcEffectService.ConsumeCapture(robot));
+        }
+
+        PrepareActiveAttempt(turns, owner, attacker);
+        skill.OnPieceRetired();
+        robot.MoveTo(BoardTileId.Outer04);
+        robot.SetCaptured(CcDefine.Capture);
+        Check("Robot direct Capture uses the same Parts replacement as Retire",
+            robot.State == PieceState.InBoard && robot.CurrentTileId == BoardTileId.Outer04 &&
+            robot.Cc.Has(CcDefine.Robot_part) && !CcEffectService.ConsumeCapture(robot));
+
+        foreach (bool bonus in new[] { false, true })
+        {
+            PrepareActiveAttempt(turns, owner, attacker);
+            skill.OnPieceRetired();
+            robot.MoveTo(BoardTileId.Outer04);
+            bool captured = CcBoardEffects.TryCapture(attacker.PlayerId, 0,
+                new CharacterPieceReference(owner, robot), 1, bonus, out _);
+            Check($"Robot skill capture bonus={bonus} leaves Parts without reporting a completed capture",
+                !captured && robot.State == PieceState.InBoard &&
+                robot.CurrentTileId == BoardTileId.Outer04 && robot.Cc.Has(CcDefine.Robot_part) &&
+                !CcEffectService.ConsumeCapture(robot));
+        }
+
+        PrepareActiveAttempt(turns, owner, attacker);
+        skill.OnPieceRetired();
+        robot.MoveTo(BoardTileId.Outer04);
+        enemy.MoveTo(BoardTileId.Outer03);
+        CcEffectService.Apply(robot, CcDefine.protect, charges: 1);
+        Check("Robot protection blocks capture before the Parts passive is evaluated",
+            movement.TryMovePiece(attacker.PlayerId, 0, 1) && robot.State == PieceState.InBoard &&
+            !robot.Cc.Has(CcDefine.Robot_part) && !robot.Cc.Has(CcDefine.protect));
+        attacker.RuntimeData.Pieces[1].MoveTo(BoardTileId.Outer03);
+        Check("Robot next capture after protection is consumed still creates Parts",
+            movement.TryMovePiece(attacker.PlayerId, 1, 1) && robot.State == PieceState.InBoard &&
+            robot.Cc.Has(CcDefine.Robot_part) && !CcEffectService.ConsumeCapture(robot));
         owner.RuntimeData.ResetPieces(); attacker.RuntimeData.ResetPieces();
         skill.OnPieceRetired();
     }

@@ -244,7 +244,9 @@ namespace YutArena.InGame
                  type == CcDefine.Robot_part) && ConsumeGuard(piece, CcDefine.protect))
                 return false;
 
-            if (type == CcDefine.Retire && owner != null && CharacterSkillRegistry.AreSkillsEnabled &&
+            // Capture/Kill과 Retire는 보너스 던지기만 다릅니다. 로봇의 퇴장 대체는 둘 다 판정합니다.
+            if ((type == CcDefine.Retire || type == CcDefine.Capture) &&
+                owner != null && CharacterSkillRegistry.AreSkillsEnabled &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var targetStatus) &&
                 targetStatus.TryReplaceRetire(piece))
                 return true;
