@@ -61,8 +61,6 @@ namespace YutArena.Managers
             finishedRanking.Clear();
             leftPlayers.Clear();
             eliminatedTeams.Clear();
-            awaitingContinueDecision = false;
-            pendingLeaveTeam = TeamSlot.None;
             // 인스펙터에 꽂아둔 모드 룰 스크립트들을 IGameModeRule로 형변환해서,
             // "이 모드는 이 룰"이라고 찾기 쉽게 표(Dictionary)로 정리해둠 (최초 1회만 하면 됨)
             if (modeRules.Count == 0 && modeRuleSources != null)
@@ -254,70 +252,26 @@ namespace YutArena.Managers
             return memberCount == 1 ? found : PlayerSlot.None;
         }
         // ===================================================================
-        //  항복/탈주 처리 
-        // - 1vs1(팀 인원 1명씩): 나가면 그 팀은 바로 전멸 -> 상대 자동 승리 (즉시 패배)
-        // - 팀전(팀 인원 2명 이상): 나가도 팀원이 남아있으면 -> "이어하시겠습니까" 확인 필요
-        // - 개인전 다인전(팀 인원 1명씩, 3팀 이상): 나가면 그 팀 전멸 -> (다인전 순위 시스템처럼)
-        //   순위만 기록하고 자동으로 계속 진행 (팀전과 달리 물어볼 필요 없음)
-        // 셋 다 "팀에 아직 안 나간 사람이 남아있는지"만 확인하면 자동으로 구분됨
+        //  항복/탈주 처리 (팀전 기획 10번)
+        // - 누가 나가거나 항복하면 그 사람의 팀이 바로 탈락 (팀전도 팀원 한 명이 나가면 팀 항복)
+        //   "남은 1명만으로 게임을 계속하는 경우는 없다" → 예전의 "이어하시겠습니까" 확인은 없앰
+        // - 남은 팀이 하나면 그 팀 승리 (1vs1, 2vs2)
+        // - 개인전 다인전(3팀 이상)은 순위만 기록하고 나머지끼리 계속 진행
+        // (온라인 연결 끊김 1분 대기 팝업은 온라인 기능이 나올 때 이 함수 앞단에서 처리)
         // ===================================================================
         // 나간 사람들을 기록해둠 (같은 사람이 중복으로 나갔다고 처리되는 거 방지)
         private readonly HashSet<PlayerSlot> leftPlayers = new HashSet<PlayerSlot>();
         // 탈주로 완전히 탈락한 팀들 (나간 순서대로 쌓임, finishedRanking과 별개 - 탈락은 낮은 등수라서)
         private readonly List<TeamSlot> eliminatedTeams = new List<TeamSlot>();
-        // "팀원이 나가서, 계속할지 확인이 필요한 상태"인지와 그 팀 정보
-        private bool awaitingContinueDecision = false;
-        private TeamSlot pendingLeaveTeam = TeamSlot.None;
-        // UI가 구독: 팀원이 나갔고 "계속하시겠습니까" 확인이 필요할 때 방송 (팝업 띄우는 용도)
-        public System.Action<TeamSlot> OnTeamMemberLeftAwaitingDecision;
-        // UI(또는 네트워크 이탈 감지 코드)가 "이 플레이어가 나갔다"고 알려줄 때 호출하는 함수
+        // UI(인게임 [게임 종료] 버튼, 또는 네트워크 이탈 감지 코드)가 "이 플레이어가 나갔다/항복했다"고 알려줄 때 호출
         public void HandlePlayerLeft(PlayerSlot leavingPlayer)
         {
             if (settings == null) return;
             if (leftPlayers.Contains(leavingPlayer)) return; // 이미 처리한 사람이면 무시 (중복 방지)
             leftPlayers.Add(leavingPlayer);
-            TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, leavingPlayer);
-            if (HasActiveTeammate(team))
-            {
-                // 아직 이 팀에 안 나간 사람이 남아있음 -> 팀전 상황, "이어할지" 확인 필요
-                // 나간 사람만 턴 순서에서 빼둠 (팀원은 그대로 남아서 계속 도는 중)
-                turnManager.RemovePlayerFromTurnOrder(leavingPlayer);
-                awaitingContinueDecision = true;
-                pendingLeaveTeam = team;
-                OnTeamMemberLeftAwaitingDecision?.Invoke(team); // UI한테 팝업 띄우라고 알림
-            }
-            else
-            {
-                // 이 팀에 남은 사람이 아무도 없음 -> 팀 전멸 (1vs1이거나, 팀 마지막 남은 사람이 나간 경우)
-                HandleTeamEliminated(team);
-            }
+            HandleTeamEliminated(MatchCompositionRule.GetTeamSlot(settings, leavingPlayer));
         }
-        // 이 팀 소속 중에 "아직 안 나간 사람"이 있는지 확인
-        private bool HasActiveTeammate(TeamSlot team)
-        {
-            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
-            {
-                var p = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings, p) == team &&
-                    !leftPlayers.Contains(p))
-                    return true;
-            }
-            return false;
-        }
-        // UI가 "이어하시겠습니까" 팝업에서 플레이어가 고른 답을 알려줄 때 호출하는 함수
-        public void ConfirmContinueAfterLeave(bool continueGame)
-        {
-            if (!awaitingContinueDecision) return;
-            awaitingContinueDecision = false;
-            if (!continueGame)
-            {
-                // 이어 안 하기로 함 -> 이 팀 전체를 탈락 처리 (남은 팀원도 마저 순서에서 제외)
-                HandleTeamEliminated(pendingLeaveTeam);
-            }
-            // continueGame == true면, 나간 사람은 이미 HandlePlayerLeft에서 순서 제외됐으니
-            // 추가로 할 일 없이 그냥 게임 계속 진행됨 (남은 팀원끼리 자연스럽게 비율대로 돎)
-        }
-        // 팀이 완전히 탈락했을 때(전원 나갔거나, "이어하기" 거부) 처리
+        // 팀이 완전히 탈락했을 때(팀원 중 누구든 나가거나 항복) 처리
         private void HandleTeamEliminated(TeamSlot team)
         {
             if (!activeTeams.Contains(team)) return; // 이미 처리된 팀이면 무시

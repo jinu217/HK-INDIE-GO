@@ -518,9 +518,8 @@ namespace YutArena.InGame
                 var wins = UnityEngine.Object.FindFirstObjectByType<TestWinConditionManager>();
                 if (wins != null) wins.OnPieceMoveResolved((PlayerSlot)request.PlayerId,
                     MatchCompositionRule.GetTeamSlot(turns.Settings, (PlayerSlot)request.PlayerId), true, newlyFinished);
-                if (turns.Settings.gameMode == GameMode.Escape)
-                    foreach (var piece in PlayerPieces(request.PlayerId))
-                        if (piece.IsFinished) piece.State = PieceState.Waiting;
+                // 이스케이프 탈출 말은 여기서 바로 돌려보내지 않음 (회의 결정 10/30, 기연 수정).
+                // 턴이 끝날 때 TestTurnManager.EndTurn 이 남은 말 칸으로 돌려보냄.
             }
             if (result.EndTurnAfterResolution)
             {

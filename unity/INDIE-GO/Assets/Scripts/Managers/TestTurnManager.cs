@@ -190,6 +190,7 @@ namespace YutArena.Managers
             // settings.matchComposition에 "1vs1vs1vs1(개인전)"인지 "2vs2(팀전)"인지가 담겨있으므로
             // Common의 MatchCompositionRule을 그대로 써서 team을 계산함
             CurrentTurn.currentTeam = MatchCompositionRule.GetTeamSlot(settings, player);
+            RememberEscapedPiecesAtTurnStart(player);
             pendingResults.Clear();
             pendingCaptureThrows = 0;
             pendingSkillThrows = 0; // 새 턴 시작이니 스킬 보너스 던지기도 초기화
@@ -415,13 +416,10 @@ namespace YutArena.Managers
             if (CurrentTurn.isGameEnded) return;
 
             // ===================================================================
-            // Escape 모드 전용: 완주한 말은 재사용해야 하므로, 상태를 다시
-            // 대기(Waiting)로 되돌림. 영서 확인: "위치는 나중에 조정, 지금은 상태만 바꾸면 됨"
+            // Escape 모드: 탈출한 말은 여기서 바로 남은 말 칸으로 돌려보내지 않음.
+            // 내 턴을 한 번 쉬고, 그 다음 내 턴이 끝날 때 돌아옴 (ReturnRestedEscapedPieces 참고).
+            // 점수는 통과한 순간(위 OnPieceMoveResolved) 올라감.
             // ===================================================================
-            if (isFinished && settings.gameMode == GameMode.Escape)
-            {
-                ResetFinishedPiecesToWaiting(playerId);
-            }
             // ===================================================================
             // 다인전(개인전 3~4명): 이번 이동으로 목표를 채워 순위가 확정되면 이 플레이어는
             // 턴 순서에서 빠짐(RemovePlayersOfTeam). 빠진 사람이 남은 윷 결과/보너스 던지기로
@@ -530,19 +528,33 @@ namespace YutArena.Managers
             return count;
         }
         // ===================================================================
-        // Escape 모드 전용: 이번에 완주한 말(들)을 다시 Waiting 상태로 되돌림
-        // (재사용 가능하게). 위치는 영서가 나중에(UI 나오면) 조정 예정, 지금은 상태만 바꿔둠
+        // Escape 모드 전용: 탈출한 말은 "내 턴을 한 번 쉬고" 남은 말 칸으로 돌아옴
+        // (기획 10/24 "탈출 시 1턴 뒤에 남은 말 칸으로", 회의 10/30, 기획 "다음 자신의 턴 시작 시에도
+        //  추가되지 않으며, 해당 턴이 끝난 후 탈출한 말을 추가")
+        // 예: P1 3턴에 탈출 → P1 4턴에도 못 씀 → P1 4턴이 끝날 때 남은 말 칸으로 → P1 5턴부터 사용
+        // 방법: 내 턴이 시작될 때 이미 탈출 상태인 말을 기억해뒀다가, 그 턴이 끝날 때 그 말만 돌려보냄
         // ===================================================================
-        private void ResetFinishedPiecesToWaiting(int playerId)
+        private readonly HashSet<int> restingEscapedPieceIds = new HashSet<int>();
+
+        private void RememberEscapedPiecesAtTurnStart(PlayerSlot player)
+        {
+            restingEscapedPieceIds.Clear();
+            if (settings == null || settings.gameMode != GameMode.Escape) return;
+            if (!playerManager.TryGetPlayer((int)player, out var playerController)) return;
+            foreach (var piece in playerController.RuntimeData.Pieces)
+                if (piece.State == PieceState.Goal)
+                    restingEscapedPieceIds.Add(piece.PieceId);
+        }
+
+        private void ReturnRestedEscapedPieces(int playerId)
         {
             if (!playerManager.TryGetPlayer(playerId, out var player)) return;
             foreach (var piece in player.RuntimeData.Pieces)
             {
-                if (piece.State == PieceState.Goal)
-                {
+                if (piece.State == PieceState.Goal && restingEscapedPieceIds.Contains(piece.PieceId))
                     piece.State = PieceState.Waiting;
-                }
             }
+            restingEscapedPieceIds.Clear();
         }
         // ===================================================================
         // 남은 pendingResults 중 하나라도 실제로 말을 움직일 수 있으면 false 를 돌려주고,
@@ -645,17 +657,22 @@ namespace YutArena.Managers
             bool includeMovingPlayer = false)
         {
             var killedTeams = new HashSet<TeamSlot>();
+            // 팀전 기획 7-5번: "팀원 말로는 추가 던지기를 얻을 수 없다" → 우리 팀(나·팀원) 말은 세지 않음.
+            // (팀원 말이 지금 업기 대신 잡히는 건 영서 쪽에서 고칠 예정. 그 전까지 보너스만 막아둠)
+            TeamSlot movingTeam = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)movingPlayerId);
             foreach (var otherPlayer in playerManager.ActivePlayers)
             {
                 // 일반 이동은 기존처럼 상대 말만, 스킬은 필요할 때 모든 말을 검사합니다.
                 if (!includeMovingPlayer && otherPlayer.PlayerId == movingPlayerId)
                     continue;
 
+                TeamSlot otherTeam = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)otherPlayer.PlayerId);
                 foreach (var piece in otherPlayer.RuntimeData.Pieces)
                 {
                     //수정: 잡기 마커만 소비하여 함께 존재하는 다른 효과를 지우지 않습니다.
-                    if (CcEffectService.ConsumeCapture(piece))
-                        killedTeams.Add(MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)otherPlayer.PlayerId));
+                    // 우리 팀 말도 마커는 지우지만(다음에 또 잡힌 걸로 착각 안 하게) 보너스 수에는 안 넣음
+                    if (CcEffectService.ConsumeCapture(piece) && otherTeam != movingTeam)
+                        killedTeams.Add(otherTeam);
                 }
             }
             return killedTeams.Count;
@@ -672,6 +689,10 @@ namespace YutArena.Managers
                 forcedMoveOwner.ExecutePendingForcedMove();
                 ConsumeCaptureResults((int)CurrentTurn.currentPlayer);
             }
+            // 이스케이프: 지난 내 턴 이전에 탈출해서 이번 턴을 쉰 말을 지금 남은 말 칸으로 돌려보냄
+            // (시간 초과·낙·스킬 턴 종료 포함, 이번 턴에 새로 탈출한 말은 다음 내 턴 끝까지 쉼)
+            if (settings != null && settings.gameMode == GameMode.Escape)
+                ReturnRestedEscapedPieces((int)CurrentTurn.currentPlayer);
             SetPhase(TurnPhase.TurnEnd);
             OnTurnEnded?.Invoke(CurrentTurn.currentPlayer);
             if (CurrentTurn.isGameEnded)
