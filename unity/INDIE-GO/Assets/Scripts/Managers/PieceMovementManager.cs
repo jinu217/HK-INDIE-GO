@@ -202,6 +202,7 @@ public sealed class PieceMovementManager : MonoBehaviour
 
         //수정: 실제 이동 전에 Player 스킬 시스템에서 최종 이동량을 결정합니다.
         bool isFirstBoardMove = selectedPiece.State == PieceState.Waiting;
+        int captureMoveCount = moveCount;
         moveCount = CharacterSkillRegistry.ModifyMoveCount(
             new CharacterMoveRequest(
                 playerId,
@@ -266,7 +267,7 @@ public sealed class PieceMovementManager : MonoBehaviour
             selectedPiece.PieceId,
             movingPieces.Count,
             selectedPiece.CurrentTileId,
-            moveCount);
+            UsesTeamStacking(CurrentSettings) ? captureMoveCount : moveCount);
         ResolveStacking(player, movingPieces, selectedPiece.CurrentTileId);
         BoardTileId landingTile = selectedPiece.CurrentTileId;
         NotifyVisualMoveResolved(playerId, movingPieces, path);
@@ -288,9 +289,15 @@ public sealed class PieceMovementManager : MonoBehaviour
         IReadOnlyList<BoardTileId> path)
     {
         if (OnVisualMoveResolved == null || path.Count == 0) return;
-        var pieceIds = new int[movingPieces.Count];
-        for (int i = 0; i < movingPieces.Count; i++) pieceIds[i] = movingPieces[i].PieceId;
-        OnVisualMoveResolved.Invoke(playerId, pieceIds, path);
+        var piecesByOwner = new Dictionary<int, List<int>>();
+        foreach (var piece in movingPieces)
+        {
+            if (!piecesByOwner.TryGetValue(piece.OwnerPlayerId, out var ids))
+                piecesByOwner.Add(piece.OwnerPlayerId, ids = new List<int>());
+            ids.Add(piece.PieceId);
+        }
+        foreach (var entry in piecesByOwner)
+            OnVisualMoveResolved.Invoke(entry.Key, entry.Value, path);
     }
 
     //수정: 이동한 모든 말에 출발지, 도착지, 전체 경로를 전달하는 공통 알림입니다.
@@ -304,7 +311,7 @@ public sealed class PieceMovementManager : MonoBehaviour
         {
             CharacterSkillRegistry.NotifyMoveCompleted(
                 new CharacterMoveRecord(
-                    playerId,
+                    piece.OwnerPlayerId,
                     piece.PieceId,
                     startingTile,
                     piece.CurrentTileId,
@@ -316,22 +323,21 @@ public sealed class PieceMovementManager : MonoBehaviour
         PlayerController player,
         PlayerRuntimeData.PieceRuntimeData selectedPiece)
     {
-        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
-
-        if (!selectedPiece.IsStacked)
-        {
-            movingPieces.Add(selectedPiece);
-            return movingPieces;
-        }
-
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
-        {
-            if (piece.StackGroupId == selectedPiece.StackGroupId)
-                movingPieces.Add(piece);
-        }
-
-        return movingPieces;
+        return selectedPiece.GetStackMembers();
     }
+
+    internal static GameStartSettings CurrentSettings =>
+        UnityEngine.Object.FindFirstObjectByType<YutArena.Managers.TestTurnManager>()?.Settings ??
+        GameStartSettingsHolder.Current;
+
+    internal static bool UsesTeamStacking(GameStartSettings settings) => settings != null &&
+        settings.isTeamMode && (settings.teamMode == TeamMode.TeamMode1 || settings.teamMode == TeamMode.TeamMode2);
+
+    private static bool AreFriendly(GameStartSettings settings, int first, int second) =>
+        first == second || (UsesTeamStacking(settings) &&
+            MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)first) != TeamSlot.None &&
+            MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)first) ==
+            MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)second));
 
     private static void SetGroupGoal(List<PlayerRuntimeData.PieceRuntimeData> movingPieces)
     {
@@ -347,6 +353,12 @@ public sealed class PieceMovementManager : MonoBehaviour
         BoardTileId landingTile,
         int moveCount)
     {
+        GameStartSettings settings = CurrentSettings;
+        if (UsesTeamStacking(settings))
+        {
+            ResolveTeamCaptures(settings, movingPlayerId, movingPieceId, movingPieceCount, landingTile, moveCount);
+            return;
+        }
         foreach (PlayerController otherPlayer in playerManager.ActivePlayers)
         {
             if (otherPlayer.PlayerId == movingPlayerId)
@@ -414,6 +426,42 @@ public sealed class PieceMovementManager : MonoBehaviour
         }
     }
 
+    private void ResolveTeamCaptures(GameStartSettings settings, int attackerId, int attackingPieceId,
+        int attackingCount, BoardTileId tile, int moveCount)
+    {
+        var targets = new HashSet<PlayerRuntimeData.PieceRuntimeData>();
+        foreach (var owner in playerManager.ActivePlayers)
+        {
+            // 아군은 방어/분신 판정에 진입시키지 않고 업기 단계에서만 처리합니다.
+            if (AreFriendly(settings, attackerId, owner.PlayerId)) continue;
+            foreach (var piece in owner.RuntimeData.Pieces)
+                if (piece.State == PieceState.InBoard && piece.CurrentTileId == tile)
+                    targets.Add(CcEffectService.StackLeader(piece));
+        }
+
+        foreach (var leader in targets)
+        {
+            if (leader.State != PieceState.InBoard || leader.CurrentTileId != tile) continue;
+            var request = new CharacterCaptureRequest(attackerId, attackingPieceId, leader.OwnerPlayerId,
+                leader.PieceId, attackingCount, GrantsCaptureExtraThrow(moveCount));
+            var decision = CharacterSkillRegistry.EvaluateIncomingCapture(request);
+            string qaTargets = QaDebugLog.Stack(leader.OwnerPlayerId, leader);
+            if (decision == CharacterCaptureDecision.Prevent ||
+                decision == CharacterCaptureDecision.ConsumeCloneWithoutBonus ||
+                decision == CharacterCaptureDecision.ConvertToParts)
+            {
+                QaDebugLog.Capture(request, decision, qaTargets, false);
+                continue;
+            }
+
+            CcEffectService.RewardMarks(leader, request);
+            leader.SetCaptured(decision == CharacterCaptureDecision.LimitRetireToAttackingCount
+                ? CcDefine.Retire : GetCaptureCc(true, moveCount));
+            QaDebugLog.Capture(request, decision, qaTargets, leader.State == PieceState.Waiting);
+            CharacterSkillRegistry.NotifyCaptureCompleted(request);
+        }
+    }
+
     //수정: 잡기 추가 던지기 판정을 요청 정보와 실제 잡기 처리에서 함께 사용합니다.
     private static bool GrantsCaptureExtraThrow(int moveCount)
     {
@@ -435,24 +483,39 @@ public sealed class PieceMovementManager : MonoBehaviour
         return CcDefine.Retire;
     }
 
-    private static void ResolveStacking(
+    private void ResolveStacking(
         PlayerController player,
         List<PlayerRuntimeData.PieceRuntimeData> movingPieces,
         BoardTileId landingTile)
     {
+        ResolveFriendlyStack(playerManager, player, movingPieces, landingTile);
+    }
+
+    internal static void ResolveFriendlyStack(PlayerManager players, PlayerController player,
+        IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces, BoardTileId landingTile)
+    {
         var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
         PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
-
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+        GameStartSettings settings = CurrentSettings;
+        IReadOnlyList<PlayerController> owners = players != null
+            ? players.ActivePlayers : new[] { player };
+        foreach (var owner in owners)
         {
-            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
-                piece.Cc.Has(CcDefine.Parts))
-                continue;
+            if (!AreFriendly(settings, player.PlayerId, owner.PlayerId)) continue;
+            foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
+            {
+                if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
+                    piece.Cc.Has(CcDefine.Parts))
+                    continue;
 
-            piecesOnTile.Add(piece);
+                piecesOnTile.Add(piece);
 
-            if (stationaryPiece == null && !movingPieces.Contains(piece))
-                stationaryPiece = piece;
+                bool arriving = false;
+                for (int i = 0; i < movingPieces.Count; i++)
+                    if (ReferenceEquals(movingPieces[i], piece)) { arriving = true; break; }
+                if (stationaryPiece == null && !arriving)
+                    stationaryPiece = piece;
+            }
         }
 
         // No friendly piece was already on the tile, so an existing stack
@@ -460,15 +523,13 @@ public sealed class PieceMovementManager : MonoBehaviour
         if (stationaryPiece == null)
             return;
 
-        int stackGroupId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackGroupId
-            : player.RuntimeData.CreateStackGroupId();
-        int stackLeaderPieceId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackLeaderPieceId
-            : stationaryPiece.PieceId;
+        var leader = CcEffectService.StackLeader(stationaryPiece);
+        if (players == null || !players.TryGetPlayer(leader.OwnerPlayerId, out var leaderOwner))
+            leaderOwner = player;
+        int stackGroupId = leader.IsStacked ? leader.StackGroupId : leaderOwner.RuntimeData.CreateStackGroupId();
 
         foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
-            piece.SetStackGroup(stackGroupId, stackLeaderPieceId);
+            piece.SetStackGroup(stackGroupId, leader);
     }
 
     private static BoardTileId GetNextForwardTile(

@@ -45,6 +45,15 @@ namespace YutArena.InGame
             public float Elapsed;
         }
 
+        private sealed class PieceVisualRuntime
+        {
+            public GameObject Prefab;
+            public CharacterStatusBehaviour Status;
+            public GameObject Model;
+            public GameObject Foothold;
+            public bool IsVisible;
+        }
+
         [Header("Piece Home Position Anchors")]
         [Tooltip("Player 1~4 말의 초기 대기 위치입니다. 빈 오브젝트를 씬에서 원하는 위치로 옮긴 뒤 순서대로 연결하세요.")]
         [SerializeField] private Transform[] playerHomeAnchors = new Transform[4];
@@ -115,6 +124,8 @@ namespace YutArena.InGame
         private readonly Dictionary<BoardTileId, List<DebugPieceView>> visiblePieceViewsByTile = new Dictionary<BoardTileId, List<DebugPieceView>>();
         private readonly Dictionary<DebugPieceView, Vector3> tileFormationOffsets = new Dictionary<DebugPieceView, Vector3>();
         private readonly List<DebugPieceView> pieceViews = new List<DebugPieceView>();
+        private readonly Dictionary<DebugPieceView, PieceVisualRuntime> pieceVisuals =
+            new Dictionary<DebugPieceView, PieceVisualRuntime>();
         private readonly Dictionary<DebugPieceView, VisualMove> visualMoves = new Dictionary<DebugPieceView, VisualMove>();
         private readonly List<YutThrowData> pendingResults = new List<YutThrowData>();
         private PlayerManager playerManager;
@@ -144,38 +155,69 @@ namespace YutArena.InGame
             // 실제 보드 프리팹이 없을 때만 공통 Anchor 위에 원형 디버그 마커를 표시한다.
             if (mapManager == null || !mapManager.HasMapVisual)
                 BuildBoard();
-            foreach (PlayerController player in playerManager.ActivePlayers)
-            foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
-            {
-                if (player.JobPiecePrefab == null)
-                {
-                    Debug.LogError($"{player.name} has no Job Piece Prefab assigned.", player);
-                    break;
-                }
-
-                GameObject pieceObject = Instantiate(player.JobPiecePrefab, player.transform);
-                DebugPieceView view = pieceObject.GetComponent<DebugPieceView>();
-                if (view == null)
-                    view = pieceObject.AddComponent<DebugPieceView>();
-                AttachFixedFoothold(view, pieceObject.transform, player.PlayerId);
-                view.Configure(player.PlayerId, piece.PieceId);
-                view.SetBaseScaleMultiplier(pieceScaleMultiplier);
-                view.SetWaitingHidden(piece.State == PieceState.Waiting);
-                pieceViews.Add(view);
-            }
+            InitializePieceRuntimes();
 
             turnManager.OnPendingResultsChanged += HandlePendingResultsChanged;
             if (pieceMovementManager != null)
                 pieceMovementManager.OnVisualMoveResolved += HandleVisualMoveResolved;
         }
 
-        private void AttachFixedFoothold(DebugPieceView view, Transform pieceTransform, int playerId)
+        private void InitializePieceRuntimes()
+        {
+            // Awake가 외형을 생성하기 전에 수명 관리를 설정하기 위한 임시 빈 부모입니다.
+            var setupRoot = new GameObject("PieceRuntimeSetup");
+            setupRoot.transform.SetParent(transform, false);
+            setupRoot.SetActive(false);
+            try
+            {
+                foreach (PlayerController player in playerManager.ActivePlayers)
+                foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
+                {
+                    if (player.JobPiecePrefab == null)
+                    {
+                        Debug.LogError($"{player.name} has no Job Piece Prefab assigned.", player);
+                        break;
+                    }
+    
+                    CharacterStatusBehaviour template = player.JobPiecePrefab.GetComponent<CharacterStatusBehaviour>();
+                    GameObject pieceObject;
+                    CharacterStatusBehaviour status = null;
+                    if (template != null)
+                    {
+                        // 현재 캐릭터 프리팹은 스킬 컴포넌트만 갖고, 모델은 CharacterData에서 가져옵니다.
+                        pieceObject = Instantiate(player.JobPiecePrefab, setupRoot.transform);
+                        status = pieceObject.GetComponent<CharacterStatusBehaviour>();
+                        status.ManageBoardVisualLifetime(piece.PieceId);
+                        pieceObject.transform.SetParent(player.transform, false);
+                    }
+                    else
+                    {
+                        // 모델 자체가 지정된 디버그 프리팹도 출루 전에는 복제하지 않습니다.
+                        pieceObject = new GameObject("PieceRuntime");
+                        pieceObject.transform.SetParent(player.transform, false);
+                    }
+                    DebugPieceView view = pieceObject.GetComponent<DebugPieceView>();
+                    if (view == null)
+                        view = pieceObject.AddComponent<DebugPieceView>();
+                    view.Configure(player.PlayerId, piece.PieceId);
+                    view.SetBaseScaleMultiplier(pieceScaleMultiplier);
+                    pieceObject.name = $"PieceRuntime_P{player.PlayerId}_{piece.PieceId + 1}";
+                    pieceViews.Add(view);
+                    pieceVisuals.Add(view, new PieceVisualRuntime { Prefab = player.JobPiecePrefab, Status = status });
+                    if (piece.State == PieceState.InBoard && !IsCarriedPiece(piece))
+                        EnsurePieceVisual(view, piece, false);
+                }
+            }
+            finally { CharacterStatusBehaviour.ReleaseBoardVisual(setupRoot); }
+        }
+
+        private GameObject AttachFixedFoothold(DebugPieceView view, Transform pieceTransform, int playerId)
         {
             GameObject footholdPrefab = footholdCatalog != null
                 ? footholdCatalog.GetForPlayer(playerId)
                 : null;
             if (footholdPrefab == null)
-                return;
+                return null;
 
             GameObject foothold = Instantiate(footholdPrefab, pieceTransform);
             foothold.name = $"P{playerId}_{footholdPrefab.name}";
@@ -184,6 +226,53 @@ namespace YutArena.InGame
                 Quaternion.Euler(90f, 0f, 0f));
             foothold.transform.localScale = Vector3.one;
             view.AttachFoothold(foothold);
+            return foothold;
+        }
+
+        private void EnsurePieceVisual(DebugPieceView view, PlayerRuntimeData.PieceRuntimeData piece, bool enteringAtStart)
+        {
+            if (!pieceVisuals.TryGetValue(view, out var visual) || visual.IsVisible) return;
+            BoardTileId tile = enteringAtStart || piece.CurrentTileId == BoardTileId.None
+                ? BoardTileId.Start : piece.CurrentTileId;
+            if (!TryGetTileWorldPosition(tile, out Vector3 position)) return;
+            // 모델의 Awake/OnEnable 이전에 Start에 배치하여 외곽에서 날아오는 프레임을 없앱니다.
+            view.transform.position = position;
+            if (TryGetHomeAnchor(view.PlayerId, out Transform home)) view.transform.rotation = home.rotation;
+            if (visual.Status != null)
+                visual.Status.SetBoardVisualActive(true);
+            else
+            {
+                visual.Model = Instantiate(visual.Prefab, view.transform);
+                visual.Model.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                DebugPieceView.EnsureSelectionCollider(visual.Model);
+            }
+            visual.Foothold = AttachFixedFoothold(view, view.transform, view.PlayerId);
+            visual.IsVisible = true;
+            view.gameObject.name = $"Piece_P{view.PlayerId}_{view.PieceId + 1}";
+            if (visual.Status != null && piece.Cc.Has(CcDefine.Stack_fake) &&
+                playerManager.TryGetPlayer(view.PlayerId, out var owner))
+                CcBoardEffects.RefreshClones(owner, piece);
+        }
+
+        private void RemovePieceVisual(DebugPieceView view)
+        {
+            if (!pieceVisuals.TryGetValue(view, out var visual)) return;
+            if (!visual.IsVisible)
+            {
+                visualMoves.Remove(view);
+                return;
+            }
+            if (visual.Status != null) visual.Status.SetBoardVisualActive(false);
+            CharacterStatusBehaviour.ReleaseBoardVisual(visual.Model);
+            CharacterStatusBehaviour.ReleaseBoardVisual(visual.Foothold);
+            if (view.TryGetComponent<CcCloneView>(out var clones)) clones.ClearVisuals();
+            visual.Model = null;
+            visual.Foothold = null;
+            visual.IsVisible = false;
+            visualMoves.Remove(view);
+            // 외형 없는 스킬 처리 루트만 남깁니다. 화면 밖에 3D 말을 보관하지 않습니다.
+            view.transform.localPosition = Vector3.zero;
+            view.gameObject.name = $"PieceRuntime_P{view.PlayerId}_{view.PieceId + 1}";
         }
 
         private void Update()
@@ -254,8 +343,13 @@ namespace YutArena.InGame
             {
                 if (view == null || view.PlayerId != playerId || !pieceIds.Contains(view.PieceId)) continue;
                 if (!playerManager.TryGetPlayer(playerId, out PlayerController player) ||
-                    !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece) ||
-                    IsCarriedPiece(piece)) continue;
+                    !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece)) continue;
+                if (piece.State != PieceState.InBoard || IsCarriedPiece(piece))
+                {
+                    RemovePieceVisual(view);
+                    continue;
+                }
+                EnsurePieceVisual(view, piece, true);
 
                 if (!visualMoves.TryGetValue(view, out VisualMove move))
                 {
@@ -316,19 +410,26 @@ namespace YutArena.InGame
 
         private void RefreshPiecePositions()
         {
+            foreach (DebugPieceView view in pieceViews)
+            {
+                if (view == null || !playerManager.TryGetPlayer(view.PlayerId, out var owner) ||
+                    !owner.TryGetPieceData(view.PieceId, out var piece)) continue;
+                if (piece.State != PieceState.InBoard || IsCarriedPiece(piece)) RemovePieceVisual(view);
+                else EnsurePieceVisual(view, piece, false);
+            }
             BuildTileFormationOffsets();
 
             foreach (DebugPieceView view in pieceViews)
             {
                 if (!playerManager.TryGetPlayer(view.PlayerId, out PlayerController player) ||
                     !player.TryGetPieceData(view.PieceId, out PlayerRuntimeData.PieceRuntimeData piece)) continue;
-                view.SetWaitingHidden(piece.State == PieceState.Waiting);
+                if (piece.State != PieceState.InBoard || IsCarriedPiece(piece) ||
+                    !pieceVisuals.TryGetValue(view, out var visual) || !visual.IsVisible) continue;
                 Vector3 formationOffset = tileFormationOffsets.TryGetValue(view, out Vector3 offset)
                     ? offset
                     : Vector3.zero;
                 Vector3 target = GetDisplayPosition(piece, view.PlayerId, view.PieceId) + formationOffset;
-                if (piece.State != PieceState.Waiting &&
-                    visualMoves.TryGetValue(view, out VisualMove move) && !IsCarriedPiece(piece))
+                if (visualMoves.TryGetValue(view, out VisualMove move))
                     AdvanceVisualMove(view, move, target);
                 else
                 {
@@ -451,7 +552,7 @@ namespace YutArena.InGame
 
         private static bool IsCarriedPiece(PlayerRuntimeData.PieceRuntimeData piece)
         {
-            return piece.IsStacked && piece.PieceId != piece.StackLeaderPieceId;
+            return piece.IsStacked && !piece.IsStackLeader;
         }
 
         /// <summary>
@@ -513,16 +614,7 @@ namespace YutArena.InGame
 
         private Vector3 GetDisplayPosition(PlayerRuntimeData.PieceRuntimeData piece, int playerId, int pieceId)
         {
-            // 업기 그룹의 대표 말만 보드 위에 표시한다.
-            // 업힌 말은 데이터와 GameObject를 유지하되 화면 밖 보관 위치로 옮긴다.
-            if (piece.State == PieceState.InBoard &&
-                IsCarriedPiece(piece))
-            {
-                return GetCarriedPieceStoragePosition(playerId, pieceId);
-            }
-
-            if (piece.State == PieceState.Waiting) return GetHomePosition(playerId, pieceId);
-            if (piece.State == PieceState.Goal) return new Vector3((playerId - 2.5f) * 1.2f, -4.7f) + GetOffset(pieceId);
+            if (piece.State != PieceState.InBoard || IsCarriedPiece(piece)) return Vector3.zero;
             BoardTileId tile = piece.CurrentTileId == BoardTileId.None ? BoardTileId.Start : piece.CurrentTileId;
             // 경유점/하이라이트와 동일한 중심점을 사용하고, 말별 분산 오프셋은 호출부에서 더합니다.
             return TryGetTileWorldPosition(tile, out Vector3 position) ? position : Vector3.zero;

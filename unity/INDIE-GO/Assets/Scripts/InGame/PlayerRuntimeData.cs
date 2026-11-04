@@ -16,6 +16,9 @@ public sealed class PlayerRuntimeData
     [Serializable]
     public sealed class PieceRuntimeData
     {
+        private readonly PlayerRuntimeData owner;
+        private StackState stack;
+        public int OwnerPlayerId => owner.PlayerId;
         public int PieceId { get; private set; }
         public BoardTileId CurrentTileId { get; private set; }
         public BoardTileId PreviousTileId { get; private set; }
@@ -23,9 +26,25 @@ public sealed class PlayerRuntimeData
         public bool IsFinished => State == PieceState.Goal;
 
         // -1 means this piece is not stacked with another piece.
-        public int StackGroupId { get; private set; }
-        public int StackLeaderPieceId { get; private set; }
-        public bool IsStacked => StackGroupId >= 0;
+        public int StackGroupId => stack != null ? stack.Id : -1;
+        public int StackLeaderPieceId => stack != null ? stack.Leader.PieceId : -1;
+        public int StackLeaderPlayerId => stack != null ? stack.Leader.OwnerPlayerId : -1;
+        public bool IsStacked => stack != null;
+        public bool IsStackLeader => stack == null || ReferenceEquals(stack.Leader, this);
+        internal PieceRuntimeData Leader => stack != null && stack.Leader.State == PieceState.InBoard &&
+            ReferenceEquals(stack.Leader.stack, stack) ? stack.Leader : this;
+
+        public bool IsInSameStack(PieceRuntimeData other) =>
+            stack != null && other != null && ReferenceEquals(stack, other.stack);
+
+        internal List<PieceRuntimeData> GetStackMembers()
+        {
+            if (stack == null) return new List<PieceRuntimeData> { this };
+            var members = new List<PieceRuntimeData>();
+            foreach (var member in stack.Members)
+                if (member == this || member.State == PieceState.InBoard) members.Add(member);
+            return members;
+        }
 
         //수정: 모든 효과는 이 말의 CC 목록에 저장하며 Character의 효과 처리기만 변경합니다.
         [UnityEngine.SerializeField] private PieceCcCollection cc = new PieceCcCollection();
@@ -33,9 +52,11 @@ public sealed class PlayerRuntimeData
         public CcDefine CurrentCc => cc.Primary;
         public int RemainingCcTurns => cc.Get(CurrentCc)?.RemainingOwnerTurns ?? 0;
 
-        internal PieceRuntimeData(int pieceId)
+        internal PieceRuntimeData(int pieceId, PlayerRuntimeData owner)
         {
+            this.owner = owner;
             PieceId = pieceId;
+            cc.Bind(owner, this);
             Reset();
         }
 
@@ -83,19 +104,37 @@ public sealed class PlayerRuntimeData
 
         public void SetStackGroup(int stackGroupId, int stackLeaderPieceId)
         {
+            if (!owner.TryGetPiece(stackLeaderPieceId, out var leader))
+                throw new ArgumentOutOfRangeException(nameof(stackLeaderPieceId));
+            SetStackGroup(stackGroupId, leader);
+        }
+
+        /// <summary>말 번호가 같아도 소유자가 다른 팀원 말을 정확히 구분합니다.</summary>
+        public void SetStackGroup(int stackGroupId, PieceRuntimeData leader)
+        {
             if (stackGroupId < 0)
                 throw new ArgumentOutOfRangeException(nameof(stackGroupId));
-            if (stackLeaderPieceId < 0)
-                throw new ArgumentOutOfRangeException(nameof(stackLeaderPieceId));
-
-            StackGroupId = stackGroupId;
-            StackLeaderPieceId = stackLeaderPieceId;
+            if (leader == null) throw new ArgumentNullException(nameof(leader));
+            var key = (stackGroupId, leader.PieceId);
+            if (!leader.owner.stacks.TryGetValue(key, out var group))
+            {
+                group = new StackState(stackGroupId, leader);
+                leader.owner.stacks.Add(key, group);
+            }
+            if (ReferenceEquals(stack, group)) return;
+            ClearStack();
+            stack = group;
+            stack.Members.Add(this);
         }
 
         public void ClearStack()
         {
-            StackGroupId = -1;
-            StackLeaderPieceId = -1;
+            if (stack == null) return;
+            var previous = stack;
+            stack = null;
+            previous.Members.Remove(this);
+            if (previous.Members.Count == 0)
+                previous.Leader.owner.stacks.Remove((previous.Id, previous.Leader.PieceId));
         }
 
         public void SetCc(CcDefine ccType, int remainingTurns = 0)
@@ -123,6 +162,15 @@ public sealed class PlayerRuntimeData
     public IReadOnlyList<PieceRuntimeData> Pieces => pieces;
 
     private readonly List<PieceRuntimeData> pieces = new List<PieceRuntimeData>();
+    private readonly Dictionary<(int group, int leader), StackState> stacks =
+        new Dictionary<(int, int), StackState>();
+    private sealed class StackState
+    {
+        public readonly int Id;
+        public readonly PieceRuntimeData Leader;
+        public readonly List<PieceRuntimeData> Members = new List<PieceRuntimeData>();
+        public StackState(int id, PieceRuntimeData leader) { Id = id; Leader = leader; }
+    }
     private int nextStackGroupId;
 
     public PlayerRuntimeData(int playerId, string playerName, int pieceCount)
@@ -136,7 +184,7 @@ public sealed class PlayerRuntimeData
         PlayerName = string.IsNullOrWhiteSpace(playerName) ? $"Player {playerId}" : playerName;
 
         for (int pieceId = 0; pieceId < pieceCount; pieceId++)
-            pieces.Add(new PieceRuntimeData(pieceId));
+            pieces.Add(new PieceRuntimeData(pieceId, this));
     }
 
     public int CreateStackGroupId()

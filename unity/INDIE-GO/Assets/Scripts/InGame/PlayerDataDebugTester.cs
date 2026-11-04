@@ -133,7 +133,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
             var settings = turnManager?.Settings ?? GameStartSettingsHolder.Current;
             string actualMap = mapManager != null && mapManager.CurrentMap != null ? mapManager.CurrentMap.mapType.ToString() : "로딩 중";
             text.AppendLine(settings == null ? "[게임 설정] 초기화 대기" :
-                $"[게임 설정] 모드={settings.gameMode}, 선택맵={settings.mapType}, 현재맵={actualMap}, 인원={settings.playerCount}, 팀전={settings.isTeamMode}, " +
+                $"[게임 설정] 모드={settings.gameMode}, 선택맵={settings.mapType}, 현재맵={actualMap}, 인원={settings.playerCount}, 대전방식={GetMatchModeDisplay(settings)}, " +
                 $"스킬={settings.useSkill}, 실제스킬사용={CharacterSkillRegistry.AreSkillsEnabled}, 아이템={settings.useItem}, 특수칸={settings.useSpecialTile}, 목표점수={settings.targetEscapeCount}, 최대라운드={settings.maxTurnCount}");
             AppendTurn();
             if (playerManager.ActivePlayers.Count == 0)
@@ -165,6 +165,16 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
             forceSnapshot = false;
         }
 #endif
+    }
+    private static string GetMatchModeDisplay(GameStartSettings settings)
+    {
+        if (settings == null || !settings.isTeamMode) return "개인전";
+        switch (settings.teamMode)
+        {
+            case TeamMode.TeamMode1: return "팀전 / 2인1팀";
+            case TeamMode.TeamMode2: return "팀전 / 2대2";
+            default: return $"팀전 / 알 수 없음 ({(int)settings.teamMode})";
+        }
     }
     private void WriteConsole(string label, string body)
     {
@@ -240,7 +250,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         if (pieceMovementManager != null &&
             pieceMovementManager.TryGetRemainingStepsToGoal(player.PlayerId, piece.PieceId, out int remaining))
             text.Append($", 남은칸={remaining}");
-        text.Append(piece.IsStacked ? $", 업기그룹={piece.StackGroupId}, 선두=말{piece.StackLeaderPieceId + 1}" : ", 업기=-");
+        text.Append(piece.IsStacked ? $", 업기그룹={piece.StackGroupId}, 선두=P{piece.StackLeaderPlayerId}/말{piece.StackLeaderPieceId + 1}" : ", 업기=-");
         if (skill != null)
             text.Append($", 패시브CD={skill.RemainingPassiveCooldownTurns}, 스킬사용가능={CharacterSkillRegistry.CanUseActive(player.PlayerId, piece.PieceId)}");
         text.Append(", CC=[");
@@ -270,28 +280,28 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
 
         int total = 0, carried = 0;
         bool leaderPresent = false;
-        foreach (var member in owner.Pieces)
+        var members = piece.GetStackMembers();
+        foreach (var member in members)
         {
             if (!IsSameBoardStack(piece, member)) continue;
             total++;
-            if (member.PieceId == piece.StackLeaderPieceId) leaderPresent = true;
+            if (member.IsStackLeader) leaderPresent = true;
             else carried++;
         }
-        output.Append(piece.PieceId == piece.StackLeaderPieceId ? ", 업기역할=리더" : ", 업기역할=업힌 말");
-        output.Append($", 리더말=P{owner.PlayerId}/말{piece.StackLeaderPieceId + 1}(id={piece.StackLeaderPieceId})");
+        output.Append(piece.IsStackLeader ? ", 업기역할=리더" : ", 업기역할=업힌 말");
+        output.Append($", 리더말=P{piece.StackLeaderPlayerId}/말{piece.StackLeaderPieceId + 1}(id={piece.StackLeaderPieceId})");
         if (!leaderPresent) output.Append("[보드에서 찾지 못함]");
         output.Append(", 업힌말=[");
         bool first = true;
-        foreach (var member in owner.Pieces)
+        foreach (var member in members)
         {
-            if (!IsSameBoardStack(piece, member) || member.PieceId == piece.StackLeaderPieceId) continue;
+            if (!IsSameBoardStack(piece, member) || member.IsStackLeader) continue;
             if (!first) output.Append(", ");
-            output.Append($"P{owner.PlayerId}/말{member.PieceId + 1}(id={member.PieceId})");
+            output.Append($"P{member.OwnerPlayerId}/말{member.PieceId + 1}(id={member.PieceId})");
             first = false;
         }
         output.AppendLine($"], 업힌수={carried}, 그룹전체={total}");
     }
     private static bool IsSameBoardStack(PlayerRuntimeData.PieceRuntimeData piece, PlayerRuntimeData.PieceRuntimeData member) =>
-        member.State == PieceState.InBoard && member.IsStacked && member.StackGroupId == piece.StackGroupId &&
-        member.StackLeaderPieceId == piece.StackLeaderPieceId;
+        member.State == PieceState.InBoard && piece.IsInSameStack(member);
 }

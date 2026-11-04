@@ -18,6 +18,8 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     [SerializeField] private int pieceId = -1;
 
     private GameObject spawnedVisualModel;
+    private bool boardVisualLifetimeManaged;
+    private bool boardVisualRequested;
     private bool isRegistered;
     private int remainingPassiveCooldownTurns;
 
@@ -38,6 +40,36 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
     public bool IsPassiveReady => CharacterSkillRegistry.AreSkillsEnabled && remainingPassiveCooldownTurns <= 0;
     public int PlayerId => Owner != null ? Owner.PlayerId : -1;
     public int PieceId => pieceId;
+
+    // 스킬 처리 오브젝트와 실제 3D 외형의 수명을 분리합니다.
+    // 비활성 부모 아래에서 생성한 직후 호출하여 Awake에서도 외형을 미리 만들지 않습니다.
+    internal void ManageBoardVisualLifetime(int runtimePieceId)
+    {
+        pieceId = runtimePieceId;
+        boardVisualLifetimeManaged = true;
+        boardVisualRequested = false;
+    }
+
+    internal void SetBoardVisualActive(bool active)
+    {
+        boardVisualLifetimeManaged = true;
+        boardVisualRequested = active;
+        if (active)
+            EnsureVisualModel();
+        else if (spawnedVisualModel != null)
+        {
+            ReleaseBoardVisual(spawnedVisualModel);
+            spawnedVisualModel = null;
+        }
+    }
+
+    internal static void ReleaseBoardVisual(GameObject visual)
+    {
+        if (visual == null) return;
+        visual.SetActive(false);
+        if (Application.isPlaying) Destroy(visual);
+        else DestroyImmediate(visual);
+    }
     public virtual bool IsTargetable => TryGetPiece(out var piece) && CcEffectService.IsTargetable(piece);
     public virtual bool IsImmuneToEffect(CcDefine type) =>
         CharacterSkillRegistry.AreSkillsEnabled &&
@@ -436,6 +468,7 @@ public abstract class CharacterStatusBehaviour : MonoBehaviour
 
     private void EnsureVisualModel()
     {
+        if (boardVisualLifetimeManaged && !boardVisualRequested) return;
         if (characterData == null || characterData.visualModelPrefab == null || spawnedVisualModel != null)
             return;
 
