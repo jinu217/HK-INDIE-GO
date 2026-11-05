@@ -526,13 +526,22 @@ namespace YutArena.Managers
             }
             return false;
         }
-        // 이 플레이어가 지금까지 완주시킨 말이 몇 개인지 셈 (State == Goal)
+        // 이 플레이어 팀이 지금까지 완주시킨 말이 몇 개인지 셈 (State == Goal)
+        // 버그 수정: 2대2에서 팀원 말이 업혀 같이 탈출하면 그 말은 팀원 소유라 점수에서 빠졌음.
+        // 기획 "팀원 말이 업혀 함께 탈출해도 모두 같은 팀의 점수" -> 같은 팀 캐릭터 말을 전부 셈
+        // (개인전·2인1조는 팀 = 캐릭터 하나라 예전과 같음)
         private int CountFinishedPieces(int playerId)
         {
-            if (!playerManager.TryGetPlayer(playerId, out var player)) return 0;
+            TeamSlot team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)playerId);
             int count = 0;
-            foreach (var piece in player.RuntimeData.Pieces)
-                if (piece.IsFinished) count++;
+            for (int id = 1; id <= MatchCompositionRule.GetCharacterCount(settings) && id <= 8; id++)
+            {
+                bool sameTeam = id == playerId ||
+                    (team != TeamSlot.None && MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)id) == team);
+                if (!sameTeam || !playerManager.TryGetPlayer(id, out var player)) continue;
+                foreach (var piece in player.RuntimeData.Pieces)
+                    if (piece.IsFinished) count++;
+            }
             return count;
         }
         // ===================================================================
