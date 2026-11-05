@@ -78,7 +78,7 @@ namespace YutArena.Managers
             activeTeams.Clear();
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
-                var team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i);
+                var team = MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)i);
                 if (team != TeamSlot.None)
                     activeTeams.Add(team);
             }
@@ -152,7 +152,19 @@ namespace YutArena.Managers
         // ===================================================================
         private void HandleTeamFinished(TeamSlot team)
         {
-            if (!activeTeams.Contains(team)) return; // 이미 처리된 팀이면 무시 
+            if (!activeTeams.Contains(team)) return; // 이미 처리된 팀이면 무시
+            // 이스케이프: 필요 점수를 먼저 채운 팀이 1등, 게임은 바로 끝.
+            // 남은 팀의 2·3·4등은 턴 끝 순위 룰(점수 -> 참먹이 거리 -> 동점이면 타이브레이커)로 정함
+            // (클래식은 공식 룰처럼 아래에서 꼴등까지 계속 진행)
+            if (settings.gameMode == GameMode.Escape)
+            {
+                finishedRanking.Add(team);
+                activeTeams.Remove(team);
+                QaDebugLog.Event("[순위 판정] " + team + " 필요 점수 달성으로 1등, 남은 팀 순위 판정 시작");
+                turnManager.NotifyGameEnded(); // 타이브레이커가 끝날 때까지 턴 진행 멈춤
+                RankRemainingTeams(GameResultType.TeamWin);
+                return;
+            }
             if (activeTeams.Count <= 2)
             {
                 // 남은 팀이 2개 이하 -> 이게 사실상 마지막 대결. 여기서 진짜로 게임을 끝냄
@@ -177,7 +189,8 @@ namespace YutArena.Managers
         // ===================================================================
         private void ClearBoardPiecesOfTeam(TeamSlot team)
         {
-            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            // 말은 캐릭터 소유라 캐릭터 수만큼 훑음 (2인 1조 = 2, 그 외 = 인원수)
+            for (int i = 1; i <= MatchCompositionRule.GetCharacterCount(settings) && i <= 8; i++)
             {
                 if (MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i) != team) continue;
                 if (!playerManager.TryGetPlayer(i, out var player)) continue;
@@ -231,6 +244,8 @@ namespace YutArena.Managers
             };
             QaDebugLog.Event("[승리확정] winningTeam=" + displayedWinner + " / winningPlayer=" + result.winningPlayer +
                 " / settings.matchComposition=" + settings.matchComposition + " / settings.playerCount=" + settings.playerCount); // 확인용 로그
+            QaDebugLog.Event("[최종 순위] " + string.Join(" → ", finalRanking.Select((t, i) => (i + 1) + "등 " + t)) +
+                " (종료 이유 " + resultType + ")"); // 결과창에 넘기는 순위 확인용
             gameManager.EndGame(result);
         }
         // ===================================================================
@@ -245,7 +260,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var p = (PlayerSlot)i;
-                if (MatchCompositionRule.GetTeamSlot(settings, p) != winningTeam) continue;
+                if (MatchCompositionRule.GetPersonTeamSlot(settings, p) != winningTeam) continue;
                 memberCount++;
                 found = p;
             }
@@ -269,7 +284,7 @@ namespace YutArena.Managers
             if (settings == null) return;
             if (leftPlayers.Contains(leavingPlayer)) return; // 이미 처리한 사람이면 무시 (중복 방지)
             leftPlayers.Add(leavingPlayer);
-            HandleTeamEliminated(MatchCompositionRule.GetTeamSlot(settings, leavingPlayer));
+            HandleTeamEliminated(MatchCompositionRule.GetPersonTeamSlot(settings, leavingPlayer)); // 나가는 건 사람(1P~4P)
         }
         // 팀이 완전히 탈락했을 때(팀원 중 누구든 나가거나 항복) 처리
         private void HandleTeamEliminated(TeamSlot team)
@@ -304,11 +319,13 @@ namespace YutArena.Managers
         // 3단계: 점수/거리까지 같은 팀끼리는 [윷 던지기] 타이브레이커로 순위를 가림
         //   - 개인전: 동률인 플레이어만 던짐 / 팀전: 동률 팀 플레이어 전부 던지고 합산
         //   - 동점 묶음이 여러 개면 높은 순위 묶음부터 차례로 진행
-        // 먼저 목표 점수를 채워 빠진 팀(finishedRanking)은 이미 순위가 정해져 있어서 그 앞에 그대로 둠
+        // 먼저 목표 점수를 채운 팀(finishedRanking)은 이미 1등으로 정해져 있어서 그 앞에 그대로 둠
         // ===================================================================
-        // 기획 확인 중: 2·3등 동점도 타이브레이커로 가리는지. false로 바꾸면 1등 묶음만 타이브레이커,
+        // 2·3·4등 동점도 타이브레이커로 가림 (기획 확정). false로 바꾸면 1등 묶음만 타이브레이커,
         // 나머지 동점은 플레이어 번호 순서대로 둠
         private static readonly bool TieBreakAllRanks = true;
+        // 순위가 다 정해졌을 때 결과에 넣을 종료 이유 (턴 끝 = TimeOver, 필요 점수 달성 = TeamWin)
+        private GameResultType rankingEndType = GameResultType.TimeOver;
 
         // 아직 순위가 안 정해진 동점 묶음들 (앞쪽일수록 높은 순위). 맨 앞부터 하나씩 꺼내서 처리함
         private readonly List<List<TeamSlot>> pendingRankGroups = new List<List<TeamSlot>>();
@@ -318,9 +335,9 @@ namespace YutArena.Managers
         public void HandleTimeLimitReached()
         {
             if (settings == null) return;
-            // 클래식도 이스케이프처럼 턴 수가 다 되면 순위 판정 (10/23 결정, 기획 확정 전 임시).
-            // 클래식 점수 = 골인한 말 개수 (클래식은 보너스 점수가 없어서 escapeCountByTeam 에 골인 수만 쌓임)
-            if (settings.gameMode != GameMode.Escape && settings.gameMode != GameMode.Classic)
+            // 클래식은 최대 턴 없음
+            if (settings.gameMode == GameMode.Classic) return;
+            if (settings.gameMode != GameMode.Escape)
             {
                 // KillTheKing은 아직 턴 제한 승부 없음
                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 턴 제한 승부 미구현");
@@ -331,6 +348,13 @@ namespace YutArena.Managers
             // 버그 수정: 예전엔 타이브레이커를 시작해도 턴이 멈추지 않아서 바로 다음 턴이 시작됐음.
             // 순위가 다 정해질 때까지 턴 진행을 먼저 멈춤 (타이브레이커 결과가 나올 때까지 이 상태로 대기)
             turnManager.NotifyGameEnded();
+            RankRemainingTeams(GameResultType.TimeOver);
+        }
+
+        // 아직 게임에 남은 팀들(activeTeams)의 순위를 정함. 턴 끝, 이스케이프 1등 확정 후 둘 다 여기로 옴
+        private void RankRemainingTeams(GameResultType endType)
+        {
+            rankingEndType = endType;
 
             // 1·2단계: 점수 높은 순, 같으면 참먹이 가까운 순
             // (OrderBy는 값이 같으면 원래 순서를 유지 -> 동점일 때 기본 순서는 플레이어 번호 순)
@@ -344,7 +368,7 @@ namespace YutArena.Managers
                 .ToList();
 
             foreach (var team in sorted)
-                QaDebugLog.Event("[승리조건2] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
+                QaDebugLog.Event("[순위 판정] " + team + " 점수 " + GetEscapeCount(team) + " / 참먹이 거리 " +
                     (distanceByTeam[team] == int.MaxValue ? "판 위 말 없음" : distanceByTeam[team] + "칸"));
 
             // 점수와 거리가 둘 다 같은 팀끼리 한 묶음으로 나눔 (혼자면 1팀짜리 묶음)
@@ -385,8 +409,8 @@ namespace YutArena.Managers
 
             // 모든 순위가 정해짐 -> 게임 종료
             if (turnLimitRanking.Count == 0) return; // 방어 처리 (남은 팀이 없을 수는 없음)
-            QaDebugLog.Event("[승리조건2] 순위 확정: " + string.Join(" > ", turnLimitRanking));
-            Declare(turnLimitRanking[0], GameResultType.TimeOver, new List<TeamSlot>(turnLimitRanking));
+            QaDebugLog.Event("[순위 판정] 순위 확정: " + string.Join(" > ", turnLimitRanking));
+            Declare(turnLimitRanking[0], rankingEndType, new List<TeamSlot>(turnLimitRanking));
         }
 
         // ===================================================================
@@ -422,7 +446,7 @@ namespace YutArena.Managers
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
                 var p = (PlayerSlot)i;
-                if (tiedTeams.Contains(MatchCompositionRule.GetTeamSlot(settings, p)))
+                if (tiedTeams.Contains(MatchCompositionRule.GetPersonTeamSlot(settings, p))) // 던지는 건 사람(2인 1조도 4명 다)
                     tieBreakerPendingPlayers.Add(p);
             }
             int rank = finishedRanking.Count + turnLimitRanking.Count + 1; // 이번 묶음이 몇 등 자리를 다투는지
@@ -478,7 +502,7 @@ namespace YutArena.Managers
                 for (int i = 1; i <= settings.playerCount && i <= 8; i++)
                 {
                     var p = (PlayerSlot)i;
-                    if (MatchCompositionRule.GetTeamSlot(settings, p) != team) continue;
+                    if (MatchCompositionRule.GetPersonTeamSlot(settings, p) != team) continue;
                     if (tieBreakerResults.TryGetValue(p, out var r))
                         sum += YutResultRule.GetMoveCount(r);
                 }
@@ -510,7 +534,7 @@ namespace YutArena.Managers
         private int GetClosestDistanceToGoal(TeamSlot team)
         {
             int minDistance = int.MaxValue;
-            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            for (int i = 1; i <= MatchCompositionRule.GetCharacterCount(settings) && i <= 8; i++) // 말 주인 = 캐릭터
             {
                 if (MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i) != team) continue;
                 if (!playerManager.TryGetPlayer(i, out var player)) continue;
@@ -532,7 +556,7 @@ namespace YutArena.Managers
             var teams = new List<TeamSlot>();
             for (int i = 1; i <= settings.playerCount && i <= 8; i++)
             {
-                var team = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)i);
+                var team = MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)i);
                 if (activeTeams.Contains(team) && !teams.Contains(team))
                     teams.Add(team);
             }

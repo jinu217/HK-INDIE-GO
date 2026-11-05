@@ -45,6 +45,10 @@ namespace YutArena.Managers
         public int PendingSkillThrows => pendingSkillThrows;
         // 턴 순서 관리 데이터 (Common의 GameSessionDefine.cs에 새로 추가??)
         public TurnOrderData TurnOrder { get; private set; } = new TurnOrderData();
+        // 2인 1조: 지금 턴인 "사람"(1P~4P). 턴 순서·입력 장치·UI 차례 표시는 이걸 쓴다.
+        // CurrentTurn.currentPlayer 는 그 사람이 조작하는 "캐릭터"(말 주인)라서 2인 1조에선 둘이 다를 수 있음.
+        // 개인전·2대2는 둘이 항상 같다.
+        public PlayerSlot CurrentPerson { get; private set; } = PlayerSlot.None;
         private GameStartSettings settings;
         public GameStartSettings Settings => settings;
         private int throwCountInTurn = 0; // 이번 턴에서 몇 번째 던지기인지 (YutThrowData.throwIndexInTurn)
@@ -146,14 +150,14 @@ namespace YutArena.Managers
         private List<PlayerSlot> DetermineTeamBasedOrder(List<PlayerSlot> players)
         {
             var playersByTeam = players
-                .GroupBy(p => MatchCompositionRule.GetTeamSlot(settings, p))
+                .GroupBy(p => MatchCompositionRule.GetPersonTeamSlot(settings, p))
                 .ToDictionary(g => g.Key, g => g.OrderBy(p => (int)p).ToList());
 
             var representatives = playersByTeam.Select(kv => kv.Value[0]).ToList();
 
             // 팀 순위(어느 팀이 먼저인지)만 뽑아둠
             var teamOrder = DetermineOrder(representatives)
-                .Select(rep => MatchCompositionRule.GetTeamSlot(settings, rep))
+                .Select(rep => MatchCompositionRule.GetPersonTeamSlot(settings, rep))
                 .ToList();
 
             // 라운드(1P끼리, 2P끼리...) 단위로 팀 순위를 반복해서 번갈아가며 이어붙임
@@ -184,8 +188,12 @@ namespace YutArena.Managers
             var result = DetermineTeamBasedOrder(TurnOrder.order);
             QaDebugLog.Event("팀 단위로 정해진 순서: " + string.Join(" -> ", result));
         }
-        private void BeginTurnFor(PlayerSlot player)
+        private void BeginTurnFor(PlayerSlot person)
         {
+            // 턴은 사람 단위로 돌고, 그 사람이 조작하는 캐릭터가 currentPlayer가 됨
+            // (2인 1조: 빨강 팀 사람 → 캐릭터 1번, 파랑 팀 사람 → 캐릭터 2번 / 그 외: 사람 = 캐릭터)
+            CurrentPerson = person;
+            PlayerSlot player = MatchCompositionRule.GetControlledCharacter(settings, person);
             CurrentTurn.currentPlayer = player;
             // settings.matchComposition에 "1vs1vs1vs1(개인전)"인지 "2vs2(팀전)"인지가 담겨있으므로
             // Common의 MatchCompositionRule을 그대로 써서 team을 계산함
@@ -712,7 +720,7 @@ namespace YutArena.Managers
         // 다음 사람 차례로 넘김
         private void AdvanceToNextPlayer()
         {
-            PlayerSlot previousPlayer = CurrentTurn.currentPlayer; // 방금 턴이 끝난 사람 (이미 순서에서 빠졌을 수도 있음)
+            PlayerSlot previousPlayer = CurrentPerson; // 방금 턴이 끝난 사람 (이미 순서에서 빠졌을 수도 있음)
             TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
             bool isNewRound = IsNewRound(previousPlayer, TurnOrder.Current);
             CurrentTurn.turnNumber++;        // 턴 진행될 때마다 무조건 +1
@@ -753,7 +761,7 @@ namespace YutArena.Managers
         // 지금 차례인 사람이 턴 순서에서 빠졌는지 (다인전 순위 확정 / 탈주)
         private bool IsCurrentPlayerOutOfTurnOrder()
         {
-            return !TurnOrder.order.Contains(CurrentTurn.currentPlayer);
+            return !TurnOrder.order.Contains(CurrentPerson);
         }
 
         // 게임에서 빠진 사람의 남은 윷 결과/보너스 던지기를 전부 버리고 바로 턴을 끝냄
@@ -919,7 +927,7 @@ namespace YutArena.Managers
         {
             // 지금 순서 목록에서, 방금 빠져야 할 팀 소속이 아닌 사람들만 남김
             var remainingPlayers = TurnOrder.order
-                .Where(p => MatchCompositionRule.GetTeamSlot(gameSettings, p) != team)
+                .Where(p => MatchCompositionRule.GetPersonTeamSlot(gameSettings, p) != team)
                 .ToList();
             PlayerSlot currentBefore = TurnOrder.Current;
             int newIndex = ResolveIndexAfterRemoval(remainingPlayers, currentBefore);

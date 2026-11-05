@@ -22,7 +22,7 @@ namespace YutArena.Managers
             }
 
             // 이 팀 소속 플레이어를 전부 찾아서
-            for (int i = 1; i <= settings.playerCount && i <= 8; i++)
+            for (int i = 1; i <= MatchCompositionRule.GetCharacterCount(settings) && i <= 8; i++) // 말 주인 = 캐릭터 (2인 1조 = 2)
             {
                 var playerSlot = (PlayerSlot)i;
                 if (MatchCompositionRule.GetTeamSlot(settings, playerSlot) != team)

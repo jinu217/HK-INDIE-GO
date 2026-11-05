@@ -169,17 +169,72 @@ namespace YutArena.Common
         // playerTeams[i]는 0=팀 없음, 1=Red(TeamA), 2=Blue(TeamB)를 담는다.
         // 그래서 isTeamMode가 true일 때만 이 값을 쓰고, 아니면 기존 고정 배정으로 대체함.
         // ===================================================================
+        // ※ 여기서 player 는 "게임 속 캐릭터(말 주인) 번호"다.
+        //   개인전·2대2는 사람 번호 = 캐릭터 번호라 기존과 똑같고,
+        //   2인 1조는 캐릭터가 팀당 1개라 1번 = 빨강(TeamA), 2번 = 파랑(TeamB)으로 답한다.
+        //   사람(1P~4P)의 팀이 필요하면 아래 GetPersonTeamSlot 을 쓴다.
         public static TeamSlot GetTeamSlot(GameStartSettings settings, PlayerSlot player)
         {
-            int index = (int)player - 1;
+            if (UsesSharedTeamCharacter(settings))
+            {
+                return player switch
+                {
+                    PlayerSlot.Player1 => TeamSlot.TeamA,
+                    PlayerSlot.Player2 => TeamSlot.TeamB,
+                    _ => TeamSlot.None
+                };
+            }
+            return GetPersonTeamSlot(settings, player);
+        }
+
+        // ===================================================================
+        // 2인 1조(TeamMode1) 팀 캐릭터 규칙 (팀전 기획 2번)
+        // - 팀이 캐릭터 1개, 말, 남은 말 칸, 스킬 포인트·쿨타임을 함께 쓴다 → 게임 속 캐릭터는 팀당 1개(총 2개)
+        // - 캐릭터 번호는 팀 색으로 정한다: 빨강(TeamA) = 캐릭터 1번, 파랑(TeamB) = 캐릭터 2번
+        //   (선공·후공과 상관없는 이름표. 순서 정하기는 사람 기준으로 따로 함)
+        // - 턴은 사람(1P~4P) 단위로 돌고, 자기 턴인 사람이 자기 팀 캐릭터를 조작한다
+        // 개인전·2대2에서는 사람 번호 = 캐릭터 번호라 아래 함수들이 기존과 같은 값을 준다.
+        // ===================================================================
+
+        // 2인 1조(팀이 캐릭터 1개를 같이 쓰는 방식)인지
+        public static bool UsesSharedTeamCharacter(GameStartSettings settings)
+        {
+            return settings != null && settings.isTeamMode && settings.teamMode == TeamMode.TeamMode1;
+        }
+
+        // 사람(1P~4P)의 팀. 대기실 팀 배정(playerTeams: 1=빨강 TeamA, 2=파랑 TeamB) 그대로.
+        // 순서 정하기, 타이브레이커처럼 "사람"이 기준인 곳에서 쓴다.
+        public static TeamSlot GetPersonTeamSlot(GameStartSettings settings, PlayerSlot person)
+        {
+            int index = (int)person - 1;
             if (settings != null && settings.isTeamMode &&
                 settings.playerTeams != null && index >= 0 && index < settings.playerTeams.Length)
             {
                 return (TeamSlot)settings.playerTeams[index];
             }
             return settings != null
-                ? GetTeamSlot(settings.matchComposition, player)
+                ? GetTeamSlot(settings.matchComposition, person)
                 : TeamSlot.None;
+        }
+
+        // 이 사람이 자기 턴에 조작하는 캐릭터 번호.
+        // 2인 1조: 빨강 팀 사람 → 캐릭터 1번, 파랑 팀 사람 → 캐릭터 2번 / 그 외: 자기 자신
+        public static PlayerSlot GetControlledCharacter(GameStartSettings settings, PlayerSlot person)
+        {
+            if (!UsesSharedTeamCharacter(settings)) return person;
+            return GetPersonTeamSlot(settings, person) switch
+            {
+                TeamSlot.TeamA => PlayerSlot.Player1,
+                TeamSlot.TeamB => PlayerSlot.Player2,
+                _ => PlayerSlot.None
+            };
+        }
+
+        // 게임 속 캐릭터(말 주인) 수. 2인 1조는 2, 그 외는 사람 수와 같다. (말 생성할 때 사용)
+        public static int GetCharacterCount(GameStartSettings settings)
+        {
+            if (settings == null) return 0;
+            return UsesSharedTeamCharacter(settings) ? 2 : settings.playerCount;
         }
 
         // 해당 대전 구성에서 유효한 플레이어인지 확인
