@@ -200,7 +200,8 @@ public static class CharacterSkillRegistry
         var piece = CcEffectService.GetPiece(request.TargetPlayerId, request.TargetPieceId);
         var leader = CcEffectService.StackLeader(piece);
         var effective = new CharacterCaptureRequest(request.AttackerPlayerId, request.AttackerPieceId,
-            request.TargetPlayerId, leader != null ? leader.PieceId : request.TargetPieceId,
+            leader != null ? leader.OwnerPlayerId : request.TargetPlayerId,
+            leader != null ? leader.PieceId : request.TargetPieceId,
             request.AttackingPieceCount, request.WouldGrantExtraThrow);
         if (!CcEffectService.TryGetCaptureDecision(effective, leader, out var decision))
         {

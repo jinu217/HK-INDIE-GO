@@ -42,7 +42,7 @@ public static class CharacterBoardUtility
             foreach (PlayerRuntimeData.PieceRuntimeData piece in player.RuntimeData.Pieces)
             {
                 if (piece.State == PieceState.InBoard &&
-                    (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId))
+                    piece.IsStackLeader)
                     result.Add(new CharacterPieceReference(player, piece));
             }
         }
@@ -96,7 +96,7 @@ public static class CharacterBoardUtility
                 if ((player.PlayerId == ownerPlayerId && piece.PieceId == sourcePieceId) ||
                     piece.State != PieceState.InBoard || piece.CurrentTileId == BoardTileId.None ||
                     piece.Cc.Has(CcDefine.Robot_part) ||
-                    (piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId))
+                    !piece.IsStackLeader)
                     continue;
 
                 int distance = GetDistance(sourceTile, piece.CurrentTileId);
@@ -402,15 +402,7 @@ public static class CcBoardEffects
         if (path == null) throw new ArgumentNullException(nameof(path));
 
         BoardTileId startingTile = caster.CurrentTileId;
-        var movingPieces = new List<PlayerRuntimeData.PieceRuntimeData>();
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
-        {
-            if (piece.PieceId == caster.PieceId ||
-                (caster.IsStacked && piece.StackGroupId == caster.StackGroupId))
-            {
-                movingPieces.Add(piece);
-            }
-        }
+        var movingPieces = CcEffectService.StackMembers(caster);
 
         if (!CcEffectService.CanMove(caster)) return;
         foreach (BoardTileId tile in path)
@@ -432,7 +424,7 @@ public static class CcBoardEffects
         {
             CharacterSkillRegistry.NotifyMoveCompleted(
                 new CharacterMoveRecord(
-                    owner.PlayerId,
+                    piece.OwnerPlayerId,
                     piece.PieceId,
                     startingTile,
                     piece.CurrentTileId,
@@ -447,29 +439,8 @@ public static class CcBoardEffects
         IReadOnlyList<PlayerRuntimeData.PieceRuntimeData> movingPieces,
         BoardTileId landingTile)
     {
-        PlayerRuntimeData.PieceRuntimeData stationaryPiece = null;
-        var piecesOnTile = new List<PlayerRuntimeData.PieceRuntimeData>();
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in owner.RuntimeData.Pieces)
-        {
-            if (piece.State != PieceState.InBoard || piece.CurrentTileId != landingTile ||
-                piece.Cc.Has(CcDefine.Robot_part))
-                continue;
-
-            piecesOnTile.Add(piece);
-            if (stationaryPiece == null && !ContainsPiece(movingPieces, piece))
-                stationaryPiece = piece;
-        }
-
-        if (stationaryPiece == null) return;
-
-        int groupId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackGroupId
-            : owner.RuntimeData.CreateStackGroupId();
-        int leaderId = stationaryPiece.IsStacked
-            ? stationaryPiece.StackLeaderPieceId
-            : stationaryPiece.PieceId;
-        foreach (PlayerRuntimeData.PieceRuntimeData piece in piecesOnTile)
-            piece.SetStackGroup(groupId, leaderId);
+        PieceMovementManager.ResolveFriendlyStack(UnityEngine.Object.FindFirstObjectByType<PlayerManager>(),
+            owner, movingPieces, landingTile);
     }
 
     private static bool ContainsPiece(
@@ -495,8 +466,8 @@ public static class CcBoardEffects
         else if (count == 0 && piece.IsStacked)
         {
             bool hasAlly = false;
-            foreach (var other in owner.RuntimeData.Pieces)
-                if (other != piece && other.StackGroupId == piece.StackGroupId) hasAlly = true;
+            foreach (var other in CcEffectService.StackMembers(piece))
+                if (other != piece) hasAlly = true;
             if (!hasAlly) piece.ClearStack();
         }
         if (!CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var source)) return;
@@ -511,9 +482,8 @@ public static class CcBoardEffects
         if (owner == null || leader == null) return 0;
         leader = CcEffectService.StackLeader(leader);
         int count = 0;
-        foreach (var piece in owner.RuntimeData.Pieces)
-            if (piece.State == PieceState.InBoard &&
-                (piece == leader || (leader.IsStacked && piece.StackGroupId == leader.StackGroupId)))
+        foreach (var piece in CcEffectService.StackMembers(leader))
+            if (piece.State == PieceState.InBoard)
                 count++;
         return count + (leader.Cc.Get(CcDefine.Stack_fake)?.Value ?? 0);
     }
@@ -521,6 +491,7 @@ public static class CcBoardEffects
     internal static void EnforceCloneCapacity(PlayerController owner,
         PlayerRuntimeData.PieceRuntimeData moved)
     {
+        if (PieceMovementManager.UsesTeamStacking(PieceMovementManager.CurrentSettings)) return;
         moved = CcEffectService.StackLeader(moved);
         int excess = CountStackUnits(owner, moved) - 4;
         if (excess <= 0) return;
@@ -598,6 +569,8 @@ public sealed class CcCloneView : MonoBehaviour
     }
 
     private void OnDisable() { Clear(); }
+
+    internal void ClearVisuals() { Clear(); }
 
     private void Clear()
     {

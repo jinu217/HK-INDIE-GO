@@ -88,12 +88,8 @@ namespace YutArena.InGame
         {
             get
             {
-                if (owner != null && piece != null && piece.State == PieceState.InBoard &&
-                    piece.IsStacked && piece.StackLeaderPieceId != piece.PieceId &&
-                    owner.TryGetPiece(piece.StackLeaderPieceId, out var leader) &&
-                    leader.State == PieceState.InBoard && leader.StackGroupId == piece.StackGroupId &&
-                    leader.StackLeaderPieceId == leader.PieceId)
-                    return leader.Cc;
+                if (piece != null && piece.State == PieceState.InBoard && piece.Leader != piece)
+                    return piece.Leader.Cc;
                 return this;
             }
         }
@@ -185,19 +181,12 @@ namespace YutArena.InGame
         internal static List<PlayerRuntimeData.PieceRuntimeData> StackMembers(
             PlayerRuntimeData.PieceRuntimeData piece)
         {
-            var members = new List<PlayerRuntimeData.PieceRuntimeData>();
-            if (piece == null) return members;
-            var owner = FindOwner(piece);
-            foreach (var member in owner != null ? owner.RuntimeData.Pieces :
-                (IReadOnlyList<PlayerRuntimeData.PieceRuntimeData>)new[] { piece })
-                if (member == piece || (piece.IsStacked && member.State == PieceState.InBoard &&
-                    member.StackGroupId == piece.StackGroupId)) members.Add(member);
-            return members;
+            return piece != null ? piece.GetStackMembers() : new List<PlayerRuntimeData.PieceRuntimeData>();
         }
 
         public static bool CanMove(PlayerRuntimeData.PieceRuntimeData piece) =>
             piece != null && piece.State != PieceState.Goal &&
-            (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId) &&
+            piece.IsStackLeader &&
             !piece.Cc.Has(CcDefine.Sturn) && !piece.Cc.Has(CcDefine.Binding) &&
             !piece.Cc.Has(CcDefine.Robot_part);
 
@@ -205,20 +194,12 @@ namespace YutArena.InGame
             piece != null && piece.State != PieceState.Goal &&
             !piece.Cc.Has(CcDefine.Sturn) && !piece.Cc.Has(CcDefine.Silence) &&
             !piece.Cc.Has(CcDefine.Robot_part) &&
-            (!piece.IsStacked || piece.StackLeaderPieceId == piece.PieceId);
+            piece.IsStackLeader;
 
         internal static PlayerRuntimeData.PieceRuntimeData StackLeader(
             PlayerRuntimeData.PieceRuntimeData piece)
         {
-            if (piece != null && piece.IsStacked)
-            {
-                var owner = FindOwner(piece);
-                if (owner != null && owner.TryGetPieceData(piece.StackLeaderPieceId, out var leader) &&
-                    leader.State == PieceState.InBoard && leader.StackGroupId == piece.StackGroupId &&
-                    leader.StackLeaderPieceId == leader.PieceId)
-                    return leader;
-            }
-            return piece;
+            return piece?.Leader;
         }
 
         public static bool IsTargetable(PlayerRuntimeData.PieceRuntimeData piece)
@@ -263,7 +244,9 @@ namespace YutArena.InGame
                  type == CcDefine.Robot_part) && ConsumeGuard(piece, CcDefine.protect))
                 return false;
 
-            if (type == CcDefine.Retire && owner != null && CharacterSkillRegistry.AreSkillsEnabled &&
+            // Capture/Kill과 Retire는 보너스 던지기만 다릅니다. 로봇의 퇴장 대체는 둘 다 판정합니다.
+            if ((type == CcDefine.Retire || type == CcDefine.Capture) &&
+                owner != null && CharacterSkillRegistry.AreSkillsEnabled &&
                 CharacterSkillRegistry.TryGet(owner.PlayerId, piece.PieceId, out var targetStatus) &&
                 targetStatus.TryReplaceRetire(piece))
                 return true;
@@ -361,9 +344,10 @@ namespace YutArena.InGame
                     0, 1, sourcePlayerId, sourcePieceId, BoardTileId.None, null, -1);
                 member.Cc.Add(captured);
                 Changed?.Invoke(member, captured, true);
-                if (owner != null)
-                    CharacterSkillRegistry.NotifyPieceRetired(owner.PlayerId, member.PieceId);
-                CcBoardEffects.RefreshClones(owner, member);
+                var memberOwner = FindOwner(member);
+                if (memberOwner != null)
+                    CharacterSkillRegistry.NotifyPieceRetired(memberOwner.PlayerId, member.PieceId);
+                CcBoardEffects.RefreshClones(memberOwner, member);
             }
         }
 
@@ -559,14 +543,13 @@ namespace YutArena.InGame
                         record.PlayerId, piece.PieceId, $"부활 및 업기, 위치={parts.Tile}, 부활 말 수={rescued.Count}");
                     Remove(piece, parts);
                     int groupId = arrived.IsStacked
-                        ? arrived.StackGroupId : movedOwner.RuntimeData.CreateStackGroupId();
-                    int leaderId = arrived.PieceId;
-                    arrived.SetStackGroup(groupId, leaderId);
+                        ? arrived.StackGroupId : (FindOwner(arrived) ?? movedOwner).RuntimeData.CreateStackGroupId();
+                    arrived.SetStackGroup(groupId, arrived);
                     foreach (var member in rescued)
                     {
                         member.MoveTo(parts.Tile);
-                        member.SetStackGroup(groupId, leaderId);
-                        CharacterSkillRegistry.NotifyPieceEnteredBoard(record.PlayerId, member.PieceId);
+                        member.SetStackGroup(groupId, arrived);
+                        CharacterSkillRegistry.NotifyPieceEnteredBoard(member.OwnerPlayerId, member.PieceId);
                     }
                 }
             }
@@ -580,8 +563,7 @@ namespace YutArena.InGame
                 record.IsSimpleMove || IsResolvingWindMove || movedPiece == null ||
                 movedPiece.State != PieceState.InBoard || movedPiece.CurrentTileId != record.To ||
                 record.Path.Count == 0 || record.Path[record.Path.Count - 1] != record.To) return;
-            var movedLeader = movedPiece.IsStacked
-                ? GetPiece(record.PlayerId, movedPiece.StackLeaderPieceId) : movedPiece;
+            var movedLeader = StackLeader(movedPiece);
             if (!CanMove(movedLeader)) return;
             var players = UnityEngine.Object.FindFirstObjectByType<PlayerManager>();
             if (players == null) return;
