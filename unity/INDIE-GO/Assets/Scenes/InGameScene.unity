@@ -6932,6 +6932,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDataDebugTester
   playerManager: {fileID: 41707850}
   pieceMovementManager: {fileID: 41707852}
+  turnManager: {fileID: 0}
+  winManager: {fileID: 0}
   refreshInterval: 0.5
   logStateChanges: 0
   logGameplayEvents: 1
@@ -14900,7 +14902,7 @@ MonoBehaviour:
   finishMarkerAnchor: {fileID: 0}
   startStopMarkerAnchor: {fileID: 0}
   startStopArrowOffset: {x: -0.2, y: 0.1}
-  startTileEscapeOffset: {x: 0.38, y: -0.38}
+  startTileEscapeOffset: {x: 0.4, y: -0.44}
   pieceArrowColor: {r: 0.45, g: 0.85, b: 1, a: 1}
   skillArrowColor: {r: 0.55, g: 1, b: 0.65, a: 1}
   pieceArrowScale: 0.35
@@ -14909,6 +14911,7 @@ MonoBehaviour:
   destScale: 0.45
   destinationArrowTexture: {fileID: 2800000, guid: a44b780fb02977741bb5c8e7bcd9a869, type: 3}
   escapeFlagTexture: {fileID: 2800000, guid: 11de2eb9aed36884ba217344e7dd81e2, type: 3}
+  escapeIconScale: 1.2
   arrowHeightEmptyTile: 0.18
   arrowHeightAbovePiece: 0.12
   outlineTileSize: 1.25

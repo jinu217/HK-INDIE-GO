@@ -44,6 +44,8 @@ namespace YutArena.InGame
         private Sprite destinationArrowSprite;
         [Tooltip("탈출(참먹이 통과) 표시 이미지. 이미지를 Sprites/인게임창 에 넣고 여기에 끌어다 넣기. 비우면 코드로 그린 임시 깃발.")]
         [SerializeField] private Texture2D escapeFlagTexture;
+        [Tooltip("탈출 표시 크기 배율 (1 = 화살표와 같은 높이).")]
+        [SerializeField, Min(0.1f)] private float escapeIconScale = 1.2f;
         private Sprite escapeFlagSprite;
         [Tooltip("말 없는 칸: ▼ 를 칸에서 이만큼 위에 표시 (살짝 위).")]
         [SerializeField] private float arrowHeightEmptyTile = 0.18f;
@@ -204,7 +206,7 @@ namespace YutArena.InGame
             return destinationArrowSprite;
         }
 
-        // 탈출 깃발 이미지 전체를 한 장짜리 스프라이트로 (한 번만). 기준점 = 아래 가운데, 높이 1 (화살표와 같은 크기 기준).
+        // 탈출 깃발 이미지 전체를 한 장짜리 스프라이트로 (한 번만). 기준점 = 아래 가운데, 높이 = escapeIconScale (화살표 높이 1 기준).
         private Sprite GetEscapeFlagSprite()
         {
             if (escapeFlagSprite == null && escapeFlagTexture != null)
@@ -213,7 +215,7 @@ namespace YutArena.InGame
                     escapeFlagTexture,
                     new Rect(0f, 0f, escapeFlagTexture.width, escapeFlagTexture.height),
                     new Vector2(0.5f, 0f),
-                    escapeFlagTexture.height);
+                    escapeFlagTexture.height / escapeIconScale);
                 escapeFlagSprite.name = escapeFlagTexture.name + "_Full";
             }
             return escapeFlagSprite;
