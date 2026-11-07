@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YutArena.Managers;
+using YutArena.Managers.GameProgress;
+using YutArena.Common;
 
 // Cached status is drawn in separate panels; Console retains exceptional actions.
 public sealed class QaPlayingDebugWindow : EditorWindow
@@ -108,13 +111,20 @@ public sealed class QaPlayingDebugWindow : EditorWindow
                 EditorApplication.isPaused = !EditorApplication.isPaused;
             }
             if (GUILayout.Button("상태 + 행동 복사")) GUIUtility.systemCopyBuffer = monitor.CurrentSnapshot + "\n" + monitor.RecentEvents;
-            if (GUILayout.Button("현재 상태 Console 출력")) monitor.LogAllPieceData();
             if (GUILayout.Button("행동 기록 비우기")) monitor.ClearEventHistory();
+            var gameManager = FindFirstObjectByType<TestGameManager>();
+            using (new EditorGUI.DisabledScope(gameManager == null ||
+                       gameManager.Session == null || gameManager.Session.phase != GamePhase.InGame))
+            {
+                if (GUILayout.Button(new GUIContent("게임 종료 (테스트)", "턴 진행 종료 및 결과 화면 표시")))
+                    EndGameForTest(gameManager);
+            }
         }
         filter = EditorGUILayout.TextField("플레이어/상태 검색", filter);
         showOptions = EditorGUILayout.Foldout(showOptions, "수집 / Console 설정");
         if (showOptions)
         {
+            if (GUILayout.Button("현재 상태 Console 출력")) monitor.LogAllPieceData();
             monitor.enabled = EditorGUILayout.Toggle("QA 수집 활성화", monitor.enabled);
             monitor.LogGameplayEvents = EditorGUILayout.Toggle("Console 특별 행동", monitor.LogGameplayEvents);
             monitor.LogStateChanges = EditorGUILayout.Toggle("상태 변경도 Console에 누적", monitor.LogStateChanges);
@@ -144,6 +154,46 @@ public sealed class QaPlayingDebugWindow : EditorWindow
                 EditorGUILayout.SelectableLabel(block.Text, textStyle, GUILayout.Width(width), GUILayout.Height(block.Height));
         }
         EditorGUILayout.EndScrollView();
+    }
+
+    private static void EndGameForTest(TestGameManager gameManager)
+    {
+        if (!EditorApplication.isPlaying || gameManager == null ||
+            gameManager.Session == null || gameManager.Session.phase != GamePhase.InGame) return;
+        // TODO: 결과 화면 테스트 종료 후 삭제할 임시 랜덤 결과 생성
+        var settings = gameManager.Settings;
+        if (settings == null) return;
+        var ranking = new List<TeamSlot>();
+        for (int person = 1; person <= settings.playerCount; person++)
+        {
+            var team = MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)person);
+            if (team != TeamSlot.None && !ranking.Contains(team)) ranking.Add(team);
+        }
+        if (ranking.Count == 0) return;
+        for (int i = ranking.Count - 1; i > 0; i--)
+        {
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (ranking[i], ranking[j]) = (ranking[j], ranking[i]);
+        }
+        PlayerSlot winner = PlayerSlot.None;
+        if (!settings.isTeamMode)
+            for (int person = 1; person <= settings.playerCount; person++)
+                if (MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)person) == ranking[0])
+                {
+                    winner = (PlayerSlot)person;
+                    break;
+                }
+        var result = new GameResultData
+        {
+            resultType = GameResultType.TeamWin,
+            winningTeam = ranking[0],
+            winningPlayer = winner,
+            finalRanking = ranking
+        };
+        var turnManager = FindFirstObjectByType<TestTurnManager>();
+        if (turnManager != null && turnManager.CurrentTurn != null) turnManager.NotifyGameEnded();
+        gameManager.EndGame(result);
+        EditorApplication.isPaused = false;
     }
 }
 
@@ -184,3 +234,4 @@ internal sealed class PlayerDataDebugTesterEditor : Editor
     }
 }
 #endif
+

@@ -13,6 +13,28 @@ namespace YutArena.UI
     /// </summary>
     public sealed class InGamePlayerPanelView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
+        [Tooltip("플레이어 번호 이미지")]
+        [SerializeField] private Image playerNumberImage;
+        [SerializeField] private Sprite redTeamNumberSprite;
+        [SerializeField] private Sprite blueTeamNumberSprite;
+        private Sprite originalNumberSprite;
+        private bool capturedNumberSprite;
+
+        public void RefreshTeamNumberImage(GameStartSettings settings, int personNumber)
+        {
+            if (playerNumberImage == null) return;
+            if (!capturedNumberSprite)
+            {
+                originalNumberSprite = playerNumberImage.sprite;
+                capturedNumberSprite = true;
+            }
+            var team = settings != null && settings.isTeamMode
+                ? MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)personNumber) : TeamSlot.None;
+            var sprite = team == TeamSlot.TeamA ? redTeamNumberSprite
+                : team == TeamSlot.TeamB ? blueTeamNumberSprite : null;
+            playerNumberImage.sprite = sprite != null ? sprite : originalNumberSprite;
+        }
+
         [Tooltip("선택한 캐릭터 이미지")]
         [SerializeField] private Image characterImage;
         [Tooltip("선택한 캐릭터 이름")]

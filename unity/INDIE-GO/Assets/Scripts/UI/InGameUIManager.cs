@@ -269,6 +269,7 @@ namespace YutArena.UI
                 InGamePlayerPanelView panel = playerPanels[i];
                 if (panel == null) continue;
 
+                panel.RefreshTeamNumberImage(settings, i + 1);
                 bool isActive = i < activeCount;
                 if (!isActive)
                 {
