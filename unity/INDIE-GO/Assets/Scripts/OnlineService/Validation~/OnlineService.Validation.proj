@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ValidationTargetFramework Condition="'$(ValidationTargetFramework)' == ''">net10.0</ValidationTargetFramework>
+    <TargetFramework>$(ValidationTargetFramework)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>9.0</LangVersion>
+    <LanguageTargets>$(MSBuildToolsPath)/Microsoft.CSharp.targets</LanguageTargets>
+    <UnityEditorDirectory Condition="'$(UnityEditorDirectory)' == ''">C:/Program Files/Unity/Hub/Editor/6000.3.18f1/Editor</UnityEditorDirectory>
+    <FusionDirectory>../ThirdParty/Photon/Fusion/Assemblies</FusionDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Runtime/*.cs" />
+    <Compile Include="../../Common/GameStartSettings.cs;../../Common/GameRuleDefine.cs;../../Common/PlayerDefine.cs;../../Common/RoomSettingsData.cs" />
+    <Compile Include="Program.cs" />
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityEditorDirectory)/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(UnityEditorDirectory)/Data/Managed/UnityEngine/UnityEngine.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(UnityEditorDirectory)/Data/Managed/UnityEngine/UnityEngine.JSONSerializeModule.dll</HintPath></Reference>
+    <Reference Include="Fusion.Common"><HintPath>$(FusionDirectory)/Fusion.Common.dll</HintPath></Reference>
+    <Reference Include="Fusion.Sockets"><HintPath>$(FusionDirectory)/Fusion.Sockets.dll</HintPath></Reference>
+    <Reference Include="Fusion.Realtime"><HintPath>$(FusionDirectory)/Fusion.Realtime.dll</HintPath></Reference>
+    <Reference Include="Fusion.Runtime"><HintPath>$(FusionDirectory)/Fusion.Runtime.dll</HintPath></Reference>
+    <Reference Include="PhotonClient"><HintPath>../ThirdParty/Photon/PhotonLibs/netstandard2.0/release/PhotonClient.dll</HintPath></Reference>
+    <Reference Include="Photon.Realtime"><HintPath>../../../../Library/ScriptAssemblies/Photon.Realtime.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>
