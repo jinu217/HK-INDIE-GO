@@ -57,6 +57,7 @@ namespace YutArena.Managers
         public System.Action<PlayerSlot> OnTurnStarted;            // 새 턴이 시작될 때
         public System.Action<PlayerSlot> OnTurnEnded;              // 턴이 끝날 때
         public System.Action<List<YutThrowData>> OnPendingResultsChanged; // 결과 묶음이 바뀔 때 (UI가 화면에 표시하려고 구독)
+        public System.Action<TurnNotice> OnTurnNotice;             // 화면 가운데 안내용: 잡기, 추가 던지기, 시간 초과, 움직일 말 없음, 낙
                                                                           // GameManager.StartGame()에서 호출됨. 게임 시작 전 준비 작업
         public void Initialize(GameStartSettings gameSettings)
         {
@@ -292,6 +293,7 @@ namespace YutArena.Managers
             if (YutResultRule.IsTurnCancelResult(result))
             {
                 CurrentTurn.isTurnCanceledByNak = true;
+                SendNotice(new TurnNotice { type = TurnNoticeType.Nak, turnEnded = true });
                 EndTurn();
                 return;
             }
@@ -325,6 +327,7 @@ namespace YutArena.Managers
             {
                 CurrentTurn.extraThrowByYutMoCount++;
                 pendingRegularThrow = true;
+                SendNotice(new TurnNotice { type = TurnNoticeType.ExtraThrow, reason = ExtraThrowReason.YutMo, count = 1 });
                 SetPhase(TurnPhase.WaitThrow);
                 //  타이머를 재시작하지 않고, 남은 시간에 보너스만 더함(추가 던지기 보너스 시간)
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
@@ -390,6 +393,7 @@ namespace YutArena.Managers
             if (chosenResult == YutResult.BackDo && !HasAnyPieceInBoard(playerId))
             {
                 Debug.LogWarning("뒷도인데 보드 위에 말이 하나도 없음 -> 턴 종료");
+                SendNotice(new TurnNotice { type = TurnNoticeType.Nak, turnEnded = true, isBackDoNak = true });
                 EndTurn();
                 return;
             }
@@ -450,6 +454,7 @@ namespace YutArena.Managers
                 CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  잡기 보너스도 시간 더해줌
             }
+            SendCaptureNotices(captureBonusCount);
             // 윤누리 첫 이동 +1: 추가 1칸 이동이 대기 중이면 남은 결과/보너스 던지기보다 먼저 처리.
             // QA 수정(10/23): 예전엔 플레이어가 두 번째 화살표를 눌러야 움직였는데, 패시브라 자동으로 바로 1칸 이동함.
             // 업혀서(리더 아님) 못 움직이면 이동 실패로 그냥 넘어감 → 추가 이동 화살표도 안 뜸.
@@ -591,11 +596,13 @@ namespace YutArena.Managers
                 QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 버리고, 보너스 던지기로 넘어갑니다.");
                 pendingResults.Clear();
                 OnPendingResultsChanged?.Invoke(new List<YutThrowData>(pendingResults));
+                SendNotice(new TurnNotice { type = TurnNoticeType.NoMovablePiece, turnEnded = false });
                 SetPhase(TurnPhase.WaitThrow);
                 return;
             }
 
             QaDebugLog.Event("[턴] 남은 윷 결과로 움직일 수 있는 말이 없어 턴을 종료합니다.");
+            SendNotice(new TurnNotice { type = TurnNoticeType.NoMovablePiece, turnEnded = true });
             EndTurn();
         }
 
@@ -669,11 +676,15 @@ namespace YutArena.Managers
         // 기획: "업은 말은 1회 / 다른 팀의 말 - 2팀의 말을 동시에 잡으면 2회"
         // (업힌 말은 리더만 Kill이라 1회, 팀전에서 같은 팀 두 명의 말을 같이 잡아도 1팀이라 1회)
         // 자폭 같은 스킬은 현재 플레이어 말의 Kill/Retire도 정리할 수 있습니다.
+        // 마지막 ConsumeCaptureResults 에서 잡은 상대 팀 수 (윷·모로 잡아 보너스 없는 것도 포함, 화면 알림용)
+        private int lastCapturedTeamCount;
+
         private int ConsumeCaptureResults(
             int movingPlayerId,
             bool includeMovingPlayer = false)
         {
             var killedTeams = new HashSet<TeamSlot>();
+            var capturedTeams = new HashSet<TeamSlot>();
             // 팀전 기획 7-5번: "팀원 말로는 추가 던지기를 얻을 수 없다" → 우리 팀(나·팀원) 말은 세지 않음.
             // (팀원 말이 지금 업기 대신 잡히는 건 영서 쪽에서 고칠 예정. 그 전까지 보너스만 막아둠)
             TeamSlot movingTeam = MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)movingPlayerId);
@@ -688,11 +699,46 @@ namespace YutArena.Managers
                 {
                     //수정: 잡기 마커만 소비하여 함께 존재하는 다른 효과를 지우지 않습니다.
                     // 우리 팀 말도 마커는 지우지만(다음에 또 잡힌 걸로 착각 안 하게) 보너스 수에는 안 넣음
-                    if (CcEffectService.ConsumeCapture(piece) && otherTeam != movingTeam)
-                        killedTeams.Add(otherTeam);
+                    // Kill = 보너스 있는 잡기, Retire = 윷·모로 잡아 보너스 없는 잡기 (보너스 규칙은 그대로, 알림용으로만 셈)
+                    bool retired = piece.Cc.Has(CcDefine.Retire);
+                    bool killed = CcEffectService.ConsumeCapture(piece);
+                    if (otherTeam == movingTeam) continue;
+                    if (killed) killedTeams.Add(otherTeam);
+                    if (killed || retired) capturedTeams.Add(otherTeam);
                 }
             }
+            lastCapturedTeamCount = capturedTeams.Count;
             return killedTeams.Count;
+        }
+
+        // 화면 알림: 지금 턴인 사람/캐릭터를 채워서 방송
+        private void SendNotice(TurnNotice notice)
+        {
+            notice.person = CurrentPerson;
+            notice.character = CurrentTurn.currentPlayer;
+            QaDebugLog.Event("[알림] " + notice.type + " | 사람=" + notice.person + ", 캐릭터=" + notice.character +
+                ", count=" + notice.count + ", bonus=" + notice.bonusCount + ", 이유=" + notice.reason +
+                ", 턴종료=" + notice.turnEnded + (notice.isBackDoNak ? ", 뒷도 낙" : "")); // UI 연결 전 확인용
+            OnTurnNotice?.Invoke(notice);
+        }
+
+        // 잡기 알림 + 잡기로 생긴 추가 던지기 알림 (ConsumeCaptureResults 바로 뒤에 부름)
+        private void SendCaptureNotices(int grantedBonusCount)
+        {
+            if (lastCapturedTeamCount <= 0) return;
+            SendNotice(new TurnNotice
+            {
+                type = TurnNoticeType.Capture,
+                count = lastCapturedTeamCount,
+                bonusCount = grantedBonusCount
+            });
+            if (grantedBonusCount > 0)
+                SendNotice(new TurnNotice
+                {
+                    type = TurnNoticeType.ExtraThrow,
+                    reason = ExtraThrowReason.Capture,
+                    count = grantedBonusCount
+                });
         }
         private void EndTurn()
         {
@@ -821,6 +867,7 @@ namespace YutArena.Managers
         {
             pendingSkillThrows++;
             AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds);
+            SendNotice(new TurnNotice { type = TurnNoticeType.ExtraThrow, reason = ExtraThrowReason.Skill, count = 1 });
 
             // QA 수정: 유가람 [한 번 더]처럼 이동 단계에서 던지기를 주는 스킬은 쓰는 즉시 던지기 단계로 돌아감.
             // (가이드: "재던지기를 부여하는 스킬을 사용한 경우 → [윷 던지기] 단계로 복귀")
@@ -854,6 +901,7 @@ namespace YutArena.Managers
                 CurrentTurn.extraThrowByCaptureCount += captureBonusCount;
                 AddTurnTimerBonus(GameRuleDefine.ExtraThrowTimeBonusSeconds * captureBonusCount); //  스킬로 인한 잡기 보너스도 시간 더해줌
             }
+            SendCaptureNotices(suppressExtraThrow ? 0 : captureBonusCount);
 
             // 버그 수정: 스킬로 말이 움직이거나 잡혀도(예: 사무라이 일섬으로 개 → 모) 윷 결과/턴 단계가 안 바뀌어서
             // 네비게이팅이 스킬 전 위치 기준 화살표(개+개 = 윷 자리)를 그대로 보여줬음.
@@ -1007,6 +1055,7 @@ namespace YutArena.Managers
             }
             turnTimerCoroutine = null;
             QaDebugLog.Event("[타이머] 턴 제한시간 초과, 턴 강제 종료");
+            SendNotice(new TurnNotice { type = TurnNoticeType.TimeOver, turnEnded = true });
             EndTurn();
         }
     }

@@ -42,4 +42,39 @@ namespace YutArena.Managers.GameProgress
         // 1vs1이나 2vs2처럼 팀이 2개뿐인 경우엔 [승리팀, 패배팀] 딱 2개만 들어감
         public List<TeamSlot> finalRanking = new List<TeamSlot>();
     }
+
+    // ===================================================================
+    // 화면 가운데 안내 UI(기획 "인게임 상호작용 중앙 UI", "턴 종료&자동 처리 안내")에 보내는 알림 종류
+    // TurnManager.OnTurnNotice 로 방송함. UI는 type 보고 문구만 골라서 띄우면 됨
+    // ===================================================================
+    public enum TurnNoticeType
+    {
+        Capture,        // 상대 말을 잡음 (count = 잡은 팀 수, bonusCount = 그중 추가 던지기를 받은 팀 수. 윷·모로 잡으면 0)
+        ExtraThrow,     // 추가 던지기가 생김 (reason = 이유, count = 몇 번)
+        TimeOver,       // 턴 제한시간이 끝나서 턴 종료
+        NoMovablePiece, // 남은 윷 결과로 움직일 말이 없어서 결과를 버림 (turnEnded = true면 턴 종료, false면 남은 던지기로)
+        Nak             // 낙으로 턴 종료 (isBackDoNak = true면 판에 말이 없는데 뒷도가 나와서 낙 처리)
+    }
+
+    // 추가 던지기가 생긴 이유
+    public enum ExtraThrowReason
+    {
+        None,
+        YutMo,      // 윷·모
+        Capture,    // 잡기 보너스
+        Skill       // 스킬 (예: 유가람 [한 번 더])
+    }
+
+    // 알림 한 건. person = 지금 턴인 사람(1P~4P), character = 움직이는 캐릭터 (2인 1조에선 팀 캐릭터, 그 외엔 person과 같음)
+    public class TurnNotice
+    {
+        public TurnNoticeType type;
+        public PlayerSlot person;
+        public PlayerSlot character;
+        public int count;
+        public int bonusCount;
+        public ExtraThrowReason reason;
+        public bool turnEnded;
+        public bool isBackDoNak;
+    }
 }
