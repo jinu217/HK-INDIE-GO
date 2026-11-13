@@ -116,10 +116,9 @@ public sealed class CharacterPieceInteractionController : MonoBehaviour
         ResolveDependencies();
         RefreshNavigation();
         if (!CanAcceptInput || Mouse.current == null || Camera.main == null) return;
-        Vector2 pointer = Mouse.current.position.ReadValue();
+        Vector2 pointer = GameInput.PointerPosition;
         navigation.HoverAt(Camera.main, pointer);
-        if (Mouse.current.rightButton.wasPressedThisFrame ||
-            (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame))
+        if (GameInput.Pressed(GameAction.Cancel))
         {
             if (SkillSelectionActive) activeButton.CancelSkillSelection();
             ClearPieceSelection();
@@ -127,7 +126,9 @@ public sealed class CharacterPieceInteractionController : MonoBehaviour
             RefreshNavigation();
             return;
         }
-        if (!Mouse.current.leftButton.wasPressedThisFrame ||
+        GameAction inputAction = SkillSelectionActive ? GameAction.SelectSkillTarget :
+            selectedPieceId >= 0 ? GameAction.SelectDestination : GameAction.SelectPiece;
+        if (!GameInput.Pressed(inputAction) ||
             (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) ||
             (SkillSelectionActive && activeButton.SelectionStartedThisFrame)) return;
 

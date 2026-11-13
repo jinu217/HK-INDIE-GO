@@ -50,9 +50,9 @@ namespace YutArena.Common
             if (Gamepad.all.Count > 0) SelectSharedGamepad(Gamepad.all[0]);
         }
 
-        public static bool SharedInputAvailable => SharedGamepadSelected
-            ? sharedGamepad != null && sharedGamepad.added
-            : Keyboard.current != null;
+        public static bool SharedDeviceAvailable => SharedGamepadSelected
+            ? sharedGamepad != null && sharedGamepad.added : Keyboard.current != null;
+        public static bool SharedInputAvailable => !YutArena.UI.SettingsPanel.IsBlockingInput && SharedDeviceAvailable;
         public static bool IsSharedGamepad(Gamepad pad) => SharedGamepadSelected && sharedGamepad == pad;
 
         public static Gamepad GetInputGamepad(int playerIndex)
@@ -79,6 +79,7 @@ namespace YutArena.Common
 
         public static void Poll(int playerCount = 4)
         {
+            if (YutArena.UI.SettingsPanel.IsBlockingInput) return;
             if (SharedGamepadSelected && sharedGamepad == null)
             {
                 foreach (Gamepad pad in Gamepad.all)

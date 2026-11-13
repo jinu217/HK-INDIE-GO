@@ -20,6 +20,15 @@ namespace YutArena.Managers
         private Image brightnessOverlay;
 
         public static GraphicsSettingsManager Instance => instance;
+
+        private void OnEnable()
+        {
+            if (instance != null && instance != this) return;
+            instance = this;
+            if (brightnessOverlay == null) brightnessOverlay = GetComponentInChildren<Image>();
+            if (brightnessOverlay == null) CreateBrightnessOverlay();
+            ApplySavedSettings();
+        }
         public static bool VSyncEnabled => PlayerPrefs.GetInt(VSyncKey, 1) == 1;
         public static int FrameRateIndex => Mathf.Clamp(PlayerPrefs.GetInt(FrameRateKey, 1), 0, FrameRates.Length - 1);
         public static int QualityIndex => Mathf.Clamp(PlayerPrefs.GetInt(QualityKey, 2), 0, 2);
@@ -85,6 +94,22 @@ namespace YutArena.Managers
         public static Vector2Int SavedResolution => new Vector2Int(
             PlayerPrefs.GetInt(ResolutionWidthKey, Screen.currentResolution.width),
             PlayerPrefs.GetInt(ResolutionHeightKey, Screen.currentResolution.height));
+
+        public static void PreviewDisplay(FullScreenMode mode, Vector2Int size)
+        {
+#if !UNITY_EDITOR
+            Screen.SetResolution(size.x, size.y, mode);
+#endif
+        }
+
+        public void CommitDisplay(FullScreenMode mode, Vector2Int size)
+        {
+            PlayerPrefs.SetInt(ScreenModeKey, (int)mode);
+            PlayerPrefs.SetInt(ResolutionWidthKey, size.x);
+            PlayerPrefs.SetInt(ResolutionHeightKey, size.y);
+            PreviewDisplay(mode, size);
+            PlayerPrefs.Save();
+        }
 
         public void SetScreenMode(FullScreenMode mode)
         {

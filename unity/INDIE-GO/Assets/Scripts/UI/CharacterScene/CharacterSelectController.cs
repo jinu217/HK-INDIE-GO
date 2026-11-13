@@ -202,10 +202,10 @@ namespace YutArena.UI.CharacterScene
 
         public void ToggleSettingPanel()
         {
-            if (settingPanel == null) return;
-            bool shouldOpen = !settingPanel.activeSelf;
             SetActive(helpPanel, false);
-            SetActive(settingPanel, shouldOpen);
+            SetActive(settingPanel, false);
+            if (YutArena.UI.SettingsPanel.IsOpen) return;
+            YutArena.UI.SettingsPanel.Show(false);
         }
 
         public void ToggleHelpPanel()
@@ -228,6 +228,7 @@ namespace YutArena.UI.CharacterScene
 
         private void Update()
         {
+            if (YutArena.UI.SettingsPanel.IsBlockingInput) return;
             if (isFinalized || runtimeCharacters.Count == 0)
             {
                 return;
@@ -381,8 +382,8 @@ namespace YutArena.UI.CharacterScene
                 return;
             }
             Keyboard keyboard = Keyboard.current;
-            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) ||
-                (Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame))
+            if ((keyboard != null && GameInput.UiPressed(UiAction.Cancel, keyboard)) ||
+                (Mouse.current != null && GameInput.UiPressed(UiAction.SecondaryClick, Mouse.current)))
             {
                 if (!selectedPlayers[keyboardPlayerIndex])
                 {
@@ -401,10 +402,10 @@ namespace YutArena.UI.CharacterScene
 
         private void ProcessKeyboardInput(int playerIndex)
         {
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+            if (Mouse.current != null && GameInput.UiPressed(UiAction.Click, Mouse.current) &&
                 !selectedPlayers[playerIndex])
             {
-                Vector2 pointer = Mouse.current.position.ReadValue();
+                Vector2 pointer = GameInput.PointerPosition;
                 for (int i = 0; i < OptionCount; i++)
                 {
                     CharacterCardView card = GetCard(i);
@@ -425,17 +426,17 @@ namespace YutArena.UI.CharacterScene
 
             if (!selectedPlayers[playerIndex])
             {
-                if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame) MoveCursor(playerIndex, -1, 0);
-                if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame) MoveCursor(playerIndex, 1, 0);
-                if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, -1);
-                if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame) MoveCursor(playerIndex, 0, 1);
+                if (GameInput.UiPressed(UiAction.Left, keyboard)) MoveCursor(playerIndex, -1, 0);
+                if (GameInput.UiPressed(UiAction.Right, keyboard)) MoveCursor(playerIndex, 1, 0);
+                if (GameInput.UiPressed(UiAction.Up, keyboard)) MoveCursor(playerIndex, 0, -1);
+                if (GameInput.UiPressed(UiAction.Down, keyboard)) MoveCursor(playerIndex, 0, 1);
 
-                if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
+                if (GameInput.UiPressed(UiAction.Submit, keyboard))
                 {
                     ConfirmSelection(playerIndex);
                 }
             }
-            else if (keyboard.escapeKey.wasPressedThisFrame)
+            else if (GameInput.UiPressed(UiAction.Cancel, keyboard))
             {
                 CancelSelection(playerIndex);
             }
@@ -471,17 +472,17 @@ namespace YutArena.UI.CharacterScene
 
             if (!selectedPlayers[playerIndex])
             {
-                if (gamepad.dpad.left.wasPressedThisFrame || gamepad.leftStick.left.wasPressedThisFrame) MoveCursor(playerIndex, -1, 0);
-                if (gamepad.dpad.right.wasPressedThisFrame || gamepad.leftStick.right.wasPressedThisFrame) MoveCursor(playerIndex, 1, 0);
-                if (gamepad.dpad.up.wasPressedThisFrame || gamepad.leftStick.up.wasPressedThisFrame) MoveCursor(playerIndex, 0, -1);
-                if (gamepad.dpad.down.wasPressedThisFrame || gamepad.leftStick.down.wasPressedThisFrame) MoveCursor(playerIndex, 0, 1);
+                if (GameInput.UiPressed(UiAction.Left, gamepad)) MoveCursor(playerIndex, -1, 0);
+                if (GameInput.UiPressed(UiAction.Right, gamepad)) MoveCursor(playerIndex, 1, 0);
+                if (GameInput.UiPressed(UiAction.Up, gamepad)) MoveCursor(playerIndex, 0, -1);
+                if (GameInput.UiPressed(UiAction.Down, gamepad)) MoveCursor(playerIndex, 0, 1);
 
-                if (gamepad.buttonSouth.wasPressedThisFrame)
+                if (GameInput.UiPressed(UiAction.Submit, gamepad))
                 {
                     ConfirmSelection(playerIndex);
                 }
             }
-            else if (gamepad.buttonEast.wasPressedThisFrame)
+            else if (GameInput.UiPressed(UiAction.Cancel, gamepad))
             {
                 CancelSelection(playerIndex);
             }
