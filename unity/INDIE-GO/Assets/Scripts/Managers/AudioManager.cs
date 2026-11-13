@@ -42,6 +42,16 @@ namespace YutArena.Managers
         public bool IsClickMuted { get; private set; }
         public bool BackgroundSoundEnabled { get; private set; }
 
+        private void OnEnable()
+        {
+            // Restore the singleton after a script/domain reload during Play mode.
+            if (instance != null && instance != this) return;
+            instance = this;
+            EnsureAudioSources();
+            ApplySavedVolumes();
+            SetBackgroundSoundRuntimeState();
+        }
+
         private void Awake()
         {
             if (instance != null && instance != this)

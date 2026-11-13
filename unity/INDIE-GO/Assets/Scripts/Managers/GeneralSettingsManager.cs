@@ -33,6 +33,14 @@ namespace YutArena.Managers
         }
 
         public static GeneralSettingsManager Instance => instance;
+
+        private void OnEnable()
+        {
+            if (instance != null && instance != this) return;
+            instance = this;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
         public static int PresentationSpeedIndex => Mathf.Clamp(PlayerPrefs.GetInt(PresentationSpeedKey, 0), 0, 1);
         public static int TextSizeIndex => Mathf.Clamp(PlayerPrefs.GetInt(TextSizeKey, 0), 0, 2);
         public static float PresentationSpeedMultiplier => PresentationSpeedIndex == 0 ? 1f : 1.5f;
@@ -91,6 +99,8 @@ namespace YutArena.Managers
             foreach (TMP_Text label in Resources.FindObjectsOfTypeAll<TMP_Text>())
             {
                 if (label == null || !label.gameObject.scene.IsValid() || !label.gameObject.scene.isLoaded) continue;
+                // Settings has a separate live text-size preview and a fixed reference layout.
+                if (label.GetComponentInParent<YutArena.UI.SettingsPanel>() != null) continue;
                 if (!tmpTexts.TryGetValue(label, out TextSizeState state))
                 {
                     state = new TextSizeState

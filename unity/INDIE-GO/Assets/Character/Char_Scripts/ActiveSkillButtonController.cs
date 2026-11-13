@@ -99,8 +99,8 @@ public sealed class ActiveSkillButtonController : MonoBehaviour
         }
         UpdateButtonCooldownState();
 
-        // The guide uses F for the same select / confirm flow as the button.
-        if (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame &&
+        // The UseSkill action follows the same select / confirm flow as the button.
+        if (YutArena.Common.GameInput.Pressed(YutArena.Common.GameAction.UseSkill) &&
             skillButton != null && skillButton.IsInteractable())
         {
             HandleActiveSkillButtonClicked();

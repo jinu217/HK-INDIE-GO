@@ -43,13 +43,13 @@ namespace YutArena.Managers
                 return;
             }
             LocalSelectionInput.Poll(Settings != null ? Settings.playerCount : 4);
-            if (!LocalSelectionInput.SharedInputAvailable && !pausedForSharedDevice)
+            if (!LocalSelectionInput.SharedDeviceAvailable && !pausedForSharedDevice)
             {
                 previousTimeScale = Time.timeScale;
                 Time.timeScale = 0f;
                 pausedForSharedDevice = true;
             }
-            else if (LocalSelectionInput.SharedInputAvailable && pausedForSharedDevice)
+            else if (LocalSelectionInput.SharedDeviceAvailable && pausedForSharedDevice)
             {
                 Time.timeScale = previousTimeScale;
                 pausedForSharedDevice = false;

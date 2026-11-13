@@ -277,6 +277,7 @@ namespace YutArena.InGame
 
         private void Update()
         {
+            if (YutArena.UI.SettingsPanel.IsBlockingInput) { RefreshPiecePositions(); return; }
             if (playerManager == null || turnManager == null) return;
             LocalSelectionInput.Poll(playerManager.ActivePlayers.Count);
             if (!LocalSelectionInput.SharedInputAvailable)
@@ -287,15 +288,15 @@ namespace YutArena.InGame
             int playerIndex = (int)turnManager.CurrentTurn.currentPlayer - 1;
             bool keyboardTurn = LocalSelectionInput.UsesKeyboard(playerIndex);
             Gamepad turnPad = LocalSelectionInput.GetInputGamepad(playerIndex);
-            if (((keyboardTurn && Keyboard.current.spaceKey.wasPressedThisFrame) ||
+            if (((keyboardTurn && GameInput.Pressed(GameAction.Throw)) ||
                  (turnPad != null && !LocalSelectionInput.JoinedThisFrame(playerIndex) &&
-                  turnPad.buttonSouth.wasPressedThisFrame)) &&
+                  GameInput.Pressed(GameAction.Throw, turnPad))) &&
                 turnManager.CurrentTurn.currentPhase == TurnPhase.WaitThrow)
                 turnManager.RequestThrow();
 
             // 이동 선택(WaitAction) 중에는 MoveDestinationSelector 가 클릭을 소유한다.
             // 그 외 단계에서는 종전과 동일하게 이 컨트롤러가 말 클릭을 처리한다.
-            if (keyboardTurn && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+            if (keyboardTurn && Mouse.current != null && GameInput.Pressed(GameAction.SelectPiece) &&
                 turnManager.CurrentTurn.currentPhase != TurnPhase.WaitAction)
                 TrySelectPieceAtPointer();
             RefreshPiecePositions();
@@ -323,7 +324,7 @@ namespace YutArena.InGame
             Camera mainCamera = Camera.main;
             if (mainCamera == null) return;
 
-            Vector2 screenPosition = Mouse.current.position.ReadValue();
+            Vector2 screenPosition = GameInput.PointerPosition;
             if (DebugPieceView.TryFindAtScreenPosition(mainCamera, screenPosition, out DebugPieceView view))
                 HandlePieceClicked(view);
         }
