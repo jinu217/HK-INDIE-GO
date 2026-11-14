@@ -18914,8 +18914,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 5, y: -177}
-  m_SizeDelta: {x: 460, y: 1000}
+  m_AnchoredPosition: {x: 0, y: -90}
+  m_SizeDelta: {x: 400, y: 500}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1431883495
 CanvasRenderer:
@@ -28299,22 +28299,6 @@ MonoBehaviour:
   characterHelpSprite: {fileID: 0}
   mapHelpSprite: {fileID: 0}
   modeHelpSprite: {fileID: 0}
-  masterVolumeSlider: {fileID: 1638906325}
-  bgmVolumeSlider: {fileID: 1361305607}
-  clickVolumeSlider: {fileID: 504138476}
-  masterMuteToggle: {fileID: 453728962}
-  bgmMuteToggle: {fileID: 1902015788}
-  clickMuteToggle: {fileID: 2030133582}
-  backgroundSoundToggle: {fileID: 459794677}
-  resolutionDropdown: {fileID: 1389060122}
-  screenModeDropdown: {fileID: 1351070182}
-  fullScreenToggle: {fileID: 0}
-  vSyncToggle: {fileID: 1226636734}
-  frameRateDropdown: {fileID: 1941667397}
-  qualityDropdown: {fileID: 1257369248}
-  brightnessSlider: {fileID: 195361703}
-  presentationSpeedDropdown: {fileID: 2132866598}
-  textSizeDropdown: {fileID: 1933152780}
   localLobbySceneName: LocalLobbyScene
   showMissingReferenceWarnings: 0
 --- !u!1 &2112612576
