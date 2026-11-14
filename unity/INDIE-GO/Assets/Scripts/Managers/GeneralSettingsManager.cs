@@ -101,6 +101,7 @@ namespace YutArena.Managers
                 if (label == null || !label.gameObject.scene.IsValid() || !label.gameObject.scene.isLoaded) continue;
                 // Settings has a separate live text-size preview and a fixed reference layout.
                 if (label.GetComponentInParent<YutArena.UI.SettingsPanel>() != null) continue;
+                if (label.GetComponentInParent<YutArena.UI.InGameSettingsPanel>() != null) continue;
                 if (!tmpTexts.TryGetValue(label, out TextSizeState state))
                 {
                     state = new TextSizeState

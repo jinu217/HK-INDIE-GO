@@ -20,7 +20,7 @@ namespace YutArena.UI
         public static event Action<GameObject> GeneratedObjectWillBeRemoved;
 #endif
         private static int blockedThroughFrame = -1;
-        public static bool IsBlockingInput => (instance != null && instance.overlay != null && instance.overlay.activeSelf) || Time.frameCount <= blockedThroughFrame;
+        public static bool IsBlockingInput => InGameSettingsPanel.IsBlockingInput || (instance != null && instance.overlay != null && instance.overlay.activeSelf) || Time.frameCount <= blockedThroughFrame;
         public static bool IsOpen => instance != null && instance.overlay != null && instance.overlay.activeSelf;
         private static readonly Color Ink = new Color32(31, 50, 79, 255);
         private static readonly Color Blue = new Color32(35, 78, 137, 255);
@@ -110,6 +110,7 @@ namespace YutArena.UI
         private void ConfigureLauncher()
         {
             if (launcher != null) DisposeGenerated(launcher);
+            if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "InGameScene") return;
             if (FindFirstObjectByType<InGameUIManager>() == null) return;
             launcher = Button(transform, "OpenSettings", "설정", 1770, 20, 125, 48, () => Show(false)).gameObject;
             var rect = launcher.GetComponent<RectTransform>();
@@ -715,7 +716,7 @@ namespace YutArena.UI
                 DisposeGenerated(child);
             }
         }
-        private static void DisposeGenerated(GameObject generated)
+        internal static void DisposeGenerated(GameObject generated)
         {
 #if UNITY_EDITOR
             GeneratedObjectWillBeRemoved?.Invoke(generated);

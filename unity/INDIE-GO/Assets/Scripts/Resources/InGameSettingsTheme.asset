@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65e8192caf2d231489e2e39d9a34f893, type: 3}
+  m_Name: InGameSettingsTheme
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGameSettingsTheme
+  font: {fileID: 11400000, guid: 20f3c23145a75e54e93ad0a2ca6cddbc, type: 2}
+  layers:
+  - {fileID: 2800000, guid: a0834862d3ed6f743b26ab56ce5ca5b8, type: 3}
+  - {fileID: 2800000, guid: 172fead77d5aacd4a9b761d28ef43d5f, type: 3}
+  - {fileID: 2800000, guid: 278eb10e20e30df44b5de2a29136770f, type: 3}
+  - {fileID: 2800000, guid: eb1d7b2ac124e9140ae24ccd24eaa4ef, type: 3}
+  - {fileID: 2800000, guid: 532522f444921b2408eb18b334d32acb, type: 3}
+  - {fileID: 2800000, guid: 44d97cd36a10bdc40b49c5c6c88f6d69, type: 3}
+  - {fileID: 2800000, guid: 6ac138861e4c20245a2a6c6129e662bc, type: 3}
+  - {fileID: 2800000, guid: db5e5a1fc34ff18479584179c206e32a, type: 3}
+  - {fileID: 2800000, guid: e2f4752ec9dba6940b681c1b4745997e, type: 3}
+  - {fileID: 2800000, guid: d1042bb2edb5149488a0c0822c721faa, type: 3}
+  - {fileID: 2800000, guid: ac31c510735bc814bb528e96d4f34797, type: 3}
+  - {fileID: 2800000, guid: 120992a83972ab94e8da4a38251d9b37, type: 3}
+  - {fileID: 2800000, guid: d6bb6067b9e8c7b48b04ccde0c1cd4bd, type: 3}
+  - {fileID: 2800000, guid: 369dd574ad4cbf247af505924e790173, type: 3}
+  - {fileID: 2800000, guid: 334372ccfe75fde41a21b3180efe2774, type: 3}
+  - {fileID: 2800000, guid: ecff335e0d66af2429590fc9723a5d24, type: 3}
+  - {fileID: 2800000, guid: 57343ddecf95d5040ae2433260be0636, type: 3}
+  - {fileID: 2800000, guid: 19c51c6dfe55a5e41a93cf6025c6928e, type: 3}

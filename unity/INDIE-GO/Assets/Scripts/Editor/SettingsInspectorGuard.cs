@@ -59,7 +59,9 @@ namespace YutArena.EditorTools
                 if (remaining.Length == 0)
                 {
                     var owner = root.GetComponentInParent<SettingsPanel>();
+                    var matchOwner = root.GetComponentInParent<InGameSettingsPanel>();
                     UnityEngine.Object fallback = owner != null && owner.gameObject != root ? owner.gameObject : Resources.Load<SettingsTheme>("SettingsTheme");
+                    if (matchOwner != null && matchOwner.gameObject != root) fallback = matchOwner.gameObject;
                     remaining = fallback != null ? new[] { fallback } : Array.Empty<UnityEngine.Object>();
                 }
                 Selection.objects = remaining;
@@ -81,6 +83,7 @@ namespace YutArena.EditorTools
             if (state != PlayModeStateChange.ExitingPlayMode && state != PlayModeStateChange.ExitingEditMode) return;
             var panels = UnityEngine.Object.FindObjectsByType<SettingsPanel>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (var panel in panels) BeforeRemove(panel.gameObject);
+            foreach (var panel in UnityEngine.Object.FindObjectsByType<InGameSettingsPanel>(FindObjectsInactive.Include, FindObjectsSortMode.None)) BeforeRemove(panel.gameObject);
             // Scene UI (including a locked dropdown Inspector) is replaced when Play changes mode.
             var inspected = Selection.objects.Concat(Trackers().SelectMany(tracker => tracker.activeEditors)
                 .Where(editor => editor != null).SelectMany(editor => editor.targets));
