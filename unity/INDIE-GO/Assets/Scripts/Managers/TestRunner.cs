@@ -10,6 +10,8 @@ public class TestRunner : MonoBehaviour
 
     [Tooltip("Only creates hard-coded settings when the scene is opened directly without a lobby.")]
     [SerializeField] private bool createFallbackSettingsWhenMissing = true;
+    [Tooltip("로비 없이 InGameScene을 바로 열 때 쓸 모드. 로비에서 킬 더 킹 시작이 막혀 있어서 테스트용으로 여기서 고름.")]
+    [SerializeField] private GameMode fallbackGameMode = GameMode.Escape;
 
     void Start()
     {
@@ -18,7 +20,7 @@ public class TestRunner : MonoBehaviour
         {
             GameStartSettingsHolder.Current = new GameStartSettings
             {
-                gameMode = GameMode.Escape,
+                gameMode = fallbackGameMode,
                 mapType = MapType.Basic,
                 matchComposition = MatchComposition.OneVsOneVsOneVsOne,
                 isTeamMode = false,
@@ -26,7 +28,9 @@ public class TestRunner : MonoBehaviour
                 pieceCountPerPlayer = GameRuleDefine.DefaultPieceCountPerPlayer,
                 targetEscapeCount = GameRuleDefine.DefaultTargetEscapeCount, // 필요 점수 (기본 5점)
                 timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
-                maxTurnCount = GameRuleDefine.DefaultMaxTurnCount,
+                maxTurnCount = fallbackGameMode == GameMode.KillTheKing
+                    ? KillTheKingManager.TempMaxRound      // 킬 더 킹 제한 턴은 밸런스 전 임시값
+                    : GameRuleDefine.DefaultMaxTurnCount,
                 turnTimeMode = TurnTimeMode.Limited,
                 throwTimeSeconds = GameRuleDefine.DefaultThrowTimeSeconds,
                 actionTimeSeconds = GameRuleDefine.DefaultActionTimeSeconds,

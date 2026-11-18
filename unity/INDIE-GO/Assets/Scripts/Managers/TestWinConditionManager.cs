@@ -41,6 +41,9 @@ namespace YutArena.Managers
         private List<TeamSlot> finishedRanking = new List<TeamSlot>();
         // 팀별 완주 수가 바뀔 때마다 UI(점수판 등)에 알려주기 위한 이벤트
         public System.Action<TeamSlot, int> OnEscapeCountChanged;
+        // 킬 더 킹 모드 전용 규칙 (HP, 공격 대상 등). UI는 KillTheKing.GetHp / GetAttackTarget / 이벤트를 쓰면 됨
+        private KillTheKingManager killTheKing;
+        public KillTheKingManager KillTheKing => killTheKing;
 
         // UI(점수판)가 "지금 이 팀 몇 개 탈출시켰는지" 직접 물어볼 때 씀.
         // Escape 모드는 완주한 말을 바로 대기 상태로 되돌리기 때문에, 말 상태를 다시 세는 방식으로는
@@ -82,6 +85,8 @@ namespace YutArena.Managers
                 if (team != TeamSlot.None)
                     activeTeams.Add(team);
             }
+            if (killTheKing == null) killTheKing = new KillTheKingManager(this, turnManager);
+            killTheKing.Initialize(settings, activeTeams);
         }
         // TurnManager가 말 이동을 처리한 직후마다 호출해주는 함수.
         // "매 득점 시 반드시 실행", 이동이 일어날 때마다 무조건 호출됨
@@ -89,6 +94,12 @@ namespace YutArena.Managers
         public void OnPieceMoveResolved(PlayerSlot player, TeamSlot team, bool isFinished, int finishedCount)
         {
             if (!isFinished) return; // 완주가 아니면 여기서 할 일 없음
+            // 킬 더 킹: 점수 대신 공격 대상 HP를 깎음
+            if (settings.gameMode == GameMode.KillTheKing)
+            {
+                killTheKing.OnEscape(team, finishedCount);
+                return;
+            }
             int bonus = GetEscapeBonus(team);
             AddEscapeCount(team, finishedCount + bonus); // 탈출한 말 개수 + 보너스 = 이번에 얻은 점수
             if (settings.gameMode == GameMode.Escape)
@@ -312,6 +323,74 @@ namespace YutArena.Managers
                 QaDebugLog.Event(team + " 탈주로 탈락. 남은 " + activeTeams.Count + "팀으로 게임 계속");
             }
         }
+
+        // ---- 킬 더 킹(KillTheKingManager)이 기존 흐름을 다시 부를 때 쓰는 입구 ----
+        internal bool IsTeamActive(TeamSlot team) => activeTeams.Contains(team);
+        internal int ActiveTeamCount => activeTeams.Count;
+        internal TeamSlot FirstActiveTeam => activeTeams.Count > 0 ? activeTeams.First() : TeamSlot.None;
+
+        // HP 0 탈락: 게임에서 빼고(턴 순서에서 제거) 판 위 말을 내림. 승리 여부는 KillTheKingManager가 판단
+        // (기획: 순위 없이 1등과 나머지 -> eliminatedTeams에 쌓아 결과창 "나머지"로 넘김)
+        internal void EliminateTeamForKillTheKing(TeamSlot team)
+        {
+            if (!activeTeams.Remove(team)) return;
+            eliminatedTeams.Add(team);
+            turnManager.RemovePlayersOfTeam(team, settings);
+            ClearBoardPiecesOfTeam(team);
+        }
+
+        internal void DeclareKillTheKingWinner(TeamSlot winner, GameResultType resultType)
+        {
+            Declare(winner, resultType, new List<TeamSlot> { winner });
+        }
+
+        // 테스트용: 판을 한 바퀴 안 돌아도 지금 턴인 팀이 말 1개를 탈출시킨 것처럼 데미지를 줌
+        [ContextMenu("테스트: 킬 더 킹 지금 팀 탈출 데미지 1")]
+        public void TestKillTheKingEscapeDamage()
+        {
+            if (settings == null || settings.gameMode != GameMode.KillTheKing || turnManager.CurrentTurn == null) return;
+            OnPieceMoveResolved(turnManager.CurrentTurn.currentPlayer, turnManager.CurrentTurn.currentTeam, true, 1);
+        }
+
+        // 테스트용: 20라운드를 안 기다리고 바로 제한 턴 종료 처리 (HP 동시 감소 -> 1등 or 서든데스)
+        [ContextMenu("테스트: 킬 더 킹 제한 턴 종료")]
+        public void TestKillTheKingTurnLimit()
+        {
+            if (settings == null || settings.gameMode != GameMode.KillTheKing) return;
+            HandleTimeLimitReached();
+        }
+
+        [ContextMenu("테스트: 킬 더 킹 상태 출력 (HP, 대상, 방패 효과)")]
+        public void TestKillTheKingLogState() { if (IsKillTheKingTest()) killTheKing.LogState(); }
+
+        // 테스트용 방패 효과 넣기 (아이템 획득이 생기기 전까지). "지금 팀" = 지금 턴인 팀, "대상 팀" = 지금 팀의 공격 대상
+        [ContextMenu("테스트: 킬 더 킹 지금 팀에 일반 방패")] public void TestKtkMyNormalShield() => AddTestShield(false, KtkShield.Normal);
+        [ContextMenu("테스트: 킬 더 킹 지금 팀에 가시 방패")] public void TestKtkMyThornShield() => AddTestShield(false, KtkShield.Thorn);
+        [ContextMenu("테스트: 킬 더 킹 지금 팀에 반사의 거울")] public void TestKtkMyMirrorShield() => AddTestShield(false, KtkShield.Mirror);
+        [ContextMenu("테스트: 킬 더 킹 대상 팀에 일반 방패")] public void TestKtkTargetNormalShield() => AddTestShield(true, KtkShield.Normal);
+        [ContextMenu("테스트: 킬 더 킹 대상 팀에 가시 방패")] public void TestKtkTargetThornShield() => AddTestShield(true, KtkShield.Thorn);
+        [ContextMenu("테스트: 킬 더 킹 대상 팀에 반사의 거울")] public void TestKtkTargetMirrorShield() => AddTestShield(true, KtkShield.Mirror);
+
+        // 테스트용 칼: 다음 탈출 한 번에만 붙음
+        [ContextMenu("테스트: 킬 더 킹 다음 탈출에 일반 검")] public void TestKtkNormalSword() => AddTestSword(KtkSword.Normal);
+        [ContextMenu("테스트: 킬 더 킹 다음 탈출에 쌍검")] public void TestKtkTwinSword() => AddTestSword(KtkSword.Twin);
+        [ContextMenu("테스트: 킬 더 킹 다음 탈출에 흡혈 검")] public void TestKtkVampireSword() => AddTestSword(KtkSword.Vampire);
+        [ContextMenu("테스트: 킬 더 킹 다음 탈출에 마검")] public void TestKtkDemonSword() => AddTestSword(KtkSword.Demon);
+
+        private bool IsKillTheKingTest() => settings != null && settings.gameMode == GameMode.KillTheKing && turnManager.CurrentTurn != null;
+
+        private void AddTestShield(bool toTarget, KtkShield shield)
+        {
+            if (!IsKillTheKingTest()) return;
+            TeamSlot team = turnManager.CurrentTurn.currentTeam;
+            if (toTarget) team = killTheKing.GetAttackTarget(team);
+            killTheKing.AddShieldEffect(team, shield);
+        }
+
+        private void AddTestSword(KtkSword sword)
+        {
+            if (IsKillTheKingTest()) killTheKing.AddTestSwordForNextEscape(sword);
+        }
         // ===================================================================
         //  Escape 승리조건 2번 (기획 10/17): 지정 턴 수의 마지막 플레이어 턴이 끝났을 때 순위 결정
         //  (TurnManager가 라운드가 maxTurnCount를 넘는 순간 호출. 함수 이름은 예전 "제한시간" 그대로 둠)
@@ -337,9 +416,14 @@ namespace YutArena.Managers
             if (settings == null) return;
             // 클래식은 최대 턴 없음
             if (settings.gameMode == GameMode.Classic) return;
+            // 킬 더 킹: HP 동시 감소 -> 1등 or 서든데스
+            if (settings.gameMode == GameMode.KillTheKing)
+            {
+                killTheKing.OnTurnLimitReached();
+                return;
+            }
             if (settings.gameMode != GameMode.Escape)
             {
-                // KillTheKing은 아직 턴 제한 승부 없음
                 Debug.LogWarning("TestWinConditionManager: " + settings.gameMode + " 턴 제한 승부 미구현");
                 return;
             }

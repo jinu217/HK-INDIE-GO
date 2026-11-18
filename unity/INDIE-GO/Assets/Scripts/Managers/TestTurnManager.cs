@@ -555,13 +555,16 @@ namespace YutArena.Managers
         //  추가되지 않으며, 해당 턴이 끝난 후 탈출한 말을 추가")
         // 예: P1 3턴에 탈출 → P1 4턴에도 못 씀 → P1 4턴이 끝날 때 남은 말 칸으로 → P1 5턴부터 사용
         // 방법: 내 턴이 시작될 때 이미 탈출 상태인 말을 기억해뒀다가, 그 턴이 끝날 때 그 말만 돌려보냄
+        // 킬 더 킹도 같음 (기획 "탈출한 말은 1턴 뒤 남은 말 칸으로 복귀 (이스케이프와 동일)")
         // ===================================================================
         private readonly HashSet<int> restingEscapedPieceIds = new HashSet<int>();
+        private bool UsesEscapedPieceRest => settings != null &&
+            (settings.gameMode == GameMode.Escape || settings.gameMode == GameMode.KillTheKing);
 
         private void RememberEscapedPiecesAtTurnStart(PlayerSlot player)
         {
             restingEscapedPieceIds.Clear();
-            if (settings == null || settings.gameMode != GameMode.Escape) return;
+            if (!UsesEscapedPieceRest) return;
             if (!playerManager.TryGetPlayer((int)player, out var playerController)) return;
             foreach (var piece in playerController.RuntimeData.Pieces)
                 if (piece.State == PieceState.Goal)
@@ -754,7 +757,7 @@ namespace YutArena.Managers
             }
             // 이스케이프: 지난 내 턴 이전에 탈출해서 이번 턴을 쉰 말을 지금 남은 말 칸으로 돌려보냄
             // (시간 초과·낙·스킬 턴 종료 포함, 이번 턴에 새로 탈출한 말은 다음 내 턴 끝까지 쉼)
-            if (settings != null && settings.gameMode == GameMode.Escape)
+            if (UsesEscapedPieceRest)
                 ReturnRestedEscapedPieces((int)CurrentTurn.currentPlayer);
             SetPhase(TurnPhase.TurnEnd);
             OnTurnEnded?.Invoke(CurrentTurn.currentPlayer);
@@ -789,8 +792,13 @@ namespace YutArena.Managers
             {
                 maxTurnLimitHandled = true;   // 이 게임에서 다시는 안 찍음 (Classic 등 게임이 안 끝나는 모드 대비)
                 QaDebugLog.Event("[턴제한] 최대 턴수(" + settings.maxTurnCount + ") 도달, 지금까지 점수로 승부 판정");
+                PlayerSlot nextBeforeLimit = TurnOrder.Current;
                 winConditionManager.HandleTimeLimitReached();
                 if (CurrentTurn.isGameEnded) return; // 턴제한 함수
+                // 킬 더 킹: 제한 턴 HP 감소로 다음 차례였던 사람이 탈락하면, 순서 제거가 "곧 +1 될 것"을 가정해
+                // 한 칸 앞을 가리킴. 여기서는 +1 없이 바로 턴을 시작하므로 직접 한 칸 넘겨서 다음 생존자로 맞춤
+                if (!TurnOrder.order.Contains(nextBeforeLimit) && TurnOrder.order.Count > 0)
+                    TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
             }
             if (isNewRound) CurrentTurn.roundNumber++;
 
