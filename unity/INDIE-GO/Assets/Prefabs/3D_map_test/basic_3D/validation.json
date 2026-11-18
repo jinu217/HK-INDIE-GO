@@ -1,0 +1,64 @@
+{
+  "native_obj_reimport": "pass",
+  "tested_with": "Blender 5.3; Unity Editor runtime not available",
+  "groups": 8,
+  "triangles": 612604,
+  "board_size": [
+    10.0,
+    10.0,
+    7.553026080131531e-07
+  ],
+  "board_height_blender_z": 0.004000377841293812,
+  "blender_xyz_bounds": [
+    [
+      -9.790088653564453,
+      9.790534019470215
+    ],
+    [
+      -8.0,
+      7.0
+    ],
+    [
+      -0.190000519156456,
+      1.800329566001892
+    ]
+  ],
+  "floor_bounds": [
+    [
+      -9.75,
+      9.75
+    ],
+    [
+      -8.0,
+      7.0
+    ],
+    [
+      -0.190000519156456,
+      0.02100054919719696
+    ]
+  ],
+  "materials": [
+    "Carved_Ivory_Marble",
+    "Champagne_Gold",
+    "Flower_Pollen",
+    "Lapis_Inlay",
+    "Leaves_0",
+    "Leaves_1",
+    "Leaves_2",
+    "Leaves_3",
+    "Pale_Gold",
+    "Planter_Soil",
+    "Reference_Floor",
+    "Vine_Stems",
+    "Walkway_Ivory_Marble",
+    "White_Petals"
+  ],
+  "loaded_textures": [
+    "floor_basecolor.png",
+    "walkway_marble.png"
+  ],
+  "all_original_nonflag_decorations_preserved": true,
+  "all_flower_assembly_anchors_touch_railing_zone": true,
+  "board_plane_clear": true,
+  "flags_in_obj": false
+}

@@ -1,0 +1,170 @@
+[
+  {
+    "name": "Carved_Ivory_Marble",
+    "basecolor_srgb": [
+      0.9372549016159725,
+      0.90196077033812,
+      0.8392156832360868,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.41999998688697815,
+    "basecolor_texture": ""
+  },
+  {
+    "name": "Champagne_Gold",
+    "basecolor_srgb": [
+      0.8274509776128216,
+      0.6823529357609528,
+      0.4039215754823358,
+      1.0
+    ],
+    "metallic": 0.7200000286102295,
+    "roughness": 0.2800000011920929,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Flower_Pollen",
+    "basecolor_srgb": [
+      0.9333333429534352,
+      0.7450980432970518,
+      0.25490196180239805,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.4300000071525574,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Lapis_Inlay",
+    "basecolor_srgb": [
+      0.39215686351127116,
+      0.49803921510516985,
+      0.6666666649079432,
+      1.0
+    ],
+    "metallic": 0.11999999731779099,
+    "roughness": 0.3400000035762787,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Leaves_0",
+    "basecolor_srgb": [
+      0.24705882630121417,
+      0.3137254898653723,
+      0.11764705971039388,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.5099999904632568,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Leaves_1",
+    "basecolor_srgb": [
+      0.35686274746836083,
+      0.42745097380382335,
+      0.16862744979935432,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.5099999904632568,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Leaves_2",
+    "basecolor_srgb": [
+      0.4745098086737521,
+      0.5372548974272265,
+      0.24705882630121417,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.5099999904632568,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Leaves_3",
+    "basecolor_srgb": [
+      0.5725490184276975,
+      0.5999999947550138,
+      0.3137254898653723,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.5099999904632568,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Pale_Gold",
+    "basecolor_srgb": [
+      0.9294117609627985,
+      0.8156862841081017,
+      0.5686274466962614,
+      1.0
+    ],
+    "metallic": 0.550000011920929,
+    "roughness": 0.3199999928474426,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Planter_Soil",
+    "basecolor_srgb": [
+      0.3254901894487975,
+      0.25490196180239805,
+      0.1568627415931254,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.8999999761581421,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Reference_Floor",
+    "basecolor_srgb": [
+      0.9999999999999999,
+      0.9999999999999999,
+      0.9999999999999999,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.6200000047683716,
+    "basecolor_texture": ""
+  },
+  {
+    "name": "Vine_Stems",
+    "basecolor_srgb": [
+      0.28627450804466026,
+      0.3372549076749593,
+      0.13333333691741428,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.5799999833106995,
+    "basecolor_texture": null
+  },
+  {
+    "name": "Walkway_Ivory_Marble",
+    "basecolor_srgb": [
+      0.9372549016159725,
+      0.90196077033812,
+      0.8392156832360868,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.41999998688697815,
+    "basecolor_texture": ""
+  },
+  {
+    "name": "White_Petals",
+    "basecolor_srgb": [
+      0.988235296747371,
+      0.9686274571326211,
+      0.8901960870485209,
+      1.0
+    ],
+    "metallic": 0.0,
+    "roughness": 0.4000000059604645,
+    "basecolor_texture": null
+  }
+]

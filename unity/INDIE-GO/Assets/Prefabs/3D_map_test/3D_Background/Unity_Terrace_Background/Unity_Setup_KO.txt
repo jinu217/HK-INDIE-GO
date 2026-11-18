@@ -1,0 +1,66 @@
+천공 궁전 테라스 — Unity용 2D 배경
+
+사용 파일: Palace_Background.png
+원본 해상도: 1672 x 941 / RGB PNG / 불투명 / 약 16:9
+Preview_With_3D_Model.png는 배치 확인용입니다. Unity의 배경으로 사용하지 마세요.
+
+설계 기준
+- 기존 테라스의 약 38.4도 사선 탑뷰와 거의 고정된 카메라를 기준으로 제작.
+- 원본에서 보이는 흰 궁전, 푸른 지붕, 금색 첨탑, 아치형 다리를 먼 경치로 확장.
+- 모델 뒤에서 드러날 상단과 좌우에 건축물을 배치.
+- 중앙과 하단은 구름과 옅은 대기로 연결해 모델 주변의 빈틈에도 자연스럽게 대응.
+- 가까운 바닥, 난간, 기둥, 화분, 깃발은 포함하지 않음.
+- 원본의 보이지 않는 도시 부분은 새로 구성한 해석이며, 원본 배경의 정확한 복원은 아님.
+
+1. 텍스처 가져오기
+Palace_Background.png를 Unity Assets 폴더로 가져온 뒤 다음을 권장합니다.
+- Texture Type: Default
+- Texture Shape: 2D
+- sRGB (Color Texture): On
+- Alpha Source: None
+- Non Power of 2: None
+- Wrap Mode: Clamp
+- Filter Mode: Bilinear
+- Max Size: 2048 이상
+- Compression: 우선 None으로 외관을 확인하고, 대상 플랫폼에 맞춰 추후 조정
+- Generate Mip Maps: 화면을 고정 크기로 채우는 배경판에서는 우선 Off
+- Read/Write: Off
+
+2. 재질
+URP라면 Universal Render Pipeline/Unlit 재질을 만드세요.
+다른 렌더 파이프라인을 쓴다면 그 파이프라인의 Unlit 재질을 사용하세요.
+- Base Map: Palace_Background.png
+- Base Color/Tint: 흰색
+- Surface Type: Opaque
+- Alpha Clipping: Off
+- Tiling: 1, 1 / Offset: 0, 0
+Unlit은 장면 조명을 재차 받지 않는 배경에 적합합니다.
+단, 노출·톤매핑·색보정 같은 후처리는 Unlit 배경에도 영향을 줄 수 있습니다.
+
+3. 배경판 배치
+- Quad를 하나 만들고 새 재질을 적용합니다.
+- 배경판의 앞면이 카메라를 향하게 하고, 화면 평면과 평행하게 맞춥니다.
+- 카메라가 보는 방향을 기준으로 테라스 전체보다 뒤에 배치합니다.
+- 카메라의 Far Clip Plane 안에 있어야 합니다.
+- Game 뷰에서 이미지 비율을 유지하면서 화면을 빈틈없이 덮도록 크기를 조정합니다.
+- 화면 비율이 달라질 때는 이미지를 찌그러뜨리지 말고 가장자리를 조금 잘라 맞추세요.
+- Mesh Renderer의 Cast Shadows는 Off로 둡니다.
+- 배경판에 Collider가 있다면 제거합니다.
+- 기존 3D 원경(Optional_Distant_Palace)은 끄고 이 PNG를 사용합니다.
+- 스크린 공간 Overlay UI에 넣으면 3D 모델을 덮을 수 있으므로 위 배경판 방식을 권장합니다.
+
+일반적인 원근 카메라에서 거리 D에 놓인 배경판의 화면 높이는
+2 * D * tan(수직 FOV / 2), 너비는 높이 * 화면 종횡비입니다.
+정사영 카메라는 높이 = 2 * Orthographic Size입니다.
+Lens Shift나 커스텀 투영을 쓰면 배경판의 중심 위치도 프러스텀에 맞춰 조정하세요.
+
+4. 검증 범위
+기존 상세 테라스 모델과 같은 카메라로 실제 3D 장면을 렌더해 배치를 확인했습니다.
+Preview_With_3D_Model.png는 Blender Cycles 결과이며 Unity 프로젝트 실행 검증은 아닙니다.
+이 배경은 고정 카메라용 2D 이미지입니다. 카메라를 크게 회전하면 입체적인 시차가
+생기지 않으므로, 현재처럼 거의 움직이지 않는 시점에 사용하세요.
+
+참고한 Unity 공식 문서
+https://docs.unity3d.com/6000.0/Documentation/Manual/urp/unlit-shader.html
+https://docs.unity3d.com/6000.0/Documentation/Manual/texture-type-default.html
+

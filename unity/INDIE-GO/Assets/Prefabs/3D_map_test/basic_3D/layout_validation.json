@@ -1,0 +1,280 @@
+{
+  "footprint": [
+    19.5,
+    15.0
+  ],
+  "ratio": 1.3,
+  "previous_too_wide": [
+    22,
+    15
+  ],
+  "original": [
+    14,
+    15
+  ],
+  "central_square": [
+    10,
+    10
+  ],
+  "board_obj_y": 0.004,
+  "base_thickness": 0.19,
+  "original_floor_geometry_and_uv_preserved": true,
+  "original_floor_texture_sha256": "40cdf368c93387b0f75fac23f162b76dcdd4ac58cfd6da4abcfe6a0b2123fafe",
+  "source_original_floor_sha256": "40cdf368c93387b0f75fac23f162b76dcdd4ac58cfd6da4abcfe6a0b2123fafe",
+  "original_prop_counts": {
+    "02_Pillars": 216,
+    "04_Central_Crest": 31,
+    "05_Planters": 108,
+    "06_Foliage": 2100,
+    "07_White_Flowers": 3456
+  },
+  "revised_prop_counts": {
+    "02_Pillars": 216,
+    "04_Central_Crest": 31,
+    "05_Planters": 108,
+    "06_Foliage": 2100,
+    "07_White_Flowers": 3456
+  },
+  "flora_assemblies": [
+    {
+      "assembly": "Rear_Large_Left",
+      "old_xy": [
+        -5.65,
+        5.55
+      ],
+      "new_xy": [
+        -8.4,
+        5.55
+      ],
+      "obj_y_up_anchor": [
+        -8.4,
+        0,
+        -5.55
+      ],
+      "distance_to_railing": 0.19999981150022206,
+      "parts_preserved": 562
+    },
+    {
+      "assembly": "Rear_Small_Left",
+      "old_xy": [
+        -2.65,
+        5.55
+      ],
+      "new_xy": [
+        -2.65,
+        5.55
+      ],
+      "obj_y_up_anchor": [
+        -2.65,
+        0,
+        -5.55
+      ],
+      "distance_to_railing": 0.19999981150022206,
+      "parts_preserved": 562
+    },
+    {
+      "assembly": "Rear_Small_Right",
+      "old_xy": [
+        2.65,
+        5.55
+      ],
+      "new_xy": [
+        2.65,
+        5.55
+      ],
+      "obj_y_up_anchor": [
+        2.65,
+        0,
+        -5.55
+      ],
+      "distance_to_railing": 0.19999981150022206,
+      "parts_preserved": 562
+    },
+    {
+      "assembly": "Rear_Large_Right",
+      "old_xy": [
+        5.65,
+        5.55
+      ],
+      "new_xy": [
+        8.4,
+        5.55
+      ],
+      "obj_y_up_anchor": [
+        8.4,
+        0,
+        -5.55
+      ],
+      "distance_to_railing": 0.19999981150022206,
+      "parts_preserved": 562
+    },
+    {
+      "assembly": "Side_Back_Left",
+      "old_xy": [
+        -6.5,
+        3.5
+      ],
+      "new_xy": [
+        -9.3,
+        3.5
+      ],
+      "obj_y_up_anchor": [
+        -9.3,
+        0,
+        -3.5
+      ],
+      "distance_to_railing": 0.0,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Side_Back_Right",
+      "old_xy": [
+        6.5,
+        3.5
+      ],
+      "new_xy": [
+        9.3,
+        3.5
+      ],
+      "obj_y_up_anchor": [
+        9.3,
+        0,
+        -3.5
+      ],
+      "distance_to_railing": 0.0,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Side_Front_Left",
+      "old_xy": [
+        -6.5,
+        -3.6
+      ],
+      "new_xy": [
+        -9.3,
+        -3.6
+      ],
+      "obj_y_up_anchor": [
+        -9.3,
+        0,
+        3.6
+      ],
+      "distance_to_railing": 0.0,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Side_Front_Right",
+      "old_xy": [
+        6.5,
+        -3.6
+      ],
+      "new_xy": [
+        9.3,
+        -3.6
+      ],
+      "obj_y_up_anchor": [
+        9.3,
+        0,
+        3.6
+      ],
+      "distance_to_railing": 0.0,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Front_Garland_Left",
+      "old_xy": [
+        -5.4,
+        -5.75
+      ],
+      "new_xy": [
+        -7.0625,
+        -5.63
+      ],
+      "obj_y_up_anchor": [
+        -7.0625,
+        0,
+        5.63
+      ],
+      "distance_to_railing": 2.384185791015625e-07,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Front_Garland_Right",
+      "old_xy": [
+        5.4,
+        -5.75
+      ],
+      "new_xy": [
+        7.0625,
+        -5.63
+      ],
+      "obj_y_up_anchor": [
+        7.0625,
+        0,
+        5.63
+      ],
+      "distance_to_railing": 2.385349660155493e-07,
+      "parts_preserved": 382
+    },
+    {
+      "assembly": "Foreground_Planter_Left",
+      "old_xy": [
+        -6.45,
+        -7.15
+      ],
+      "new_xy": [
+        -8.35,
+        -5.42
+      ],
+      "obj_y_up_anchor": [
+        -8.35,
+        0,
+        5.42
+      ],
+      "distance_to_railing": 0.0018937830755037719,
+      "parts_preserved": 562
+    },
+    {
+      "assembly": "Foreground_Planter_Right",
+      "old_xy": [
+        6.45,
+        -7.15
+      ],
+      "new_xy": [
+        8.35,
+        -5.42
+      ],
+      "obj_y_up_anchor": [
+        8.35,
+        0,
+        5.42
+      ],
+      "distance_to_railing": 0.001893787664164027,
+      "parts_preserved": 562
+    }
+  ],
+  "central_prop_intrusions": [],
+  "flags_included": false,
+  "source_camera_side_floor_coverage": 1.0,
+  "coverage_region": "x<200 or x>=1472; y>=160; step5; 1672x941 source camera only",
+  "camera_footprint_pixels": [
+    [
+      59.190630346536636,
+      45.67978209257126
+    ],
+    [
+      1612.8093509674072,
+      45.67978209257126
+    ],
+    [
+      2175.5008153915405,
+      1075.092358097434
+    ],
+    [
+      -503.50086522102356,
+      1075.092358097434
+    ]
+  ],
+  "projection_is_estimated": true,
+  "separate_flag_placement_note": "Move side flag assemblies outward by 2.75 world units on X from the original map; do not scale. Additional pole geometry is not included."
+}

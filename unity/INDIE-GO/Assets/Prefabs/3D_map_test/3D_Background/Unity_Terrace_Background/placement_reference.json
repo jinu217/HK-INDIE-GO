@@ -1,0 +1,18 @@
+{
+  "image_resolution": [
+    1672,
+    941
+  ],
+  "preview_renderer": "Blender Cycles; not a Unity runtime test",
+  "model_camera": "Camera_Source_Match",
+  "camera_facing_plane_distance": 60,
+  "plane_width": 45.00367736816406,
+  "plane_height": 25.32802677154541,
+  "plane_local_center": [
+    0.0,
+    -2.107480525970459,
+    -60
+  ],
+  "lighting": "unlit camera-only plate",
+  "opaque": true
+}

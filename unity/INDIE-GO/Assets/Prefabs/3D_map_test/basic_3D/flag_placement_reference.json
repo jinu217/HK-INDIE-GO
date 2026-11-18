@@ -1,0 +1,75 @@
+{
+  "note": "Reference coordinates only. No flag mesh included. OBJ Y up; same root/import settings as original assets. Main side banners move with railing.",
+  "assemblies": [
+    {
+      "name": "Main_Left",
+      "original_obj_anchor": [
+        -6.72,
+        0,
+        -0.25
+      ],
+      "revised_obj_anchor": [
+        -9.469999999999999,
+        0,
+        -0.25
+      ],
+      "local_asset_from_existing_package": "Single_Main_Left.obj"
+    },
+    {
+      "name": "Main_Right",
+      "original_obj_anchor": [
+        6.72,
+        0,
+        -0.25
+      ],
+      "revised_obj_anchor": [
+        9.469999999999999,
+        0,
+        -0.25
+      ],
+      "local_asset_from_existing_package": "Single_Main_Right.obj"
+    },
+    {
+      "name": "Rear_Teal",
+      "original_obj_anchor": [
+        -5.8,
+        0,
+        -6.3
+      ],
+      "revised_obj_anchor": [
+        -5.8,
+        0,
+        -6.3
+      ],
+      "local_asset_from_existing_package": "Single_Rear_Teal.obj"
+    },
+    {
+      "name": "Rear_Blue",
+      "original_obj_anchor": [
+        4.4,
+        0,
+        -6.3
+      ],
+      "revised_obj_anchor": [
+        4.4,
+        0,
+        -6.3
+      ],
+      "local_asset_from_existing_package": "Single_Rear_Blue.obj"
+    },
+    {
+      "name": "Central_Banner",
+      "original_obj_anchor": [
+        0,
+        1.65,
+        -5.69
+      ],
+      "revised_obj_anchor": [
+        0,
+        1.65,
+        -5.69
+      ],
+      "local_asset_from_existing_package": "Single_Central_Banner.obj"
+    }
+  ]
+}
