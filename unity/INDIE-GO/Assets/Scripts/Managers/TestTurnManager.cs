@@ -58,6 +58,7 @@ namespace YutArena.Managers
         public System.Action<PlayerSlot> OnTurnEnded;              // 턴이 끝날 때
         public System.Action<List<YutThrowData>> OnPendingResultsChanged; // 결과 묶음이 바뀔 때 (UI가 화면에 표시하려고 구독)
         public System.Action<TurnNotice> OnTurnNotice;             // 화면 가운데 안내용: 잡기, 추가 던지기, 시간 초과, 움직일 말 없음, 낙
+        public System.Action<int> OnRoundStarted;                  // 새 라운드가 시작될 때 (라운드 번호, 그 라운드 첫 턴 시작 직전)
                                                                           // GameManager.StartGame()에서 호출됨. 게임 시작 전 준비 작업
         public void Initialize(GameStartSettings gameSettings)
         {
@@ -107,6 +108,7 @@ namespace YutArena.Managers
             CurrentTurn.roundNumber = 1;
             CurrentTurn.turnNumber = 1;
             maxTurnLimitHandled = false;
+            OnRoundStarted?.Invoke(CurrentTurn.roundNumber);
             BeginTurnFor(TurnOrder.Current);
         }
         // 참가자 목록을 받아서, 던진 결과가 높은 순서대로 정렬된 새 목록을 돌려줌
@@ -800,7 +802,11 @@ namespace YutArena.Managers
                 if (!TurnOrder.order.Contains(nextBeforeLimit) && TurnOrder.order.Count > 0)
                     TurnOrder.currentIndex = (TurnOrder.currentIndex + 1) % TurnOrder.order.Count;
             }
-            if (isNewRound) CurrentTurn.roundNumber++;
+            if (isNewRound)
+            {
+                CurrentTurn.roundNumber++;
+                OnRoundStarted?.Invoke(CurrentTurn.roundNumber); // 킬 더 킹 아이템 생성, 아레나의 열기 등
+            }
 
             BeginTurnFor(TurnOrder.Current);
         }

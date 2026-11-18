@@ -63,13 +63,13 @@ namespace YutArena.Managers
 
             // 2. 데미지 계산
             int damage = pieceCount + swords.Sum(s => GetSwordBonus(s));
-            QaDebugLog.Event($"[킬더킹] {attacker} 탈출 → 대상 {target} | 말 {pieceCount}" +
+            ktk.Log($"[킬더킹] {attacker} 탈출 → 대상 {target} | 말 {pieceCount}" +
                 (swords.Count > 0 ? ", 칼 " + string.Join("+", swords) : "") + $" = 데미지 {damage}");
 
             // 3. [마검]: 대상 즉사. 대상 방패 효과는 발동·소모 안 함, 4~6 건너뜀
             if (swords.Contains(KtkSword.Demon))
             {
-                QaDebugLog.Event($"[킬더킹] 마검! {target} 즉사 (방패 효과 무시)");
+                ktk.Log($"[킬더킹] 마검! {target} 즉사 (방패 효과 무시)");
                 ktk.ApplyDamage(attacker, target, ktk.GetHp(target));
                 ktk.KnockOutIfDead(target, attacker);
                 return; // 방패 효과가 안 쓰였으니 돌아오는 데미지도 없음
@@ -80,11 +80,11 @@ namespace YutArena.Managers
             int bounceAmount = 0;
             if (targetShield == KtkShield.Normal)
             {
-                QaDebugLog.Event($"[킬더킹] {target} 일반 방패로 막음");
+                ktk.Log($"[킬더킹] {target} 일반 방패로 막음");
             }
             else if (targetShield == KtkShield.Thorn)
             {
-                QaDebugLog.Event($"[킬더킹] {target} 가시 방패로 막고 {attacker}에게 1 반격");
+                ktk.Log($"[킬더킹] {target} 가시 방패로 막고 {attacker}에게 1 반격");
                 bounceAmount = 1;
             }
             else
@@ -93,7 +93,7 @@ namespace YutArena.Managers
                 int dealt = ktk.ApplyDamage(attacker, target, damage);
                 if (targetShield == KtkShield.Mirror)
                 {
-                    QaDebugLog.Event($"[킬더킹] {target} 반사의 거울: 받은 데미지 {damage} 전부를 {attacker}에게 돌려줌");
+                    ktk.Log($"[킬더킹] {target} 반사의 거울: 받은 데미지 {damage} 전부를 {attacker}에게 돌려줌");
                     bounceAmount = damage; // 남는 데미지 버리기 전 값 전부
                 }
                 // 6. [흡혈 검] 회복 (첫 타격에서 실제로 들어갔을 때만)
@@ -121,12 +121,12 @@ namespace YutArena.Managers
                 int next = 0;
                 if (shield == KtkShield.Normal)
                 {
-                    QaDebugLog.Event($"[킬더킹] 핑퐁: {receiver} 일반 방패로 막음, 끝");
+                    ktk.Log($"[킬더킹] 핑퐁: {receiver} 일반 방패로 막음, 끝");
                     return;
                 }
                 if (shield == KtkShield.Thorn)
                 {
-                    QaDebugLog.Event($"[킬더킹] 핑퐁: {receiver} 가시 방패로 막고 {sender}에게 1 반격");
+                    ktk.Log($"[킬더킹] 핑퐁: {receiver} 가시 방패로 막고 {sender}에게 1 반격");
                     next = 1;
                 }
                 else
@@ -134,7 +134,7 @@ namespace YutArena.Managers
                     ktk.ApplyDamage(sender, receiver, amount);
                     if (shield == KtkShield.Mirror)
                     {
-                        QaDebugLog.Event($"[킬더킹] 핑퐁: {receiver} 반사의 거울로 {amount} 그대로 {sender}에게 돌려줌");
+                        ktk.Log($"[킬더킹] 핑퐁: {receiver} 반사의 거울로 {amount} 그대로 {sender}에게 돌려줌");
                         next = amount;
                     }
                 }

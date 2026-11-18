@@ -9,7 +9,7 @@ namespace YutArena.Managers
     // 여기서는 TurnManager가 넘겨주는 isFinished 값만 받아서 카운트하고 승패를 확인함
     // (예전엔 BoardMoveResult를 통째로 받았는데, 영서 새 구조로 바뀌면서 TurnManager가
     //  필요한 값만 뽑아서 넘겨주는 방식으로 변경함)
-    public class TestWinConditionManager : MonoBehaviour
+    public class TestWinConditionManager : MonoBehaviour, IKtkHost
     {
         [SerializeField] private TestGameManager gameManager;
         [SerializeField] private TestTurnManager turnManager;
@@ -85,7 +85,17 @@ namespace YutArena.Managers
                 if (team != TeamSlot.None)
                     activeTeams.Add(team);
             }
-            if (killTheKing == null) killTheKing = new KillTheKingManager(this, turnManager);
+            if (killTheKing == null)
+            {
+                killTheKing = new KillTheKingManager(this);
+                turnManager.OnRoundStarted += killTheKing.OnRoundStarted; // 아이템 생성, 아레나의 열기, 탈락자 구슬
+                // 결과창 "잡기 수": 턴 알림 중 잡기를 받아서 지금 턴인 사람의 팀에 +1
+                turnManager.OnTurnNotice += notice =>
+                {
+                    if (settings != null && settings.gameMode == GameMode.KillTheKing && notice.type == TurnNoticeType.Capture)
+                        killTheKing.RecordCapture(MatchCompositionRule.GetPersonTeamSlot(settings, notice.person));
+                };
+            }
             killTheKing.Initialize(settings, activeTeams);
         }
         // TurnManager가 말 이동을 처리한 직후마다 호출해주는 함수.
@@ -324,14 +334,15 @@ namespace YutArena.Managers
             }
         }
 
-        // ---- 킬 더 킹(KillTheKingManager)이 기존 흐름을 다시 부를 때 쓰는 입구 ----
-        internal bool IsTeamActive(TeamSlot team) => activeTeams.Contains(team);
-        internal int ActiveTeamCount => activeTeams.Count;
-        internal TeamSlot FirstActiveTeam => activeTeams.Count > 0 ? activeTeams.First() : TeamSlot.None;
+        // ---- 킬 더 킹(KillTheKingManager)이 기존 흐름을 다시 부를 때 쓰는 입구 (IKtkHost) ----
+        bool IKtkHost.IsTeamActive(TeamSlot team) => activeTeams.Contains(team);
+        int IKtkHost.ActiveTeamCount => activeTeams.Count;
+        TeamSlot IKtkHost.FirstActiveTeam => activeTeams.Count > 0 ? activeTeams.First() : TeamSlot.None;
+        IReadOnlyList<PlayerSlot> IKtkHost.TurnOrder => turnManager.TurnOrder.order;
 
         // HP 0 탈락: 게임에서 빼고(턴 순서에서 제거) 판 위 말을 내림. 승리 여부는 KillTheKingManager가 판단
         // (기획: 순위 없이 1등과 나머지 -> eliminatedTeams에 쌓아 결과창 "나머지"로 넘김)
-        internal void EliminateTeamForKillTheKing(TeamSlot team)
+        void IKtkHost.EliminateTeam(TeamSlot team)
         {
             if (!activeTeams.Remove(team)) return;
             eliminatedTeams.Add(team);
@@ -339,10 +350,18 @@ namespace YutArena.Managers
             ClearBoardPiecesOfTeam(team);
         }
 
-        internal void DeclareKillTheKingWinner(TeamSlot winner, GameResultType resultType)
+        void IKtkHost.DeclareWinner(TeamSlot winner, GameResultType resultType)
         {
             Declare(winner, resultType, new List<TeamSlot> { winner });
         }
+
+        // 킬 더 킹 자동 테스트: 진짜 게임은 안 건드리고 가짜 게임에서 규칙만 확인 (플레이 안 해도 됨)
+        [ContextMenu("테스트: 킬 더 킹 자동 확인 - 데미지·방패·탈락")]
+        public void TestKtkAutoCombat() => KtkSelfTest.RunCombatTests();
+        [ContextMenu("테스트: 킬 더 킹 자동 확인 - 아이템 생성·아레나의 열기·서든데스")]
+        public void TestKtkAutoItems() => KtkSelfTest.RunItemTests();
+        [ContextMenu("테스트: 킬 더 킹 자동 확인 - 결과 통계·탈락자 능력")]
+        public void TestKtkAutoStatsAndGhost() => KtkSelfTest.RunStatsAndGhostTests();
 
         // 테스트용: 판을 한 바퀴 안 돌아도 지금 턴인 팀이 말 1개를 탈출시킨 것처럼 데미지를 줌
         [ContextMenu("테스트: 킬 더 킹 지금 팀 탈출 데미지 1")]
@@ -376,6 +395,25 @@ namespace YutArena.Managers
         [ContextMenu("테스트: 킬 더 킹 다음 탈출에 쌍검")] public void TestKtkTwinSword() => AddTestSword(KtkSword.Twin);
         [ContextMenu("테스트: 킬 더 킹 다음 탈출에 흡혈 검")] public void TestKtkVampireSword() => AddTestSword(KtkSword.Vampire);
         [ContextMenu("테스트: 킬 더 킹 다음 탈출에 마검")] public void TestKtkDemonSword() => AddTestSword(KtkSword.Demon);
+
+        // 테스트용 아이템 생성 타이머: 보드 연결 전이라 "먹음"을 직접 눌러주고, 라운드는 시작 처리만 넘겨봄
+        [ContextMenu("테스트: 킬 더 킹 다음 라운드 시작 처리 (아이템 생성 확인)")]
+        public void TestKtkNextRound() { if (IsKillTheKingTest()) { killTheKing.TestStartNextRound(); killTheKing.LogState(); } }
+        [ContextMenu("테스트: 킬 더 킹 보드 위 칼 먹음")] public void TestKtkPickSword() { if (IsKillTheKingTest()) killTheKing.NotifySwordPickedUp(); }
+        [ContextMenu("테스트: 킬 더 킹 보드 위 방패 먹음")] public void TestKtkPickShield() { if (IsKillTheKingTest()) killTheKing.NotifyShieldPickedUp(); }
+        [ContextMenu("테스트: 킬 더 킹 아레나의 열기 바로 시작")] public void TestKtkArenaHeat() { if (IsKillTheKingTest()) killTheKing.TestStartArenaHeat(); }
+
+        // 테스트용 탈락자 능력: 첫 번째로 탈락한 사람이 씀 (쓰는 화면은 기획서도 "추후 작업")
+        [ContextMenu("테스트: 킬 더 킹 탈락자 능력 - 저주")] public void TestKtkCurse() => TestGhost(KtkGhostAbility.Curse);
+        [ContextMenu("테스트: 킬 더 킹 탈락자 능력 - 영혼 주입")] public void TestKtkSoul() => TestGhost(KtkGhostAbility.SoulInfusion);
+        [ContextMenu("테스트: 킬 더 킹 탈락자 능력 - 죽은 자의 염원")] public void TestKtkDeadWish() => TestGhost(KtkGhostAbility.DeadWish);
+
+        private void TestGhost(KtkGhostAbility ability)
+        {
+            if (!IsKillTheKingTest()) return;
+            killTheKing.TryUseGhostAbility(killTheKing.FirstEliminatedTeam, ability, out _);
+            killTheKing.LogState();
+        }
 
         private bool IsKillTheKingTest() => settings != null && settings.gameMode == GameMode.KillTheKing && turnManager.CurrentTurn != null;
 
