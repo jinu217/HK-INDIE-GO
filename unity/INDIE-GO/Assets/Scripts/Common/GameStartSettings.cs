@@ -46,6 +46,7 @@ namespace YutArena.Common
         public int targetEscapeCount;
         public int timeLimitMinutes;
         public int maxTurnCount;
+        public int killTheKingStartHp;
 
         public TurnTimeMode turnTimeMode;
 

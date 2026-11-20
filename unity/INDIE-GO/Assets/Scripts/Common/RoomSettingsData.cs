@@ -13,6 +13,7 @@ namespace YutArena.Common
         public int pieceCountPerPlayer;
         public int targetEscapeCount;
         public int maxTurnCount;
+        public int killTheKingStartHp;
         public int turnTimeSeconds;
         public bool isTeamMode;
         public TeamMode teamMode = TeamMode.TeamMode1;
@@ -35,6 +36,7 @@ namespace YutArena.Common
                     ? targetEscapeCount : GameRuleDefine.DefaultTargetEscapeCount,
                 timeLimitMinutes = GameRuleDefine.UnlimitedTimeMinutes,
                 maxTurnCount = maxTurnCount,
+                killTheKingStartHp = killTheKingStartHp,
                 turnTimeMode = TurnTimeMode.Limited,
                 throwTimeSeconds = turnTimeSeconds,
                 actionTimeSeconds = turnTimeSeconds,

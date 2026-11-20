@@ -17,7 +17,14 @@ namespace YutArena.UI
                 modeImage.sprite = entry != null ? entry.image : null;
                 modeImage.enabled = modeImage.sprite != null;
             }
-            if (modeNameText != null) modeNameText.text = entry != null ? entry.modeName : string.Empty;
+            if (modeNameText != null)
+            {
+                modeNameText.text = entry == null ? string.Empty
+                    : entry.gameMode == GameMode.Classic ? "클래식"
+                    : entry.gameMode == GameMode.Escape ? "탈출"
+                    : entry.gameMode == GameMode.KillTheKing ? "킬 더 킹"
+                    : entry.modeName;
+            }
             if (modeDescriptionText != null) modeDescriptionText.text = entry != null ? entry.description : string.Empty;
         }
     }

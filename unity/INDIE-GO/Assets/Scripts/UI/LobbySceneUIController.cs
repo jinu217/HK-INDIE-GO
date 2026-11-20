@@ -38,6 +38,25 @@ namespace YutArena.UI
         [SerializeField] private Button escapeTargetRightButton;
         [SerializeField] private TMP_Text escapeTargetValueText;
 
+        [Header("Kill The King Settings")]
+        [SerializeField, Range(5, 10)] private int killTheKingSoloHp = YutArena.Managers.KillTheKingManager.TempSoloStartHp;
+        [SerializeField, Min(1)] private int killTheKingSharedTeamHp = YutArena.Managers.KillTheKingManager.TempSharedTeamStartHp;
+        [SerializeField, Min(1)] private int killTheKingTwoVsTwoHp = YutArena.Managers.KillTheKingManager.TempTwoVsTwoStartHp;
+        [SerializeField, Min(1)] private int killTheKingMaxRounds = YutArena.Managers.KillTheKingManager.TempMaxRound;
+        [SerializeField, Min(1)] private int killTheKingMinRounds = GameRuleDefine.MinMaxTurnCount;
+        [SerializeField, Min(1)] private int killTheKingMaxRoundsLimit = GameRuleDefine.MaxMaxTurnCount;
+        [SerializeField] private TMP_Text killTheKingHpTitle;
+        [SerializeField] private TMP_Text killTheKingHpValue;
+        [SerializeField] private Button killTheKingHpLeftButton;
+        [SerializeField] private Button killTheKingHpRightButton;
+        [SerializeField] private TMP_Text killTheKingPieceValue;
+        [SerializeField] private Button killTheKingPieceLeftButton;
+        [SerializeField] private Button killTheKingPieceRightButton;
+        [SerializeField] private TMP_Text killTheKingRoundsValue;
+        [SerializeField] private Button killTheKingRoundsLeftButton;
+        [SerializeField] private Button killTheKingRoundsRightButton;
+        [SerializeField] private TMP_Text maxRoundsTitle;
+
         [Header("Players")]
         [Tooltip("개인전 플레이어 수 설정 영역")]
         [SerializeField] private GameObject playerCountPanel;
@@ -164,7 +183,7 @@ namespace YutArena.UI
         {
             LocalSelectionInput.Poll(selectedPlayerCount);
             if (sharedInputLabel != null)
-                sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
+                sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "게임패드" : "키보드";
             DisableNavigationEvents();
             RefreshStartAvailability();
         }
@@ -233,6 +252,12 @@ namespace YutArena.UI
             AddClick(startPieceCountRightButton, () => ChangeStartPieceCount(1));
             AddClick(escapeTargetLeftButton, () => ChangeEscapeTarget(-1));
             AddClick(escapeTargetRightButton, () => ChangeEscapeTarget(1));
+            AddClick(killTheKingHpLeftButton, () => ChangeKillTheKingHp(-1));
+            AddClick(killTheKingHpRightButton, () => ChangeKillTheKingHp(1));
+            AddClick(killTheKingPieceLeftButton, () => ChangeStartPieceCount(-1));
+            AddClick(killTheKingPieceRightButton, () => ChangeStartPieceCount(1));
+            AddClick(killTheKingRoundsLeftButton, () => ChangeKillTheKingRounds(-1));
+            AddClick(killTheKingRoundsRightButton, () => ChangeKillTheKingRounds(1));
             AddClick(startGameButton, StartGame);
             AddClick(backButton, BackToStartScene);
 
@@ -261,7 +286,7 @@ namespace YutArena.UI
 
         private void ChangeStartPieceCount(int step)
         {
-            if (SelectedGameMode != GameMode.Escape) return;
+            if (SelectedGameMode != GameMode.Escape && SelectedGameMode != GameMode.KillTheKing) return;
             var options = GetStartPieceCountOptions();
             int index = System.Array.IndexOf(options, startPieceCount);
             startPieceCount = options[Mathf.Clamp(index + step, 0, options.Length - 1)];
@@ -273,6 +298,31 @@ namespace YutArena.UI
             if (SelectedGameMode != GameMode.Escape) return;
             targetEscapeCount = Mathf.Clamp(targetEscapeCount + step,
                 GameRuleDefine.MinTargetEscapeCount, GameRuleDefine.MaxTargetEscapeCount);
+            RefreshUI();
+        }
+
+        private int SelectedKillTheKingHp => !isTeamMode ? killTheKingSoloHp
+            : selectedTeamOption == TeamMode.TeamMode1 ? killTheKingSharedTeamHp : killTheKingTwoVsTwoHp;
+
+        private void ChangeKillTheKingHp(int step)
+        {
+            if (SelectedGameMode != GameMode.KillTheKing) return;
+            if (!isTeamMode)
+                killTheKingSoloHp = Mathf.Clamp(killTheKingSoloHp + step, 5, 10);
+            else
+            {
+                int hp = (int)System.Math.Max(1L, System.Math.Min(int.MaxValue, (long)SelectedKillTheKingHp + step));
+                if (selectedTeamOption == TeamMode.TeamMode1) killTheKingSharedTeamHp = hp;
+                else killTheKingTwoVsTwoHp = hp;
+            }
+            RefreshUI();
+        }
+
+        private void ChangeKillTheKingRounds(int step)
+        {
+            if (SelectedGameMode != GameMode.KillTheKing) return;
+            killTheKingMaxRounds = Mathf.Clamp(killTheKingMaxRounds + step,
+                Mathf.Max(1, killTheKingMinRounds), Mathf.Max(killTheKingMinRounds, killTheKingMaxRoundsLimit));
             RefreshUI();
         }
 
@@ -358,7 +408,7 @@ namespace YutArena.UI
         private void RefreshMap()
         {
             MapEntry map = maps.Length > 0 ? maps[mapIndex] : null;
-            SetText(mapNameText, map != null ? map.mapName : string.Empty);
+            SetText(mapNameText, map != null ? GetMapDisplayName(map) : string.Empty);
             SetText(mapDescriptionText, map != null ? map.description : string.Empty);
             if (mapImage != null)
             {
@@ -416,14 +466,28 @@ namespace YutArena.UI
             SetActive(classicRules, SelectedGameMode == GameMode.Classic);
             SetActive(escapeRules, SelectedGameMode == GameMode.Escape);
             SetActive(killTheKingRules, SelectedGameMode == GameMode.KillTheKing);
+            bool isKillTheKing = SelectedGameMode == GameMode.KillTheKing;
+            SetText(maxRoundsTitle, isKillTheKing ? "최대 라운드" : "최대 턴 수");
+            SetText(killTheKingHpTitle, isTeamMode ? "팀 HP" : "HP");
+            SetText(killTheKingHpValue, SelectedKillTheKingHp.ToString());
+            SetText(killTheKingPieceValue, startPieceCount.ToString());
+            SetText(killTheKingRoundsValue, killTheKingMaxRounds + "라운드");
+            SetActive(killTheKingHpLeftButton != null ? killTheKingHpLeftButton.gameObject : null, true);
+            SetActive(killTheKingHpRightButton != null ? killTheKingHpRightButton.gameObject : null, true);
+            SetInteractable(killTheKingHpLeftButton, SelectedKillTheKingHp > (isTeamMode ? 1 : 5));
+            SetInteractable(killTheKingHpRightButton, SelectedKillTheKingHp < (isTeamMode ? int.MaxValue : 10));
+            SetInteractable(killTheKingRoundsLeftButton, killTheKingMaxRounds > killTheKingMinRounds);
+            SetInteractable(killTheKingRoundsRightButton, killTheKingMaxRounds < killTheKingMaxRoundsLimit);
             SetText(startPieceCountValueText, startPieceCount.ToString());
             SetText(escapeTargetValueText, targetEscapeCount.ToString());
             var pieceOptions = GetStartPieceCountOptions();
+            SetInteractable(killTheKingPieceLeftButton, startPieceCount > pieceOptions[0]);
+            SetInteractable(killTheKingPieceRightButton, startPieceCount < pieceOptions[pieceOptions.Length - 1]);
             SetInteractable(startPieceCountLeftButton, startPieceCount > pieceOptions[0]);
             SetInteractable(startPieceCountRightButton, startPieceCount < pieceOptions[pieceOptions.Length - 1]);
             SetInteractable(escapeTargetLeftButton, targetEscapeCount > GameRuleDefine.MinTargetEscapeCount);
             SetInteractable(escapeTargetRightButton, targetEscapeCount < GameRuleDefine.MaxTargetEscapeCount);
-            SetText(playerCountValueText, selectedPlayerCount + " Players");
+            SetText(playerCountValueText, selectedPlayerCount + "명");
             SetActive(playerCountPanel, !isTeamMode);
             SetActive(teamModePanel, isTeamMode);
             SetActive(soloModeOn, !isTeamMode);
@@ -432,8 +496,8 @@ namespace YutArena.UI
             SetActive(teamModeOff, !isTeamMode);
             RefreshTeamOptionSelection();
             RefreshMap();
-            SetText(turnLengthValueText, turnLength + " Turns");
-            SetText(turnTimeValueText, turnTimeOptions[turnTimeIndex] + " Seconds");
+            SetText(turnLengthValueText, turnLength + "턴");
+            SetText(turnTimeValueText, turnTimeOptions[turnTimeIndex] + "초");
 
             SetInteractable(playerCountLeftButton, selectedPlayerCount > GameRuleDefine.MinDemoPlayerCount);
             SetInteractable(playerCountRightButton, selectedPlayerCount < GameRuleDefine.MaxDemoPlayerCount);
@@ -495,9 +559,6 @@ namespace YutArena.UI
         private bool CanStartGame()
         {
             if (!LocalSelectionInput.SharedInputAvailable)
-                return false;
-
-            if (SelectedGameMode == GameMode.KillTheKing)
                 return false;
 
             if (selectedPlayerCount < GameRuleDefine.MinDemoPlayerCount || selectedPlayerCount > GameRuleDefine.MaxDemoPlayerCount)
@@ -593,11 +654,13 @@ namespace YutArena.UI
                 mapType = (int)SelectedMapType,
                 matchComposition = (int)GetMatchComposition(),
                 playerCount = selectedPlayerCount,
-                pieceCountPerPlayer = SelectedGameMode == GameMode.Escape
+                pieceCountPerPlayer = SelectedGameMode == GameMode.Escape || SelectedGameMode == GameMode.KillTheKing
                     ? startPieceCount : GameRuleDefine.DefaultPieceCountPerPlayer,
                 targetEscapeCount = SelectedGameMode == GameMode.Escape
                     ? targetEscapeCount : GameRuleDefine.DefaultTargetEscapeCount,
-                maxTurnCount = SelectedGameMode == GameMode.Classic ? 0 : turnLength,
+                maxTurnCount = SelectedGameMode == GameMode.Classic ? 0
+                    : SelectedGameMode == GameMode.KillTheKing ? killTheKingMaxRounds : turnLength,
+                killTheKingStartHp = SelectedGameMode == GameMode.KillTheKing ? SelectedKillTheKingHp : 0,
                 turnTimeSeconds = turnTimeOptions[turnTimeIndex],
                 isTeamMode = isTeamMode,
                 teamMode = selectedTeamOption,
@@ -665,6 +728,18 @@ namespace YutArena.UI
                 case 2: return "초록";
                 case 3: return "노랑";
                 default: return string.Empty;
+            }
+        }
+
+        private static string GetMapDisplayName(MapEntry map)
+        {
+            switch (map.mapType)
+            {
+                case MapType.Random: return "무작위";
+                case MapType.Basic: return "기본";
+                case MapType.Korean: return "한국";
+                case MapType.Grassland: return "초원";
+                default: return map.mapName;
             }
         }
 

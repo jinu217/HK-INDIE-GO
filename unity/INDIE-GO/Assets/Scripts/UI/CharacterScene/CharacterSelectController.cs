@@ -49,18 +49,6 @@ namespace YutArena.UI.CharacterScene
         [Tooltip("도움말 버튼을 누르면 열 패널")]
         [SerializeField] private GameObject helpPanel;
 
-        [Header("Lobby Settings UI")]
-        [Tooltip("게임 모드 텍스트")]
-        [SerializeField] private TMP_Text gameModeText;
-        [Tooltip("플레이어 수 텍스트")]
-        [SerializeField] private TMP_Text playerCountText;
-        [Tooltip("팀 구성 텍스트")]
-        [SerializeField] private TMP_Text teamCompositionText;
-        [Tooltip("맵 텍스트")]
-        [SerializeField] private TMP_Text mapText;
-        [Tooltip("턴 수 텍스트")]
-        [SerializeField] private TMP_Text turnCountText;
-
         [Header("Character UI")]
         [Tooltip("캐릭터 카드 목록")]
         [SerializeField] private CharacterCardView[] cardViews;
@@ -82,6 +70,8 @@ namespace YutArena.UI.CharacterScene
         private readonly int[] cursorIndexes = new int[MaxPlayerCount];
         private readonly bool[] selectedPlayers = new bool[MaxPlayerCount];
         private readonly CharacterData[] randomSelections = new CharacterData[MaxPlayerCount];
+        // 2인 1조(팀전1): 각 플레이어가 따라가는 팀 대표의 index. 대표 본인이거나 팀 규칙이 없으면 자기 자신.
+        private readonly int[] leaderIndexes = new int[MaxPlayerCount];
         private readonly List<CharacterData> runtimeCharacters = new List<CharacterData>();
 
         private int playerCount;
@@ -94,7 +84,6 @@ namespace YutArena.UI.CharacterScene
             CharacterSelectionResult.Clear();
             BuildRuntimeCharacterList();
             ResolvePlayers();
-            RefreshLobbySettingsUI();
 
             remainingTime = selectionTimeSeconds;
 
@@ -114,68 +103,6 @@ namespace YutArena.UI.CharacterScene
             InitializeCards();
             InitializePlayerMarkers();
             RefreshUI();
-        }
-
-        private void RefreshLobbySettingsUI()
-        {
-            GameStartSettings settings = GameStartSettingsHolder.Current;
-
-            if (settings == null)
-            {
-                SetText(gameModeText, "-");
-                SetText(playerCountText, $"{playerCount} Players");
-                SetText(teamCompositionText, "-");
-                SetText(mapText, "-");
-                SetText(turnCountText, "-");
-                return;
-            }
-
-            SetText(gameModeText, GetGameModeText(settings.gameMode));
-            SetText(playerCountText, $"{settings.playerCount} Players");
-            SetText(teamCompositionText, GetTeamCompositionText(settings));
-            SetText(mapText, GetMapText(settings.mapType));
-            SetText(turnCountText, $"{settings.maxTurnCount} Turns");
-        }
-
-        private static string GetGameModeText(GameMode gameMode)
-        {
-            return gameMode switch
-            {
-                GameMode.Classic => "Classic",
-                GameMode.Escape => "Escape",
-                GameMode.KillTheKing => "Kill The King",
-                _ => gameMode.ToString()
-            };
-        }
-
-        private static string GetMapText(MapType mapType)
-        {
-            return mapType switch
-            {
-                MapType.Random => "Random",
-                MapType.Basic => "Basic",
-                MapType.Grassland => "Grassland",
-                MapType.Korean => "Korean",
-                _ => mapType.ToString()
-            };
-        }
-
-        private static string GetTeamCompositionText(GameStartSettings settings)
-        {
-            if (!settings.isTeamMode)
-            {
-                return "Solo";
-            }
-
-            return settings.matchComposition switch
-            {
-                MatchComposition.TwoVsTwo => "2:2",
-                MatchComposition.ThreeVsThree => "3:3",
-                MatchComposition.FourVsFour => "4:4",
-                MatchComposition.TwoVsTwoVsTwo => "2:2:2",
-                MatchComposition.TwoVsTwoVsTwoVsTwo => "2:2:2:2",
-                _ => "Team"
-            };
         }
 
         private static void SetText(TMP_Text target, string value)
@@ -308,6 +235,39 @@ namespace YutArena.UI.CharacterScene
                 ? Mathf.Clamp(settings.playerCount, 1, MaxPlayerCount)
                 : Mathf.Clamp(fallbackPlayerCount, 1, MaxPlayerCount);
 
+            // 2인 1조(팀전1)는 팀마다 index가 가장 앞인 플레이어가 대표로 선택하고, 팀원은 대표의 선택을 따라간다.
+            bool sharedTeamCharacter = MatchCompositionRule.UsesSharedTeamCharacter(settings);
+            for (int i = 0; i < MaxPlayerCount; i++)
+            {
+                leaderIndexes[i] = i;
+                if (!sharedTeamCharacter || i >= playerCount) continue;
+
+                TeamSlot team = MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)(i + 1));
+                if (team == TeamSlot.None) continue;
+                for (int other = 0; other < i; other++)
+                {
+                    if (MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)(other + 1)) == team)
+                    {
+                        leaderIndexes[i] = other;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private bool IsFollower(int playerIndex) => leaderIndexes[playerIndex] != playerIndex;
+
+        // 팀원은 대표의 커서·선택 상태를 그대로 복사한다.
+        private void SyncFollowers()
+        {
+            for (int i = 0; i < playerCount; i++)
+            {
+                if (!IsFollower(i)) continue;
+                int leader = leaderIndexes[i];
+                cursorIndexes[i] = cursorIndexes[leader];
+                selectedPlayers[i] = selectedPlayers[leader];
+                randomSelections[i] = randomSelections[leader];
+            }
         }
 
         private void InitializeCards()
@@ -352,7 +312,7 @@ namespace YutArena.UI.CharacterScene
                 int teamIndex = isTeamMode && settings.playerTeams != null && playerIndex < settings.playerTeams.Length
                     ? settings.playerTeams[playerIndex] : 0;
                 marker.SetTeamImage(isTeamMode, teamIndex, redTeamMarkerSprite, blueTeamMarkerSprite);
-                marker.gameObject.SetActive(playerIndex < playerCount);
+                marker.gameObject.SetActive(playerIndex < playerCount && !IsFollower(playerIndex));
             }
         }
 
@@ -363,6 +323,8 @@ namespace YutArena.UI.CharacterScene
             int lastSharedPlayer = -1;
             for (int i = 0; i < playerCount; i++)
             {
+                // 팀원은 직접 선택하지 않는다 (대표 선택을 따라감).
+                if (IsFollower(i)) continue;
                 Gamepad assignedPad = LocalSelectionInput.GetGamepad(i);
                 if (assignedPad != null)
                 {
@@ -388,7 +350,7 @@ namespace YutArena.UI.CharacterScene
                 if (!selectedPlayers[keyboardPlayerIndex])
                 {
                     for (int i = keyboardPlayerIndex - 1; i >= 0; i--)
-                        if (LocalSelectionInput.GetGamepad(i) == null)
+                        if (!IsFollower(i) && LocalSelectionInput.GetGamepad(i) == null)
                         {
                             keyboardPlayerIndex = i;
                             break;
@@ -514,6 +476,7 @@ namespace YutArena.UI.CharacterScene
 
         private void RefreshUI()
         {
+            SyncFollowers();
             if (remainingTimeText != null)
             {
                 remainingTimeText.text = $"남은 시간 {Mathf.CeilToInt(remainingTime)}";
@@ -541,7 +504,7 @@ namespace YutArena.UI.CharacterScene
                 PlayerSelectionMarkerView marker = playerMarkerViews[playerIndex];
                 if (marker == null) continue;
 
-                if (playerIndex >= playerCount || cursorIndexes[playerIndex] >= OptionCount)
+                if (playerIndex >= playerCount || IsFollower(playerIndex) || cursorIndexes[playerIndex] >= OptionCount)
                 {
                     marker.gameObject.SetActive(false);
                     continue;
@@ -564,7 +527,8 @@ namespace YutArena.UI.CharacterScene
             // 낮은 P 번호부터 원래 위치를 차지하고, 이후 플레이어는 오른쪽으로 이동한다.
             for (int otherPlayerIndex = 0; otherPlayerIndex < playerIndex; otherPlayerIndex++)
             {
-                if (otherPlayerIndex < playerCount && cursorIndexes[otherPlayerIndex] == cardIndex)
+                if (otherPlayerIndex < playerCount && !IsFollower(otherPlayerIndex) &&
+                    cursorIndexes[otherPlayerIndex] == cardIndex)
                 {
                     order++;
                 }
@@ -616,6 +580,17 @@ namespace YutArena.UI.CharacterScene
 
             for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
             {
+                // 팀원은 대표가 최종 확정한 챔피언을 그대로 받는다 (대표 index가 항상 더 앞이라 이미 확정됨).
+                if (IsFollower(playerIndex))
+                {
+                    int leader = leaderIndexes[playerIndex];
+                    selectedPlayers[playerIndex] = true;
+                    randomSelections[playerIndex] = selectedCharacters[leader];
+                    selectedIds[playerIndex] = selectedIds[leader];
+                    selectedCharacters[playerIndex] = selectedCharacters[leader];
+                    continue;
+                }
+
                 if (randomizeUnselectedPlayers && !selectedPlayers[playerIndex])
                 {
                     randomSelections[playerIndex] = DrawRandomCharacter();

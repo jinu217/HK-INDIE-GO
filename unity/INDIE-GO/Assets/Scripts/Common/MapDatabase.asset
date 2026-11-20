@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.Common.MapDatabase
   maps:
   - index: 0
-    image: {fileID: 0}
+    image: {fileID: -4122962828729818712, guid: 140fab32491a7984a881ac81d5efd073, type: 3}
     mapName: Random
     description: 
     mapType: -1
