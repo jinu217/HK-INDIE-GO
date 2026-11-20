@@ -1,0 +1,221 @@
+{
+  "units": "same as prior Terrace_Detailed.obj",
+  "obj_up_axis": "Y",
+  "assemblies": [
+    {
+      "name": "Main_Left",
+      "collection": "20_Main_Left",
+      "anchor_blender": [
+        -6.72,
+        0.25,
+        0
+      ],
+      "banner_width": 1.12,
+      "banner_drop": 2.9,
+      "header_height": 4.55,
+      "panel": "royal_blue",
+      "type": "standing_banner",
+      "anchor_obj_y_up": [
+        -6.72,
+        0,
+        -0.25
+      ],
+      "local_asset": "Single_Main_Left.obj"
+    },
+    {
+      "name": "Main_Right",
+      "collection": "20_Main_Right",
+      "anchor_blender": [
+        6.72,
+        0.25,
+        0
+      ],
+      "banner_width": 1.12,
+      "banner_drop": 2.9,
+      "header_height": 4.55,
+      "panel": "royal_blue",
+      "type": "standing_banner",
+      "anchor_obj_y_up": [
+        6.72,
+        0,
+        -0.25
+      ],
+      "local_asset": "Single_Main_Right.obj"
+    },
+    {
+      "name": "Rear_Teal",
+      "collection": "20_Rear_Teal",
+      "anchor_blender": [
+        -5.8,
+        6.3,
+        0
+      ],
+      "banner_width": 0.76,
+      "banner_drop": 2.25,
+      "header_height": 2.55,
+      "panel": "teal",
+      "type": "standing_banner",
+      "anchor_obj_y_up": [
+        -5.8,
+        0,
+        -6.3
+      ],
+      "local_asset": "Single_Rear_Teal.obj"
+    },
+    {
+      "name": "Rear_Blue",
+      "collection": "20_Rear_Blue",
+      "anchor_blender": [
+        4.4,
+        6.3,
+        0
+      ],
+      "banner_width": 0.76,
+      "banner_drop": 2.25,
+      "header_height": 2.55,
+      "panel": "royal_blue",
+      "type": "standing_banner",
+      "anchor_obj_y_up": [
+        4.4,
+        0,
+        -6.3
+      ],
+      "local_asset": "Single_Rear_Blue.obj"
+    },
+    {
+      "name": "Central_Banner",
+      "collection": "20_Central_Banner",
+      "anchor_blender": [
+        0,
+        5.69,
+        1.65
+      ],
+      "banner_width": 0.82,
+      "banner_drop": 1.88,
+      "header_height": 2.15,
+      "panel": "royal_blue",
+      "type": "wall_mounted_banner",
+      "anchor_obj_y_up": [
+        0,
+        1.65,
+        -5.69
+      ],
+      "local_asset": "Single_Central_Banner.obj"
+    }
+  ],
+  "cloth_clearance_checks": [
+    {
+      "name": "Main_Left_Cloth",
+      "vertices": 3157,
+      "world_play_area_intrusion_vertices": 0,
+      "projected_board_overlap_vertices": 0,
+      "screen_bounds_pixels": [
+        61.839092284440994,
+        -15.119970798492432,
+        227.87187027931213,
+        259.4405174255371
+      ]
+    },
+    {
+      "name": "Main_Right_Cloth",
+      "vertices": 3157,
+      "world_play_area_intrusion_vertices": 0,
+      "projected_board_overlap_vertices": 0,
+      "screen_bounds_pixels": [
+        1448.2024374008179,
+        -15.62498688697815,
+        1610.287082195282,
+        255.60875552892685
+      ]
+    },
+    {
+      "name": "Rear_Teal_Cloth",
+      "vertices": 3157,
+      "world_play_area_intrusion_vertices": 0,
+      "projected_board_overlap_vertices": 0,
+      "screen_bounds_pixels": [
+        324.7892680168152,
+        -108.90915369987488,
+        407.13149213790894,
+        63.917571008205414
+      ]
+    },
+    {
+      "name": "Rear_Blue_Cloth",
+      "vertices": 3157,
+      "world_play_area_intrusion_vertices": 0,
+      "projected_board_overlap_vertices": 0,
+      "screen_bounds_pixels": [
+        1149.9179697036743,
+        -109.20002591609955,
+        1226.014765739441,
+        62.72278505563736
+      ]
+    },
+    {
+      "name": "Central_Cloth",
+      "vertices": 2013,
+      "world_play_area_intrusion_vertices": 0,
+      "projected_board_overlap_vertices": 0,
+      "screen_bounds_pixels": [
+        799.938901424408,
+        -48.38069832324982,
+        872.061098575592,
+        95.33160209655762
+      ]
+    }
+  ],
+  "complete_scene_removed_old_plaque": [
+    "Blue_Enamel_Shield",
+    "Shield_Gold_Edge",
+    "Shield_Gold_Compass",
+    "Shield_Gold_Compass.001",
+    "Shield_Gold_Compass.002",
+    "Shield_Gold_Compass.003",
+    "Shield_Gold_Compass.004",
+    "Shield_Gold_Compass.005",
+    "Shield_Gold_Compass.006",
+    "Shield_Gold_Compass.007"
+  ],
+  "static_cloth": true,
+  "background_is_preview_only": true,
+  "coordinate_note": "OBJ axes: X right, Y up; Blender (x,y,z) becomes OBJ (x,z,-y). Use identical importer settings and root transforms for prior map and placed additions.",
+  "evaluated_triangle_clearance_checks": [
+    {
+      "cloth": "Central_Cloth",
+      "evaluated_triangles": 8048,
+      "screen_board_intersecting_triangles": 0,
+      "world_board_intersecting_triangles": 0,
+      "thickness": 0.006
+    },
+    {
+      "cloth": "Main_Left_Cloth",
+      "evaluated_triangles": 12624,
+      "screen_board_intersecting_triangles": 0,
+      "world_board_intersecting_triangles": 0,
+      "thickness": 0.006
+    },
+    {
+      "cloth": "Main_Right_Cloth",
+      "evaluated_triangles": 12624,
+      "screen_board_intersecting_triangles": 0,
+      "world_board_intersecting_triangles": 0,
+      "thickness": 0.006
+    },
+    {
+      "cloth": "Rear_Blue_Cloth",
+      "evaluated_triangles": 12624,
+      "screen_board_intersecting_triangles": 0,
+      "world_board_intersecting_triangles": 0,
+      "thickness": 0.006
+    },
+    {
+      "cloth": "Rear_Teal_Cloth",
+      "evaluated_triangles": 12624,
+      "screen_board_intersecting_triangles": 0,
+      "world_board_intersecting_triangles": 0,
+      "thickness": 0.006
+    }
+  ],
+  "triangle_check_camera": "Camera_Source_Match; this clearance does not guarantee every possible free camera angle"
+}

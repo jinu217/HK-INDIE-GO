@@ -13,18 +13,24 @@ MonoBehaviour:
   m_Name: GrasslandMapDefinition
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
   mapType: 1
-  backgroundPrefab: {fileID: 0}
-  boardPrefab: {fileID: 0}
+  backgroundPrefab: {fileID: 7916582679720015828, guid: 3be5ec62a0ce9504487e7c6b7f9fb255, type: 3}
+  startTilePrefab: {fileID: 0}
+  outerTilePrefab: {fileID: 0}
+  innerTilePrefab: {fileID: 0}
+  corner01TilePrefab: {fileID: 0}
+  corner02TilePrefab: {fileID: 0}
+  corner03TilePrefab: {fileID: 0}
+  centerTilePrefab: {fileID: 0}
   specialTiles:
   - tileId: 6
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 11
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 16
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
   - tileId: 22
-    effect: 0
+    tileEvent: {fileID: 0}
     value: 0
