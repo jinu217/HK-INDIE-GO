@@ -23,14 +23,30 @@ namespace YutArena.EditorTools
             if (theme == null) { theme = ScriptableObject.CreateInstance<InGameSettingsTheme>(); AssetDatabase.CreateAsset(theme, Path); }
             theme.font = AssetDatabase.LoadAssetAtPath<TMPro.TMP_FontAsset>("Assets/Fonts/NEXON Lv2 Gothic SDF.asset");
             var paths = AssetDatabase.FindAssets("t:Texture2D", new[] { Art }).Select(AssetDatabase.GUIDToAssetPath).ToArray();
-            theme.layers = new Texture2D[18];
-            for (int i = 0; i < 18; i++)
+            Texture2D Load(string prefix)
             {
-                string prefix = (i + 1).ToString("00") + "_";
                 string file = paths.FirstOrDefault(p => System.IO.Path.GetFileName(p).StartsWith(prefix));
                 if (file == null) throw new System.InvalidOperationException("인게임 설정 이미지 누락: " + prefix);
-                theme.layers[i] = AssetDatabase.LoadAssetAtPath<Texture2D>(file);
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(file);
             }
+            theme.windowBackground = Load("01_");
+            theme.closeIcon = Load("02_");
+            theme.selectedTab = Load("03_");
+            theme.footerButton = Load("04_");
+            theme.generalPreview = Load("05_");
+            theme.sizeIdle = Load("06_");
+            theme.sizeSelected = Load("07_");
+            theme.soundDividers = Load("08_");
+            theme.sliderEmpty = Load("09_");
+            theme.sliderFilled = Load("10_");
+            theme.sliderThumb = Load("11_");
+            theme.controlsTable = Load("12_");
+            theme.bindingIdle = Load("13_");
+            theme.bindingListening = Load("14_");
+            theme.confirmationScrim = Load("15_");
+            theme.confirmationFrame = Load("16_");
+            theme.confirmationCancel = Load("17_");
+            theme.confirmationAccept = Load("18_");
             EditorUtility.SetDirty(theme); AssetDatabase.SaveAssetIfDirty(theme);
         }
 
@@ -44,14 +60,19 @@ namespace YutArena.EditorTools
             var panel = Object.FindFirstObjectByType<InGameSettingsPanel>(FindObjectsInactive.Include);
             if (panel == null)
             {
-                var root = new GameObject("InGameSettingsPanel", typeof(RectTransform));
-                Undo.RegisterCreatedObjectUndo(root, "Place in-game settings");
-                panel = root.AddComponent<InGameSettingsPanel>();
+                var prefab = Resources.Load<GameObject>("UI/Settings/InGameSettingsPanelRoot");
+                if (prefab == null) throw new System.InvalidOperationException("InGameSettingsPanelRoot prefab is missing.");
+                var root = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
+                Undo.RegisterCreatedObjectUndo(root, "Place InGameSettingsPanel");
+                panel = root.GetComponent<InGameSettingsPanel>();
             }
             panel.BuildSceneLayout();
             var button = Object.FindObjectsByType<UnityEngine.UI.Button>(FindObjectsInactive.Include, FindObjectsSortMode.None)
                 .FirstOrDefault(b => b.name == "OptionBtn" && b.gameObject.scene == scene);
             if (button == null) throw new System.InvalidOperationException("OptionBtn이 없습니다.");
+            var panelFields = new SerializedObject(panel);
+            panelFields.FindProperty("optionButton").objectReferenceValue = button;
+            panelFields.ApplyModifiedProperties();
             bool connected = false;
             for (int i = 0; i < button.onClick.GetPersistentEventCount(); i++)
                 connected |= button.onClick.GetPersistentTarget(i) == panel && button.onClick.GetPersistentMethodName(i) == nameof(InGameSettingsPanel.Open);

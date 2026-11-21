@@ -51,15 +51,11 @@ namespace YutArena.EditorTools
             var panel = Object.FindFirstObjectByType<SettingsPanel>(FindObjectsInactive.Include);
             if (panel == null)
             {
-                var root = new GameObject("SettingsPanel", typeof(RectTransform), typeof(Canvas), typeof(UnityEngine.UI.CanvasScaler), typeof(UnityEngine.UI.GraphicRaycaster));
+                var prefab = Resources.Load<GameObject>("UI/Settings/SettingsPanelRoot");
+                if (prefab == null) throw new System.InvalidOperationException("SettingsPanelRoot prefab is missing.");
+                var root = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
                 Undo.RegisterCreatedObjectUndo(root, "Place SettingsPanel");
-                var canvas = root.GetComponent<Canvas>();
-                canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 2000;
-                var scaler = root.GetComponent<UnityEngine.UI.CanvasScaler>();
-                scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
-                scaler.referenceResolution = new Vector2(1920, 1080);
-                scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.Expand;
-                panel = root.AddComponent<SettingsPanel>();
+                panel = root.GetComponent<SettingsPanel>();
             }
             panel.BuildSceneLayout();
             var controller = Object.FindFirstObjectByType<YutArena.UI.StartSceneUIController>();

@@ -223,6 +223,13 @@ MonoBehaviour:
   m_Name: SettingsTheme
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.SettingsTheme
   font: {fileID: 11400000, guid: 20f3c23145a75e54e93ad0a2ca6cddbc, type: 2}
+  textColor: {r: 0.12156863, g: 0.19607843, b: 0.30980393, a: 1}
+  selectedTextColor: {r: 1, g: 1, b: 1, a: 1}
+  selectedBackgroundColor: {r: 0.13725491, g: 0.30588236, b: 0.5372549, a: 1}
+  dropdownBackgroundColor: {r: 0.98039216, g: 0.96862745, b: 0.9372549, a: 1}
+  disabledButtonTint: {r: 0.90588236, g: 0.88235295, b: 0.827451, a: 1}
+  disabledTextColor: {r: 0.56078434, g: 0.5411765, b: 0.4862745, a: 1}
+  previewTextSizes: {x: 22, y: 27, z: 32}
   titleWindow: {fileID: 2800000, guid: 74a9ee9a92b647d418c5a00f5a7b0f8f, type: 3}
   gameWindow: {fileID: 2800000, guid: a0834862d3ed6f743b26ab56ce5ca5b8, type: 3}
   confirmation: {fileID: 2800000, guid: 5f2fbaf0e660aa34ca2407510d516b17, type: 3}

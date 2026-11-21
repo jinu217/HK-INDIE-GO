@@ -13,22 +13,24 @@ MonoBehaviour:
   m_Name: InGameSettingsTheme
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGameSettingsTheme
   font: {fileID: 11400000, guid: 20f3c23145a75e54e93ad0a2ca6cddbc, type: 2}
-  layers:
-  - {fileID: 2800000, guid: a0834862d3ed6f743b26ab56ce5ca5b8, type: 3}
-  - {fileID: 2800000, guid: 172fead77d5aacd4a9b761d28ef43d5f, type: 3}
-  - {fileID: 2800000, guid: 278eb10e20e30df44b5de2a29136770f, type: 3}
-  - {fileID: 2800000, guid: eb1d7b2ac124e9140ae24ccd24eaa4ef, type: 3}
-  - {fileID: 2800000, guid: 532522f444921b2408eb18b334d32acb, type: 3}
-  - {fileID: 2800000, guid: 44d97cd36a10bdc40b49c5c6c88f6d69, type: 3}
-  - {fileID: 2800000, guid: 6ac138861e4c20245a2a6c6129e662bc, type: 3}
-  - {fileID: 2800000, guid: db5e5a1fc34ff18479584179c206e32a, type: 3}
-  - {fileID: 2800000, guid: e2f4752ec9dba6940b681c1b4745997e, type: 3}
-  - {fileID: 2800000, guid: d1042bb2edb5149488a0c0822c721faa, type: 3}
-  - {fileID: 2800000, guid: ac31c510735bc814bb528e96d4f34797, type: 3}
-  - {fileID: 2800000, guid: 120992a83972ab94e8da4a38251d9b37, type: 3}
-  - {fileID: 2800000, guid: d6bb6067b9e8c7b48b04ccde0c1cd4bd, type: 3}
-  - {fileID: 2800000, guid: 369dd574ad4cbf247af505924e790173, type: 3}
-  - {fileID: 2800000, guid: 334372ccfe75fde41a21b3180efe2774, type: 3}
-  - {fileID: 2800000, guid: ecff335e0d66af2429590fc9723a5d24, type: 3}
-  - {fileID: 2800000, guid: 57343ddecf95d5040ae2433260be0636, type: 3}
-  - {fileID: 2800000, guid: 19c51c6dfe55a5e41a93cf6025c6928e, type: 3}
+  textColor: {r: 0.12156863, g: 0.18039216, b: 0.29803923, a: 1}
+  selectedTextColor: {r: 1, g: 1, b: 1, a: 1}
+  previewTextSizes: {x: 27, y: 33, z: 39}
+  windowBackground: {fileID: 2800000, guid: a0834862d3ed6f743b26ab56ce5ca5b8, type: 3}
+  closeIcon: {fileID: 2800000, guid: 172fead77d5aacd4a9b761d28ef43d5f, type: 3}
+  selectedTab: {fileID: 2800000, guid: 278eb10e20e30df44b5de2a29136770f, type: 3}
+  footerButton: {fileID: 2800000, guid: eb1d7b2ac124e9140ae24ccd24eaa4ef, type: 3}
+  generalPreview: {fileID: 2800000, guid: 532522f444921b2408eb18b334d32acb, type: 3}
+  sizeIdle: {fileID: 2800000, guid: 44d97cd36a10bdc40b49c5c6c88f6d69, type: 3}
+  sizeSelected: {fileID: 2800000, guid: 6ac138861e4c20245a2a6c6129e662bc, type: 3}
+  soundDividers: {fileID: 2800000, guid: db5e5a1fc34ff18479584179c206e32a, type: 3}
+  sliderEmpty: {fileID: 2800000, guid: e2f4752ec9dba6940b681c1b4745997e, type: 3}
+  sliderFilled: {fileID: 2800000, guid: d1042bb2edb5149488a0c0822c721faa, type: 3}
+  sliderThumb: {fileID: 2800000, guid: ac31c510735bc814bb528e96d4f34797, type: 3}
+  controlsTable: {fileID: 2800000, guid: 120992a83972ab94e8da4a38251d9b37, type: 3}
+  bindingIdle: {fileID: 2800000, guid: d6bb6067b9e8c7b48b04ccde0c1cd4bd, type: 3}
+  bindingListening: {fileID: 2800000, guid: 369dd574ad4cbf247af505924e790173, type: 3}
+  confirmationScrim: {fileID: 2800000, guid: 334372ccfe75fde41a21b3180efe2774, type: 3}
+  confirmationFrame: {fileID: 2800000, guid: ecff335e0d66af2429590fc9723a5d24, type: 3}
+  confirmationCancel: {fileID: 2800000, guid: 57343ddecf95d5040ae2433260be0636, type: 3}
+  confirmationAccept: {fileID: 2800000, guid: 19c51c6dfe55a5e41a93cf6025c6928e, type: 3}

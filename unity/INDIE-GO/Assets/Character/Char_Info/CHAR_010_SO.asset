@@ -16,7 +16,7 @@ MonoBehaviour:
   char_Name: "SF \uAD70\uC778"
   char_Desc: 
   char_Icon: {fileID: 21300000, guid: 3b3669508d4b4ef48a94e83d7d027d28, type: 3}
-  panelViewImage: {fileID: 0}
+  panelViewImage: {fileID: 21300000, guid: 10671ffec8bbaa4469a202eb5aa53ee1, type: 3}
   illustrationImage: {fileID: 21300000, guid: 6176d6bb7a1749049afe4dba424e2117, type: 3}
   pieceImage: {fileID: 21300000, guid: 041d1c4a7cb81ed429f918b7a9debee6, type: 3}
   passive_Icon: {fileID: -7054484961733533825, guid: bb8cd6a431433a641a57c6e00231e9a7, type: 3}

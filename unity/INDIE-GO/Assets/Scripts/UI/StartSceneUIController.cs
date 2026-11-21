@@ -30,16 +30,6 @@ namespace YutArena.UI
         [Tooltip("온라인 게임 참가하기 버튼")]
         [SerializeField] private Button onlineJoinGameButton;
 
-        [Header("Help Buttons")]
-        [Tooltip("윷놀이 규칙 버튼")]
-        [SerializeField] private Button yutRuleHelpButton;
-        [Tooltip("캐릭터 설명 버튼")]
-        [SerializeField] private Button characterHelpButton;
-        [Tooltip("맵 설명 버튼")]
-        [SerializeField] private Button mapHelpButton;
-        [Tooltip("모드 설명 버튼")]
-        [SerializeField] private Button modeHelpButton;
-
         [Header("Panels")]
         [Tooltip("온라인 게임 버튼 묶음")]
         [FormerlySerializedAs("onlineGamePanel")]
@@ -50,18 +40,6 @@ namespace YutArena.UI
         [SerializeField] private GameObject helpPanel;
         [Tooltip("설정 패널")]
         [SerializeField] private SettingsPanel settingsPanel;
-
-        [Header("Help Image")]
-        [Tooltip("도움말 표시 이미지")]
-        [SerializeField] private Image helpContentImage;
-        [Tooltip("윷놀이 규칙 이미지")]
-        [SerializeField] private Sprite yutRuleHelpSprite;
-        [Tooltip("캐릭터 설명 이미지")]
-        [SerializeField] private Sprite characterHelpSprite;
-        [Tooltip("맵 설명 이미지")]
-        [SerializeField] private Sprite mapHelpSprite;
-        [Tooltip("모드 설명 이미지")]
-        [SerializeField] private Sprite modeHelpSprite;
 
         [Header("Scene")]
         [Tooltip("로컬 대기실 씬 이름")]
@@ -115,13 +93,11 @@ namespace YutArena.UI
             if (settingsPanel == null) settingsPanel = FindFirstObjectByType<SettingsPanel>(FindObjectsInactive.Include);
             ValidateRequiredReferences();
             BindButtons();
-            SetupHelpImage();
             HideAllPanels();
         }
 
         private void BindButtons()
         {
-            BindPanelEscapeButton(helpPanel);
             AddClick(helpButton, OpenHelp);
             AddClick(settingsButton, OpenSettings);
             AddClick(quitButton, () => SettingsPanel.ConfirmQuit(QuitGame));
@@ -132,20 +108,7 @@ namespace YutArena.UI
             AddClick(onlineCreateGameButton, ShowOnlineFeaturePending);
             AddClick(onlineJoinGameButton, OpenOnlineJoin);
 
-            AddClick(yutRuleHelpButton, ShowYutRuleHelp);
-            AddClick(characterHelpButton, ShowCharacterHelp);
-            AddClick(mapHelpButton, ShowMapHelp);
-            AddClick(modeHelpButton, ShowModeHelp);
-        }
 
-        private static void BindPanelEscapeButton(GameObject panel)
-        {
-            if (panel == null) return;
-            foreach (Button button in panel.GetComponentsInChildren<Button>(true))
-            {
-                if (button.name == "ESCButton")
-                    button.onClick.AddListener(() => panel.SetActive(false));
-            }
         }
 
         private void ValidateRequiredReferences()
@@ -166,14 +129,6 @@ namespace YutArena.UI
             WarnIfMissing(onlineJoinPanel, nameof(onlineJoinPanel));
             WarnIfMissing(helpPanel, nameof(helpPanel));
             WarnIfMissing(settingsPanel, nameof(settingsPanel));
-        }
-
-        private void SetupHelpImage()
-        {
-            if (helpContentImage != null && helpContentImage.sprite == null)
-            {
-                SetHelpImage(yutRuleHelpSprite);
-            }
         }
 
         private void ShowOnlineGamePanel()
@@ -238,38 +193,6 @@ namespace YutArena.UI
         {
             SetActive(onlineJoinPanel, false);
             SetActive(helpPanel, false);
-        }
-
-        private void ShowYutRuleHelp()
-        {
-            SetHelpImage(yutRuleHelpSprite);
-        }
-
-        private void ShowCharacterHelp()
-        {
-            SetHelpImage(characterHelpSprite);
-        }
-
-        private void ShowMapHelp()
-        {
-            SetHelpImage(mapHelpSprite);
-        }
-
-        private void ShowModeHelp()
-        {
-            SetHelpImage(modeHelpSprite);
-        }
-
-        private void SetHelpImage(Sprite sprite)
-        {
-            if (helpContentImage == null || sprite == null)
-            {
-                return;
-            }
-
-            helpContentImage.sprite = sprite;
-            helpContentImage.preserveAspect = true;
-            helpContentImage.enabled = true;
         }
 
         private void QuitGame()

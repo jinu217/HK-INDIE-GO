@@ -15,8 +15,7 @@ namespace YutArena.UI
     {
         [Tooltip("플레이어 번호 이미지")]
         [SerializeField] private Image playerNumberImage;
-        [SerializeField] private Sprite redTeamNumberSprite;
-        [SerializeField] private Sprite blueTeamNumberSprite;
+        [SerializeField] private GameObject skillRoot;
         private Sprite originalNumberSprite;
         private bool capturedNumberSprite;
 
@@ -30,8 +29,8 @@ namespace YutArena.UI
             }
             var team = settings != null && settings.isTeamMode
                 ? MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)personNumber) : TeamSlot.None;
-            var sprite = team == TeamSlot.TeamA ? redTeamNumberSprite
-                : team == TeamSlot.TeamB ? blueTeamNumberSprite : null;
+            var sprite = theme == null ? null : team == TeamSlot.TeamA ? theme.redTeamMarker
+                : team == TeamSlot.TeamB ? theme.blueTeamMarker : null;
             playerNumberImage.sprite = sprite != null ? sprite : originalNumberSprite;
         }
 
@@ -43,23 +42,19 @@ namespace YutArena.UI
         [SerializeField] private Image passiveSkillImage;
         [Tooltip("액티브 스킬 이미지")]
         [SerializeField] private Image activeSkillImage;
+        [SerializeField] private InGameHUDTheme theme;
+
         [Header("Victory Conditions")]
         [SerializeField] private GameObject escapeVictoryPanel;
         [SerializeField] private TMP_Text currentEscapeCountText;
         [SerializeField] private TMP_Text targetEscapeCountText;
         [SerializeField] private GameObject classicVictoryPanel;
         [SerializeField] private Image[] classicPieceImages;
-        [Tooltip("클래식에서 아직 탈출하지 않은 말의 이미지 (1~4번)")]
-        [SerializeField] private Sprite[] classicPendingSprites;
-        [Tooltip("클래식에서 탈출한 말의 이미지 (1~4번)")]
-        [SerializeField] private Sprite[] classicFinishedSprites;
         [Header("Available Pieces")]
         [Tooltip("게임 시작 시 플레이어의 말 개수만큼 복제할 이미지. 씬에서는 비활성화해 둡니다.")]
         [SerializeField] private Image availablePieceImageTemplate;
         [Tooltip("현재 차례일 때만 활성화할 테두리 또는 표식")]
         [SerializeField] private GameObject currentTurnHighlight;
-        [Tooltip("다음 차례일 때만 활성화할 테두리 또는 표식")]
-        [SerializeField] private GameObject nextTurnHighlight;
         [Tooltip("이 플레이어의 패시브/액티브 상세 정보를 함께 표시할 공용 패널")]
         [SerializeField] private CharacterSkillDetailPanelView skillDetailPanel;
         [Min(0f)]
@@ -85,9 +80,7 @@ namespace YutArena.UI
             CharacterData character = player.SelectedCharacter;
             currentCharacter = character;
             skillsVisible = settings == null || settings.gameMode != GameMode.Classic;
-            foreach (Transform child in GetComponentsInChildren<Transform>(true))
-                if (child != transform && child.name == "Skill")
-                    child.gameObject.SetActive(skillsVisible);
+            if (skillRoot != null) skillRoot.SetActive(skillsVisible);
             if (!skillsVisible)
             {
                 CancelHover();
@@ -164,7 +157,7 @@ namespace YutArena.UI
             {
                 Image image = classicPieceImages[i];
                 if (image == null) continue;
-                Sprite[] sprites = i < finishedCount ? classicFinishedSprites : classicPendingSprites;
+                Sprite[] sprites = theme == null ? null : i < finishedCount ? theme.finishedPieces : theme.unfinishedPieces;
                 Sprite sprite = sprites != null && i < sprites.Length ? sprites[i] : null;
                 image.sprite = sprite;
                 image.enabled = sprite != null;
@@ -229,16 +222,10 @@ namespace YutArena.UI
             }
         }
 
-        public void SetTurnState(bool isCurrentTurn, bool isNextTurn)
+        public void SetTurnState(bool isCurrentTurn)
         {
-            // 현재 차례가 최우선입니다. 현재/다음 차례가 아니면 둘 다 꺼집니다.
-            bool showCurrentHighlight = isCurrentTurn;
-            bool showNextHighlight = !isCurrentTurn && isNextTurn;
-
             if (currentTurnHighlight != null)
-                currentTurnHighlight.SetActive(showCurrentHighlight);
-            if (nextTurnHighlight != null)
-                nextTurnHighlight.SetActive(showNextHighlight);
+                currentTurnHighlight.SetActive(isCurrentTurn);
         }
 
         private static void SetText(TMP_Text target, string value)

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 261573fbd9d7951438f537eda5c17a68
+guid: e49fd355bd689a242a0dceae4b343abe
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 5807866043213895335
-    second: "8_\uC5D8\uD504 1_0"
+      213: -737065717578261437
+    second: chat_frame_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,23 +100,23 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: "8_\uC5D8\uD504 1_0"
+      name: chat_frame_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 2500
-        height: 3500
+        width: 1506
+        height: 922
       alignment: 0
-      pivot: {x: 0.5, y: 0.5}
+      pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7a651d8156fa99050800000000000000
-      internalID: 5807866043213895335
+      spriteID: 34c11af82aa65c5f0800000000000000
+      internalID: -737065717578261437
       vertices: []
       indices: 
       edges: []
@@ -125,7 +125,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 3bea1e0ee257e9246a3babf112abe418
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      "8_\uC5D8\uD504 1_0": 5807866043213895335
+      chat_frame_0: -737065717578261437
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

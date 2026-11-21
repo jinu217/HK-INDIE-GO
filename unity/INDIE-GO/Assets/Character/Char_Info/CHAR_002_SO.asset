@@ -15,10 +15,10 @@ MonoBehaviour:
   char_ID: 2
   char_Name: "\uC804\uC6B0\uCE58"
   char_Desc: "\uC804\uC6B0\uCE58"
-  char_Icon: {fileID: -226022335290975863, guid: c0b4b483af23f57459736b619bb38d0b, type: 3}
-  panelViewImage: {fileID: 0}
-  illustrationImage: {fileID: 6160567813913587780, guid: 3bcf64eee5f11b14fb6c24bf36db3ca0, type: 3}
-  pieceImage: {fileID: -4851358060752382073, guid: 40c434ab732a58c4aaa46ac56a66a870, type: 3}
+  char_Icon: {fileID: 21300000, guid: c0b4b483af23f57459736b619bb38d0b, type: 3}
+  panelViewImage: {fileID: 21300000, guid: 46ca81d2d49dd61419ec8053e4d49095, type: 3}
+  illustrationImage: {fileID: 21300000, guid: 3bcf64eee5f11b14fb6c24bf36db3ca0, type: 3}
+  pieceImage: {fileID: 21300000, guid: 40c434ab732a58c4aaa46ac56a66a870, type: 3}
   passive_Icon: {fileID: 1091065062650771398, guid: 22bfe8d06ef357847b15b5b91bb625aa, type: 3}
   passive_Name: "\uB3C4\uC0AC\uC758 \uBD80\uC801"
   passive_Desc: "\uB9D0\uC774 \uD310\uC5D0 \uC62C\uB77C\uAC00\uBA74 \uAC00\uC7A5

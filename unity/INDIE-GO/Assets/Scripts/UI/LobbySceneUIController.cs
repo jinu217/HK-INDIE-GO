@@ -587,21 +587,6 @@ namespace YutArena.UI
             return redCount == 2 && blueCount == 2;
         }
 
-        private int GetConnectedRequiredPlayerCount()
-        {
-            int connectedCount = 0;
-
-            for (int playerIndex = 0; playerIndex < selectedPlayerCount; playerIndex++)
-            {
-                if (LocalPlayerJoinState.IsJoined(playerIndex))
-                {
-                    connectedCount++;
-                }
-            }
-
-            return connectedCount;
-        }
-
         private void StartGame()
         {
             if (!CanStartGame())
@@ -639,11 +624,6 @@ namespace YutArena.UI
         public string GetCurrentRoomSettingsJson()
         {
             return CreateRoomSettingsData().ToJson();
-        }
-
-        private GameStartSettings CreateGameStartSettings()
-        {
-            return CreateRoomSettingsData().ToGameStartSettings();
         }
 
         private RoomSettingsData CreateRoomSettingsData()

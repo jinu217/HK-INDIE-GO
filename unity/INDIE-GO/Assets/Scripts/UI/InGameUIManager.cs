@@ -15,6 +15,8 @@ namespace YutArena.UI
     public sealed class InGameUIManager : MonoBehaviour
     {
 
+        [SerializeField] private InGameHUDTheme theme;
+
         [Header("Managers")]
         [SerializeField] private TestGameManager gameManager;
         [SerializeField] private TestTurnManager turnManager;
@@ -25,6 +27,7 @@ namespace YutArena.UI
         [SerializeField] private InGamePlayerPanelView[] playerPanels;
 
         [Header("Game Info")]
+        [SerializeField] private GameObject turnCountRoot;
         [SerializeField] private TMP_Text turnTimeText;
         [Tooltip("현재 턴(라운드) 숫자")]
         [SerializeField] private TMP_Text turnCountText;
@@ -40,17 +43,9 @@ namespace YutArena.UI
         [SerializeField] private SkillTooltipTrigger activeSkillTooltip;
 
         [Header("Current Player SP")]
-        [Tooltip("SP 이미지를 나열할 빈 UI 컨테이너 (Layout Group 없이 사용)")]
+        [Tooltip("SP 이미지를 정렬할 HorizontalLayoutGroup 컨테이너")]
         [SerializeField] private RectTransform spContainer;
-        [Tooltip("현재 보유한 SP를 표시할 이미지")]
-        [SerializeField] private Sprite spSprite;
-        [Tooltip("아직 채워지지 않은 SP를 표시할 이미지")]
-        [SerializeField] private Sprite emptySpSprite;
-        [Tooltip("SP 이미지 한 개의 표시 크기")]
-        [SerializeField] private Vector2 spImageSize = new Vector2(32f, 32f);
-        [Tooltip("SP 이미지 사이 간격")]
-        [SerializeField, Min(0f)] private float spSpacing = 3f;
-
+        [SerializeField] private Image spImageTemplate;
         [Header("Current Player Waiting Pieces")]
         [Tooltip("현재 턴 플레이어의 대기 말 이미지를 배치할 GridLayoutGroup 컨테이너")]
         [SerializeField] private RectTransform commonAvailablePiecesContainer;
@@ -206,7 +201,7 @@ namespace YutArena.UI
 
         private void RefreshCurrentPlayerSP()
         {
-            if (spContainer == null || spSprite == null)
+            if (spContainer == null || theme == null || theme.skillPointFilled == null || spImageTemplate == null)
             {
                 foreach (Image image in spImages)
                     if (image != null) image.gameObject.SetActive(false);
@@ -223,14 +218,10 @@ namespace YutArena.UI
         {
             maximum = Mathf.Max(0, maximum);
             count = Mathf.Clamp(count, 0, maximum);
-            Vector2 size = new Vector2(Mathf.Max(1f, spImageSize.x), Mathf.Max(1f, spImageSize.y));
             while (spImages.Count < maximum)
             {
-                GameObject icon = new GameObject($"SP_{spImages.Count + 1}", typeof(RectTransform), typeof(Image));
-                icon.transform.SetParent(spContainer, false);
-                Image image = icon.GetComponent<Image>();
-                image.raycastTarget = false;
-                image.preserveAspect = true;
+                Image image = Instantiate(spImageTemplate, spContainer, false);
+                image.name = $"SP_{spImages.Count + 1}";
                 spImages.Add(image);
             }
             for (int i = 0; i < spImages.Count; i++)
@@ -238,17 +229,11 @@ namespace YutArena.UI
                 Image image = spImages[i];
                 if (image == null) continue;
                 bool filled = i < count;
-                image.sprite = filled || emptySpSprite == null ? spSprite : emptySpSprite;
-                image.color = !filled && emptySpSprite == null
-                    ? new Color(1f, 1f, 1f, 0.25f) : Color.white;
+                image.sprite = filled || theme.skillPointEmpty == null ? theme.skillPointFilled : theme.skillPointEmpty;
+                image.color = !filled && theme.skillPointEmpty == null
+                    ? theme.unfilledSkillPointColor : Color.white;
                 image.gameObject.SetActive(i < maximum);
-                RectTransform rect = image.rectTransform;
-                rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
-                rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.localScale = Vector3.one;
-                rect.localRotation = Quaternion.identity;
-                rect.sizeDelta = size;
-                rect.anchoredPosition = new Vector2((i - (maximum - 1) * 0.5f) * (size.x + spSpacing), 0f);
+
             }
         }
 
@@ -315,37 +300,23 @@ namespace YutArena.UI
         {
             if (playerPanels == null) return;
 
-            // 이전 턴의 표시를 모두 끈 뒤 현재/다음 플레이어만 다시 켭니다.
+            // 이전 턴의 표시를 모두 끈 뒤 현재 플레이어만 다시 켭니다.
             for (int i = 0; i < playerPanels.Length; i++)
             {
                 InGamePlayerPanelView panel = playerPanels[i];
-                if (panel != null) panel.SetTurnState(false, false);
+                if (panel != null) panel.SetTurnState(false);
             }
 
-            SetPlayerTurnState((int)currentPlayer, true, false);
-            SetPlayerTurnState(GetNextPlayerId(currentPlayer), false, true);
+            SetPlayerTurnState((int)currentPlayer, true);
         }
 
-        private void SetPlayerTurnState(int playerId, bool isCurrentTurn, bool isNextTurn)
+        private void SetPlayerTurnState(int playerId, bool isCurrentTurn)
         {
             int panelIndex = playerId - 1;
             if (panelIndex < 0 || panelIndex >= playerPanels.Length) return;
 
             InGamePlayerPanelView panel = playerPanels[panelIndex];
-            if (panel != null) panel.SetTurnState(isCurrentTurn, isNextTurn);
-        }
-
-        private int GetNextPlayerId(PlayerSlot currentPlayer)
-        {
-            if (turnManager == null || turnManager.CurrentTurn == null || turnManager.TurnOrder == null ||
-                turnManager.TurnOrder.order == null || turnManager.TurnOrder.order.Count <= 1)
-                return -1;
-
-            int currentIndex = turnManager.TurnOrder.order.IndexOf(currentPlayer);
-            if (currentIndex < 0) return -1;
-
-            int nextIndex = (currentIndex + 1) % turnManager.TurnOrder.order.Count;
-            return (int)turnManager.TurnOrder.order[nextIndex];
+            if (panel != null) panel.SetTurnState(isCurrentTurn);
         }
 
         private void RefreshTurnInfo()
@@ -353,12 +324,8 @@ namespace YutArena.UI
             if (turnCountText == null && maxTurnCountText == null) return;
 
             GameStartSettings settings = GetSettings();
-            Transform turnCountRoot = turnCountText != null ? turnCountText.transform
-                : maxTurnCountText.transform;
-            while (turnCountRoot != null && turnCountRoot.name != "TurnCount")
-                turnCountRoot = turnCountRoot.parent;
             if (turnCountRoot != null)
-                turnCountRoot.gameObject.SetActive(settings == null || settings.gameMode != GameMode.Classic);
+                turnCountRoot.SetActive(settings == null || settings.gameMode != GameMode.Classic);
             int current = turnManager != null && turnManager.CurrentTurn != null
                 ? turnManager.CurrentTurn.roundNumber // 턴 수 = 전원 1바퀴(라운드) 기준
                 : 0;

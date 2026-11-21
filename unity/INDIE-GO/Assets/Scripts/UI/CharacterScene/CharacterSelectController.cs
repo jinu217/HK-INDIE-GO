@@ -42,8 +42,6 @@ namespace YutArena.UI.CharacterScene
         [SerializeField] private GameStartLoadingPanel gameStartLoadingPanel;
         [Tooltip("설정 버튼")]
         [SerializeField] private Button settingButton;
-        [Tooltip("설정 버튼을 누르면 열 패널")]
-        [SerializeField] private GameObject settingPanel;
         [Tooltip("도움말 버튼")]
         [SerializeField] private Button helpButton;
         [Tooltip("도움말 버튼을 누르면 열 패널")]
@@ -97,7 +95,6 @@ namespace YutArena.UI.CharacterScene
                 settingButton.onClick.AddListener(ToggleSettingPanel);
             if (helpButton != null)
                 helpButton.onClick.AddListener(ToggleHelpPanel);
-            SetActive(settingPanel, false);
             SetActive(helpPanel, false);
 
             InitializeCards();
@@ -130,7 +127,6 @@ namespace YutArena.UI.CharacterScene
         public void ToggleSettingPanel()
         {
             SetActive(helpPanel, false);
-            SetActive(settingPanel, false);
             if (YutArena.UI.SettingsPanel.IsOpen) return;
             YutArena.UI.SettingsPanel.Show(false);
         }
@@ -139,11 +135,15 @@ namespace YutArena.UI.CharacterScene
         {
             if (helpPanel == null) return;
             bool shouldOpen = !helpPanel.activeSelf;
-            SetActive(settingPanel, false);
             SetActive(helpPanel, shouldOpen);
         }
 
-        public void CloseSettingPanel() => SetActive(settingPanel, false);
+        public void CloseSettingPanel()
+        {
+            if (!YutArena.UI.SettingsPanel.IsOpen) return;
+            var panel = FindFirstObjectByType<YutArena.UI.SettingsPanel>();
+            if (panel != null) panel.CloseImmediately();
+        }
 
         public void CloseHelpPanel() => SetActive(helpPanel, false);
 
@@ -181,7 +181,6 @@ namespace YutArena.UI.CharacterScene
         }
 
         private bool IsInfoPanelOpen =>
-            (settingPanel != null && settingPanel.activeInHierarchy) ||
             (helpPanel != null && helpPanel.activeInHierarchy);
 
         public void BackToLocalLobby()
@@ -408,21 +407,6 @@ namespace YutArena.UI.CharacterScene
         {
             if (!isFinalized && AreAllPlayersSelected())
                 BeginGameStart(false);
-        }
-
-        private void OnGUI()
-        {
-            if (isFinalized) return;
-            GUI.Label(new Rect(16, 16, 800, 28),
-                $"{(LocalSelectionInput.SharedGamepadSelected ? "Shared Gamepad" : "Keyboard")} P{keyboardPlayerIndex + 1}: Select / Confirm / Cancel | Extra gamepads: A to join");
-            string devices = string.Empty;
-            for (int i = 0; i < playerCount; i++)
-            {
-                string device = LocalSelectionInput.GetGamepad(i) != null ? "Gamepad" :
-                    LocalSelectionInput.SharedGamepadSelected ? "Shared Gamepad" : "Keyboard";
-                devices += $"P{i + 1}: {device}  ";
-            }
-            GUI.Label(new Rect(16, 46, 800, 28), devices);
         }
 
         private void ProcessGamepadInput(int playerIndex, Gamepad gamepad)

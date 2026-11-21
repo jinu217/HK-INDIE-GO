@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ce735ffa7c5dbc4baaf56ed122fa2c4, type: 3}
+  m_Name: InGameHUDTheme
+  m_EditorClassIdentifier: Assembly-CSharp::YutArena.UI.InGameHUDTheme
+  skillPointFilled: {fileID: -4669901389127126777, guid: 9599afebe0871b948aceed9b0fed817e, type: 3}
+  skillPointEmpty: {fileID: 4762294875224524033, guid: 1aee9c9402eec2f4090481d74aa6a3c2, type: 3}
+  unfilledSkillPointColor: {r: 1, g: 1, b: 1, a: 0.25}
+  redTeamMarker: {fileID: -1696580175995090963, guid: 85f80a2266f03944c85d6b23b2304aa5, type: 3}
+  blueTeamMarker: {fileID: 8251033789572523070, guid: 42f1f378eecd39b4f82decd0f2fceb28, type: 3}
+  unfinishedPieces:
+  - {fileID: -4669901389127126777, guid: 9599afebe0871b948aceed9b0fed817e, type: 3}
+  - {fileID: -4669901389127126777, guid: 9599afebe0871b948aceed9b0fed817e, type: 3}
+  - {fileID: -4669901389127126777, guid: 9599afebe0871b948aceed9b0fed817e, type: 3}
+  - {fileID: -4669901389127126777, guid: 9599afebe0871b948aceed9b0fed817e, type: 3}
+  finishedPieces:
+  - {fileID: 4762294875224524033, guid: 1aee9c9402eec2f4090481d74aa6a3c2, type: 3}
+  - {fileID: 4762294875224524033, guid: 1aee9c9402eec2f4090481d74aa6a3c2, type: 3}
+  - {fileID: 4762294875224524033, guid: 1aee9c9402eec2f4090481d74aa6a3c2, type: 3}
+  - {fileID: 4762294875224524033, guid: 1aee9c9402eec2f4090481d74aa6a3c2, type: 3}
