@@ -49,11 +49,16 @@ namespace YutArena.Online
         public int PlayerCount { get; }
         public int Capacity { get; }
         public bool IsOpen { get; }
+        public int? GameMode { get; }
+        public int? MapType { get; }
+        public bool? IsTeamMode { get; }
         public bool CanJoin => IsOpen && PlayerCount < Capacity;
-        public OnlineRoomInfo(string sessionId, string roomName, int playerCount, int capacity, bool isOpen)
+        public OnlineRoomInfo(string sessionId, string roomName, int playerCount, int capacity, bool isOpen,
+            int? gameMode = null, int? mapType = null, bool? isTeamMode = null)
         {
             SessionId = sessionId; RoomName = roomName; PlayerCount = playerCount;
             Capacity = capacity; IsOpen = isOpen;
+            GameMode = gameMode; MapType = mapType; IsTeamMode = isTeamMode;
         }
     }
 

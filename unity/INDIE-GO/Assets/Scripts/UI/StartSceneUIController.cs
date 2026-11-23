@@ -7,6 +7,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using YutArena.Managers;
+using YutArena.Online;
 
 namespace YutArena.UI
 {
@@ -171,8 +172,8 @@ namespace YutArena.UI
             AddClick(localPlayButton, MoveToLocalLobby);
             AddClick(onlinePlayButton, ShowOnlineGamePanel);
 
-            AddClick(onlineCreateGameButton, ShowOnlineFeaturePending);
-            AddClick(onlineJoinGameButton, OpenOnlineJoin);
+            AddClick(onlineCreateGameButton, () => OnlineSessionController.Instance?.OpenRoomSettings());
+            AddClick(onlineJoinGameButton, () => OnlineSessionController.Instance?.OpenRoomList());
 
             AddClick(yutRuleHelpButton, ShowYutRuleHelp);
             AddClick(characterHelpButton, ShowCharacterHelp);
@@ -333,8 +334,10 @@ namespace YutArena.UI
 
         private void ShowOnlineGamePanel()
         {
+            if (IsActive(onlineGameButtons)) { HideAllPanels(); return; }
             ClosePopups();
             SetActive(onlineGameButtons, true);
+            OnlineSessionController.Instance?.EnterOnline();
         }
 
         private void OpenOnlineJoin()
@@ -361,7 +364,10 @@ namespace YutArena.UI
                 return;
             }
 
-            SceneManager.LoadScene(localLobbySceneName);
+            if (OnlineSessionController.Instance != null)
+                OnlineSessionController.Instance.EnterLocalPlay(localLobbySceneName);
+            else
+                SceneManager.LoadScene(localLobbySceneName);
         }
 
         private void OpenHelp()

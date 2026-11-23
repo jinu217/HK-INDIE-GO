@@ -23,6 +23,10 @@ namespace YutArena.Online
         private const int MaxMessageBytes = 8192;
         private const string ProtocolProperty = "ig.proto";
         private const string NameProperty = "ig.name";
+        private const string ModeProperty = "ig.mode";
+        private const string MapProperty = "ig.map";
+        private const string TeamProperty = "ig.team";
+        private YutArena.Common.RoomSettingsData listingSettings;
         private static readonly byte[] ConnectionToken = Encoding.UTF8.GetBytes("INDIEGO:LOBBY:1");
         private readonly Func<NetworkRunner> runnerProvider;
         private readonly OnlineOptions options;
@@ -56,9 +60,14 @@ namespace YutArena.Online
         {
             var settings = AppSettings();
             var current = OpenRunner();
-            var result = await current.JoinSessionLobby(SessionLobby.ClientServer, options.LobbyName,
+            var result = await current.JoinSessionLobby(SessionLobby.Custom, options.LobbyName,
                 customAppSettings: settings, cancellationToken: cancellationToken);
             CheckResult(current, result);
+        }
+
+        public void SetRoomListingDetails(YutArena.Common.RoomSettingsData settings)
+        {
+            listingSettings = LobbyRules.ValidateSettings(settings);
         }
 
         public Task HostAsync(string sessionId, string roomName, int capacity, bool visible, CancellationToken cancellationToken)
@@ -66,15 +75,22 @@ namespace YutArena.Online
             LobbyRules.SessionId(sessionId);
             roomName = LobbyRules.RoomName(roomName);
             LobbyRules.Require(capacity >= 2 && capacity <= LobbyRules.MaxPlayers, "방 정원은 2~4명입니다.");
+            var properties = new Dictionary<string, SessionProperty>
+            {
+                [ProtocolProperty] = LobbyMessage.Protocol, [NameProperty] = roomName
+            };
+            if (listingSettings != null)
+            {
+                properties[ModeProperty] = listingSettings.gameMode;
+                properties[MapProperty] = listingSettings.mapType;
+                properties[TeamProperty] = listingSettings.isTeamMode ? 1 : 0;
+            }
             return StartAsync(new StartGameArgs
             {
                 GameMode = Fusion.GameMode.Host, SessionName = sessionId, PlayerCount = capacity,
                 CustomLobbyName = options.LobbyName, IsOpen = true, IsVisible = visible,
                 EnableClientSessionCreation = false,
-                SessionProperties = new Dictionary<string, SessionProperty>
-                {
-                    [ProtocolProperty] = LobbyMessage.Protocol, [NameProperty] = roomName
-                },
+                SessionProperties = properties,
                 ConnectionToken = ConnectionToken, DisableNATPunchthrough = options.ForceRelay,
                 StartGameCancellationToken = cancellationToken
             });
@@ -97,6 +113,7 @@ namespace YutArena.Online
             args.CustomPhotonAppSettings = AppSettings();
             var current = OpenRunner();
             current.ProvideInput = false; // Lobby-only; gameplay input is outside this service.
+            args.SceneManager = current.GetComponent<INetworkSceneManager>();
             var result = await current.StartGame(args);
             CheckResult(current, result);
         }
@@ -213,7 +230,10 @@ namespace YutArena.Online
                     !Guid.TryParseExact(session.Name, "N", out _) ||
                     !session.Properties.TryGetValue(ProtocolProperty, out var version) || !version.IsInt || (int)version != LobbyMessage.Protocol ||
                     !session.Properties.TryGetValue(NameProperty, out var name) || !name.IsString) continue;
-                list.Add(new OnlineRoomInfo(session.Name, (string)name, session.PlayerCount, session.MaxPlayers, session.IsOpen));
+                int? mode = session.Properties.TryGetValue(ModeProperty, out var modeValue) && modeValue.IsInt ? (int)modeValue : (int?)null;
+                int? map = session.Properties.TryGetValue(MapProperty, out var mapValue) && mapValue.IsInt ? (int)mapValue : (int?)null;
+                bool? team = session.Properties.TryGetValue(TeamProperty, out var teamValue) && teamValue.IsInt ? (int)teamValue == 1 : (bool?)null;
+                list.Add(new OnlineRoomInfo(session.Name, (string)name, session.PlayerCount, session.MaxPlayers, session.IsOpen, mode, map, team));
             }
             RoomsReceived?.Invoke(list.AsReadOnly());
         }

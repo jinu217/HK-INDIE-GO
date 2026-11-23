@@ -1,0 +1,1288 @@
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/OnlineModels.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/OnlineModels.cs
+index ad81b1f..0cd9a70 100644
+--- a/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/OnlineModels.cs
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/OnlineModels.cs
+@@ -47,15 +47,20 @@ namespace YutArena.Online
+         public string SessionId { get; }
+         public string RoomName { get; }
+         public int PlayerCount { get; }
+         public int Capacity { get; }
+         public bool IsOpen { get; }
++        public int? GameMode { get; }
++        public int? MapType { get; }
++        public bool? IsTeamMode { get; }
+         public bool CanJoin => IsOpen && PlayerCount < Capacity;
+-        public OnlineRoomInfo(string sessionId, string roomName, int playerCount, int capacity, bool isOpen)
++        public OnlineRoomInfo(string sessionId, string roomName, int playerCount, int capacity, bool isOpen,
++            int? gameMode = null, int? mapType = null, bool? isTeamMode = null)
+         {
+             SessionId = sessionId; RoomName = roomName; PlayerCount = playerCount;
+             Capacity = capacity; IsOpen = isOpen;
++            GameMode = gameMode; MapType = mapType; IsTeamMode = isTeamMode;
+         }
+     }
+ 
+     [Serializable]
+     public sealed class OnlineLobbyPlayer
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/PhotonFusionTransport.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/PhotonFusionTransport.cs
+index d8a4f28..ce831be 100644
+--- a/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/PhotonFusionTransport.cs
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/Runtime/PhotonFusionTransport.cs
+@@ -21,10 +21,14 @@ namespace YutArena.Online
+     {
+         private const int Channel = 0x594C4F42; // YLOB
+         private const int MaxMessageBytes = 8192;
+         private const string ProtocolProperty = "ig.proto";
+         private const string NameProperty = "ig.name";
++        private const string ModeProperty = "ig.mode";
++        private const string MapProperty = "ig.map";
++        private const string TeamProperty = "ig.team";
++        private YutArena.Common.RoomSettingsData listingSettings;
+         private static readonly byte[] ConnectionToken = Encoding.UTF8.GetBytes("INDIEGO:LOBBY:1");
+         private readonly Func<NetworkRunner> runnerProvider;
+         private readonly OnlineOptions options;
+         private readonly HashSet<NetworkRunner> usedRunners = new HashSet<NetworkRunner>();
+         private readonly Dictionary<int, (long second, int count)> messageRates = new Dictionary<int, (long, int)>();
+@@ -54,29 +58,41 @@ namespace YutArena.Online
+ 
+         public async Task BrowseAsync(CancellationToken cancellationToken)
+         {
+             var settings = AppSettings();
+             var current = OpenRunner();
+-            var result = await current.JoinSessionLobby(SessionLobby.ClientServer, options.LobbyName,
++            var result = await current.JoinSessionLobby(SessionLobby.Custom, options.LobbyName,
+                 customAppSettings: settings, cancellationToken: cancellationToken);
+             CheckResult(current, result);
+         }
+ 
++        public void SetRoomListingDetails(YutArena.Common.RoomSettingsData settings)
++        {
++            listingSettings = LobbyRules.ValidateSettings(settings);
++        }
++
+         public Task HostAsync(string sessionId, string roomName, int capacity, bool visible, CancellationToken cancellationToken)
+         {
+             LobbyRules.SessionId(sessionId);
+             roomName = LobbyRules.RoomName(roomName);
+             LobbyRules.Require(capacity >= 2 && capacity <= LobbyRules.MaxPlayers, "방 정원은 2~4명입니다.");
++            var properties = new Dictionary<string, SessionProperty>
++            {
++                [ProtocolProperty] = LobbyMessage.Protocol, [NameProperty] = roomName
++            };
++            if (listingSettings != null)
++            {
++                properties[ModeProperty] = listingSettings.gameMode;
++                properties[MapProperty] = listingSettings.mapType;
++                properties[TeamProperty] = listingSettings.isTeamMode ? 1 : 0;
++            }
+             return StartAsync(new StartGameArgs
+             {
+                 GameMode = Fusion.GameMode.Host, SessionName = sessionId, PlayerCount = capacity,
+                 CustomLobbyName = options.LobbyName, IsOpen = true, IsVisible = visible,
+                 EnableClientSessionCreation = false,
+-                SessionProperties = new Dictionary<string, SessionProperty>
+-                {
+-                    [ProtocolProperty] = LobbyMessage.Protocol, [NameProperty] = roomName
+-                },
++                SessionProperties = properties,
+                 ConnectionToken = ConnectionToken, DisableNATPunchthrough = options.ForceRelay,
+                 StartGameCancellationToken = cancellationToken
+             });
+         }
+ 
+@@ -95,10 +111,11 @@ namespace YutArena.Online
+         private async Task StartAsync(StartGameArgs args)
+         {
+             args.CustomPhotonAppSettings = AppSettings();
+             var current = OpenRunner();
+             current.ProvideInput = false; // Lobby-only; gameplay input is outside this service.
++            args.SceneManager = current.GetComponent<INetworkSceneManager>();
+             var result = await current.StartGame(args);
+             CheckResult(current, result);
+         }
+ 
+         public Task LeaveAsync()
+@@ -211,11 +228,14 @@ namespace YutArena.Online
+             {
+                 if (!session.IsVisible || session.MaxPlayers < 2 || session.MaxPlayers > LobbyRules.MaxPlayers ||
+                     !Guid.TryParseExact(session.Name, "N", out _) ||
+                     !session.Properties.TryGetValue(ProtocolProperty, out var version) || !version.IsInt || (int)version != LobbyMessage.Protocol ||
+                     !session.Properties.TryGetValue(NameProperty, out var name) || !name.IsString) continue;
+-                list.Add(new OnlineRoomInfo(session.Name, (string)name, session.PlayerCount, session.MaxPlayers, session.IsOpen));
++                int? mode = session.Properties.TryGetValue(ModeProperty, out var modeValue) && modeValue.IsInt ? (int)modeValue : (int?)null;
++                int? map = session.Properties.TryGetValue(MapProperty, out var mapValue) && mapValue.IsInt ? (int)mapValue : (int?)null;
++                bool? team = session.Properties.TryGetValue(TeamProperty, out var teamValue) && teamValue.IsInt ? (int)teamValue == 1 : (bool?)null;
++                list.Add(new OnlineRoomInfo(session.Name, (string)name, session.PlayerCount, session.MaxPlayers, session.IsOpen, mode, map, team));
+             }
+             RoomsReceived?.Invoke(list.AsReadOnly());
+         }
+ 
+         public void OnPlayerJoined(NetworkRunner current, PlayerRef player)
+diff --git a/unity/INDIE-GO/Assets/Scripts/UI/LobbySceneUIController.cs b/unity/INDIE-GO/Assets/Scripts/UI/LobbySceneUIController.cs
+index 8fa6224..71a670e 100644
+--- a/unity/INDIE-GO/Assets/Scripts/UI/LobbySceneUIController.cs
++++ b/unity/INDIE-GO/Assets/Scripts/UI/LobbySceneUIController.cs
+@@ -2,10 +2,11 @@
+ using UnityEngine;
+ using UnityEngine.EventSystems;
+ using UnityEngine.SceneManagement;
+ using UnityEngine.UI;
+ using YutArena.Common;
++using YutArena.Online;
+ 
+ namespace YutArena.UI
+ {
+     public class LobbySceneUIController : MonoBehaviour
+     {
+@@ -134,10 +135,11 @@ namespace YutArena.UI
+         private bool isTeamMode;
+         private readonly int[] playerTeamIndexes = { 1, 2, 1, 2 };
+         private ButtonSound startButtonSound;
+         private EventSystem navigationEventSystem;
+         private bool previousNavigationEvents;
++        private bool OnlineRoomSetup => OnlineSessionController.Instance != null && OnlineSessionController.Instance.IsConfiguringRoom;
+ 
+         private GameMode SelectedGameMode
+         {
+             get { return gameModeOptions[gameModeIndex]; }
+         }
+@@ -160,10 +162,11 @@ namespace YutArena.UI
+             RefreshUI();
+         }
+ 
+         private void Update()
+         {
++            if (OnlineRoomSetup) { RefreshStartAvailability(); return; }
+             LocalSelectionInput.Poll(selectedPlayerCount);
+             if (sharedInputLabel != null)
+                 sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
+             DisableNavigationEvents();
+             RefreshStartAvailability();
+@@ -492,11 +495,12 @@ namespace YutArena.UI
+ 
+         }
+ 
+         private bool CanStartGame()
+         {
+-            if (!LocalSelectionInput.SharedInputAvailable)
++            if (OnlineRoomSetup && OnlineSessionController.Instance.Busy) return false;
++            if (!OnlineRoomSetup && !LocalSelectionInput.SharedInputAvailable)
+                 return false;
+ 
+             if (SelectedGameMode == GameMode.KillTheKing)
+                 return false;
+ 
+@@ -548,10 +552,15 @@ namespace YutArena.UI
+                 PlayInvalidStartSound();
+                 return;
+             }
+ 
+             RoomSettingsData roomSettings = CreateRoomSettingsData();
++            if (OnlineRoomSetup)
++            {
++                OnlineSessionController.Instance.CreateRoom(roomSettings);
++                return;
++            }
+             GameStartSettingsHolder.CurrentRoomSettings = roomSettings;
+             GameStartSettingsHolder.Current = roomSettings.ToGameStartSettings();
+ 
+             if (string.IsNullOrWhiteSpace(inGameSceneName))
+             {
+@@ -637,10 +646,11 @@ namespace YutArena.UI
+             }
+         }
+ 
+         private void BackToStartScene()
+         {
++            if (OnlineRoomSetup) { OnlineSessionController.Instance.LeaveToTitle(); return; }
+             if (string.IsNullOrWhiteSpace(startSceneName))
+             {
+                 Debug.LogWarning("Start scene name is empty.");
+                 return;
+             }
+diff --git a/unity/INDIE-GO/Assets/Scripts/UI/StartSceneUIController.cs b/unity/INDIE-GO/Assets/Scripts/UI/StartSceneUIController.cs
+index 7649e52..f63211e 100644
+--- a/unity/INDIE-GO/Assets/Scripts/UI/StartSceneUIController.cs
++++ b/unity/INDIE-GO/Assets/Scripts/UI/StartSceneUIController.cs
+@@ -5,10 +5,11 @@ using UnityEngine.Serialization;
+ using UnityEngine.UI;
+ using UnityEngine.EventSystems;
+ using UnityEngine.InputSystem;
+ using System.Collections.Generic;
+ using YutArena.Managers;
++using YutArena.Online;
+ 
+ namespace YutArena.UI
+ {
+     public class StartSceneUIController : MonoBehaviour
+     {
+@@ -169,12 +170,12 @@ namespace YutArena.UI
+             AddClick(quitButton, QuitGame);
+ 
+             AddClick(localPlayButton, MoveToLocalLobby);
+             AddClick(onlinePlayButton, ShowOnlineGamePanel);
+ 
+-            AddClick(onlineCreateGameButton, ShowOnlineFeaturePending);
+-            AddClick(onlineJoinGameButton, OpenOnlineJoin);
++            AddClick(onlineCreateGameButton, () => OnlineSessionController.Instance?.OpenRoomSettings());
++            AddClick(onlineJoinGameButton, () => OnlineSessionController.Instance?.OpenRoomList());
+ 
+             AddClick(yutRuleHelpButton, ShowYutRuleHelp);
+             AddClick(characterHelpButton, ShowCharacterHelp);
+             AddClick(mapHelpButton, ShowMapHelp);
+             AddClick(modeHelpButton, ShowModeHelp);
+@@ -331,12 +332,14 @@ namespace YutArena.UI
+             }
+         }
+ 
+         private void ShowOnlineGamePanel()
+         {
++            if (IsActive(onlineGameButtons)) { HideAllPanels(); return; }
+             ClosePopups();
+             SetActive(onlineGameButtons, true);
++            OnlineSessionController.Instance?.EnterOnline();
+         }
+ 
+         private void OpenOnlineJoin()
+         {
+             if (IsActive(onlineJoinPanel))
+@@ -359,11 +362,14 @@ namespace YutArena.UI
+             {
+                 Debug.LogWarning("Local lobby scene name is empty.");
+                 return;
+             }
+ 
+-            SceneManager.LoadScene(localLobbySceneName);
++            if (OnlineSessionController.Instance != null)
++                OnlineSessionController.Instance.EnterLocalPlay(localLobbySceneName);
++            else
++                SceneManager.LoadScene(localLobbySceneName);
+         }
+ 
+         private void OpenHelp()
+         {
+             if (IsActive(helpPanel))
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineLobbyLabels.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineLobbyLabels.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineLobbyLabels.cs
+@@ -0,0 +1,25 @@
++using YutArena.Common;
++
++namespace YutArena.Online
++{
++    public static class OnlineLobbyLabels
++    {
++        public static string Mode(int? mode) => mode switch
++        {
++            (int)GameMode.Classic => "클래식",
++            (int)GameMode.Escape => "이스케이프",
++            (int)GameMode.KillTheKing => "킬 더 킹",
++            _ => "—"
++        };
++        public static string Map(int map) => (MapType)map switch
++        {
++            MapType.Random => "랜덤",
++            MapType.Basic => "기본 맵",
++            MapType.Grassland => "초원",
++            MapType.Korean => "한국",
++            _ => "—"
++        };
++        public static string Composition(RoomSettingsData settings) => !settings.isTeamMode ? "개인전" :
++            settings.teamMode == TeamMode.TeamMode1 ? "팀전 · 2인 1조" : "팀전 · 2대2";
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomListView.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomListView.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomListView.cs
+@@ -0,0 +1,103 @@
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using TMPro;
++using UnityEngine;
++using UnityEngine.InputSystem;
++using UnityEngine.UI;
++
++namespace YutArena.Online
++{
++    public sealed class OnlineRoomListView : MonoBehaviour
++    {
++        [SerializeField] private RectTransform roomRows;
++        [SerializeField] private OnlineRoomRowView rowTemplate;
++        [SerializeField] private TMP_Text emptyText;
++        [SerializeField] private TMP_Text statusText;
++        [SerializeField] private TMP_Text roomCountText;
++        [SerializeField] private TMP_InputField nicknameInput;
++        [SerializeField] private TMP_InputField codeInput;
++        [SerializeField] private Button refreshButton;
++        [SerializeField] private Button joinSelectedButton;
++        [SerializeField] private Button joinCodeButton;
++        [SerializeField] private Button backButton;
++        private OnlineSessionController session;
++        private string selectedId;
++        private readonly List<OnlineRoomRowView> rows = new List<OnlineRoomRowView>();
++
++        private void Start()
++        {
++            session = OnlineSessionController.Instance;
++            if (session == null) { statusText.text = "StartScene에서 온라인 플레이를 선택해주세요."; return; }
++            nicknameInput.SetTextWithoutNotify(session.Nickname);
++            nicknameInput.onValueChanged.AddListener(value => session.Nickname = value);
++            codeInput.onValueChanged.AddListener(_ => RefreshState());
++            refreshButton.onClick.AddListener(session.RefreshRooms);
++            joinSelectedButton.onClick.AddListener(JoinSelected);
++            joinCodeButton.onClick.AddListener(() => session.JoinRoom(codeInput.text));
++            backButton.onClick.AddListener(session.LeaveToTitle);
++            session.Changed += RefreshState;
++            session.Service.RoomsChanged += RefreshRooms;
++            RefreshRooms(session.Service.Rooms);
++            if (session.Service.State != OnlineState.BrowsingRooms) session.RefreshRooms();
++            RefreshState();
++        }
++
++        private void Update()
++        {
++            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
++                session?.LeaveToTitle();
++        }
++
++        private void JoinSelected()
++        {
++            var room = session.Service.Rooms.FirstOrDefault(item => item.SessionId == selectedId);
++            if (room == null) { session.SetStatus("참가할 방을 선택해주세요."); return; }
++            if (!room.CanJoin) { session.SetStatus(room.IsOpen ? "방이 가득 찼습니다." : "이미 경기가 시작되었거나 입장이 닫힌 방입니다."); return; }
++            session.JoinRoom(room.SessionId);
++        }
++
++        private void RefreshRooms(IReadOnlyList<OnlineRoomInfo> rooms)
++        {
++            foreach (var row in rows) { row.gameObject.SetActive(false); Destroy(row.gameObject); }
++            rows.Clear();
++            if (!rooms.Any(room => room.SessionId == selectedId)) selectedId = null;
++            foreach (var room in rooms)
++            {
++                var current = room;
++                var row = Instantiate(rowTemplate, roomRows);
++                row.gameObject.SetActive(true);
++                row.Bind(room, selectedId == room.SessionId, () =>
++                {
++                    selectedId = current.SessionId;
++                    RefreshRooms(session.Service.Rooms);
++                });
++                rows.Add(row);
++            }
++            emptyText.gameObject.SetActive(rooms.Count == 0);
++            roomCountText.text = $"공개 방 {rooms.Count}개";
++            RefreshState();
++        }
++
++        private void RefreshState()
++        {
++            if (session == null) return;
++            statusText.text = session.Status;
++            bool available = !session.Busy;
++            refreshButton.interactable = available;
++            joinSelectedButton.interactable = available && selectedId != null;
++            joinCodeButton.interactable = available && !string.IsNullOrWhiteSpace(codeInput.text);
++            nicknameInput.interactable = codeInput.interactable = available;
++
++            foreach (var row in rows) row.GetComponent<Button>().interactable = available;
++        }
++
++        private void OnDestroy()
++        {
++            if (session == null) return;
++            session.Changed -= RefreshState;
++            session.Service.RoomsChanged -= RefreshRooms;
++        }
++
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomRowView.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomRowView.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomRowView.cs
+@@ -0,0 +1,27 @@
++using System;
++using TMPro;
++using UnityEngine;
++using UnityEngine.UI;
++
++namespace YutArena.Online
++{
++    public sealed class OnlineRoomRowView : MonoBehaviour
++    {
++        [SerializeField] private Button selectButton;
++        [SerializeField] private TMP_Text nameText;
++        [SerializeField] private TMP_Text modeText;
++        [SerializeField] private TMP_Text compositionText;
++        [SerializeField] private TMP_Text countText;
++        [SerializeField] private Image background;
++        public void Bind(OnlineRoomInfo room, bool selected, Action select)
++        {
++            nameText.text = room.RoomName;
++            modeText.text = OnlineLobbyLabels.Mode(room.GameMode);
++            compositionText.text = room.IsTeamMode == true ? "팀전" : room.IsTeamMode == false ? "개인전" : "—";
++            countText.text = $"{room.PlayerCount}/{room.Capacity}" + (room.IsOpen ? "" : " · 입장 불가");
++            background.color = selected ? new Color32(220, 233, 244, 255) : new Color32(255, 252, 245, 255);
++            selectButton.onClick.RemoveAllListeners();
++            selectButton.onClick.AddListener(() => select());
++        }
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomSettingsView.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomSettingsView.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineRoomSettingsView.cs
+@@ -0,0 +1,50 @@
++using TMPro;
++using UnityEngine;
++using UnityEngine.UI;
++
++namespace YutArena.Online
++{
++    public sealed class OnlineRoomSettingsView : MonoBehaviour
++    {
++        [SerializeField] private TMP_InputField roomNameInput;
++        [SerializeField] private TMP_InputField nicknameInput;
++        [SerializeField] private TMP_Text statusText;
++        [SerializeField] private TMP_Text startButtonLabel;
++        [SerializeField] private GameObject[] localOnlyObjects;
++        [SerializeField] private Behaviour[] localOnlyBehaviours;
++        private OnlineSessionController session;
++
++        private void Start()
++        {
++            session = OnlineSessionController.Instance;
++            if (session == null || !session.IsConfiguringRoom) { gameObject.SetActive(false); return; }
++            foreach (var item in localOnlyObjects) if (item != null) item.SetActive(false);
++            foreach (var item in localOnlyBehaviours) if (item != null) item.enabled = false;
++            if (startButtonLabel != null)
++            {
++                startButtonLabel.font = roomNameInput.textComponent.font;
++                startButtonLabel.fontSharedMaterial = roomNameInput.textComponent.font.material;
++                startButtonLabel.text = "설정 완료";
++                startButtonLabel.ForceMeshUpdate();
++            }
++            roomNameInput.SetTextWithoutNotify(session.RoomName);
++            nicknameInput.SetTextWithoutNotify(session.Nickname);
++            roomNameInput.onValueChanged.AddListener(SetRoomName);
++            nicknameInput.onValueChanged.AddListener(SetNickname);
++            session.Changed += Refresh;
++            Refresh();
++        }
++
++        private void SetRoomName(string value) => session.RoomName = value;
++        private void SetNickname(string value) => session.Nickname = value;
++        private void Refresh()
++        {
++            statusText.text = session.Status;
++            roomNameInput.interactable = nicknameInput.interactable = !session.Busy;
++        }
++        private void OnDestroy()
++        {
++            if (session != null) session.Changed -= Refresh;
++        }
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSceneBuilder.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSceneBuilder.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSceneBuilder.cs
+@@ -0,0 +1,402 @@
++#if UNITY_EDITOR
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using Fusion;
++using TMPro;
++using UnityEditor;
++using UnityEditor.SceneManagement;
++using UnityEngine;
++using UnityEngine.EventSystems;
++using UnityEngine.InputSystem.UI;
++using UnityEngine.InputSystem;
++using UnityEngine.SceneManagement;
++using UnityEngine.UI;
++using YutArena.UI;
++using Object = UnityEngine.Object;
++
++namespace YutArena.Online
++{
++    // Explicit editor tool only; no automatic scene rebuilds or runtime UI generation.
++    public static class OnlineSceneBuilder
++    {
++        private const string Root = "Assets/Scripts/OnlineService/";
++        private static readonly Color Navy = Hex("19334B"), Blue = Hex("2C6088"), Cream = Hex("F3EFE3"),
++            Paper = Hex("FFFCF5"), Gold = Hex("BC955C"), Ink = Hex("203E59"), Muted = Hex("66716F"), Soft = Hex("EEE8DB");
++        private static TMP_FontAsset font;
++        private static GameObject sessionPrefab;
++
++        [MenuItem("Tools/INDIE-GO/Build Online Lobby Scenes")]
++        public static void Build()
++        {
++            for (int i = 0; i < SceneManager.sceneCount; i++)
++                if (SceneManager.GetSceneAt(i).isDirty) throw new InvalidOperationException("열린 씬을 먼저 저장해주세요.");
++            if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play Mode before building online scenes.");
++            var setup = EditorSceneManager.GetSceneManagerSetup();
++            const string fontPath = Root + "OnlineLobbyFont.asset";
++            if (AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(fontPath) == null)
++                AssetDatabase.CopyAsset("Assets/Fonts/NEXON Lv2 Gothic SDF.asset", fontPath);
++            font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(fontPath);
++            if (font == null) throw new InvalidOperationException("Project Korean TMP font is missing.");
++            BuildPrefabs();
++            BuildTitle();
++            BuildRoomSettings();
++            BuildRoomList();
++            BuildWaitingRoom();
++            var scenes = EditorBuildSettings.scenes.ToList();
++            foreach (string name in new[] { OnlineSessionController.RoomListScene, OnlineSessionController.WaitingRoomScene })
++            {
++                string path = Root + name + ".unity";
++                int index = scenes.FindIndex(s => s.path == path);
++                if (index < 0) scenes.Add(new EditorBuildSettingsScene(path, true));
++                else scenes[index] = new EditorBuildSettingsScene(path, true);
++            }
++            EditorBuildSettings.scenes = scenes.ToArray();
++            AssetDatabase.SaveAssets();
++            if (setup.Length > 0 && setup.All(s => !string.IsNullOrEmpty(s.path))) EditorSceneManager.RestoreSceneManagerSetup(setup);
++            Debug.Log("Online scenes generated: title popup, reused room settings, room list, waiting room.");
++        }
++
++        private static void BuildPrefabs()
++        {
++            var runnerObject = new GameObject("OnlineLobbyRunner");
++            var runner = runnerObject.AddComponent<NetworkRunner>();
++            runner.ProvideInput = false;
++            runnerObject.AddComponent<NetworkSceneManagerDefault>();
++            var runnerPrefab = PrefabUtility.SaveAsPrefabAsset(runnerObject, Root + "OnlineLobbyRunner.prefab");
++            Object.DestroyImmediate(runnerObject);
++            var sessionObject = new GameObject("OnlineSession");
++            var session = sessionObject.AddComponent<OnlineSessionController>();
++            Set(session, "runnerPrefab", runnerPrefab.GetComponent<NetworkRunner>());
++            sessionPrefab = PrefabUtility.SaveAsPrefabAsset(sessionObject, Root + "OnlineSession.prefab");
++            Object.DestroyImmediate(sessionObject);
++        }
++
++        private static void AddSession()
++        {
++            if (Object.FindFirstObjectByType<OnlineSessionController>() == null)
++                PrefabUtility.InstantiatePrefab(sessionPrefab);
++        }
++
++        private static void BuildTitle()
++        {
++            var scene = EditorSceneManager.OpenScene("Assets/Scenes/StartScene.unity");
++            var controller = Object.FindFirstObjectByType<StartSceneUIController>();
++            var group = Get<GameObject>(controller, "onlineGameButtons");
++            var create = Get<UnityEngine.UI.Button>(controller, "onlineCreateGameButton");
++            var join = Get<UnityEngine.UI.Button>(controller, "onlineJoinGameButton");
++            var canvas = group.GetComponentInParent<Canvas>().GetComponent<RectTransform>();
++            var rt = group.GetComponent<RectTransform>();
++            foreach (var layout in group.GetComponents<LayoutGroup>()) layout.enabled = false;
++            rt.SetParent(canvas, false);
++            Place(rt, 1060, 350, 600, 500);
++            var image = group.GetComponent<UnityEngine.UI.Image>() ?? group.AddComponent<UnityEngine.UI.Image>();
++            image.sprite = null;
++            image.color = Paper;
++            Border(group);
++            RemoveChild(group.transform, "OnlineHeader");
++            RemoveChild(group.transform, "OnlineStatus");
++            RemoveChild(group.transform, "OnlineBack");
++            RemoveChild(group.transform, "OnlineReconnect");
++            var header = Panel("OnlineHeader", rt, 0, 0, 600, 78, Navy);
++            Label("Title", header, "온라인 플레이", 28, 12, 540, 52, 30, Paper, true);
++            Place(create.GetComponent<RectTransform>(), 32, 106, 536, 72);
++            Place(join.GetComponent<RectTransform>(), 32, 194, 536, 72);
++            RestyleButton(create, "방 만들기");
++            RestyleButton(join, "방 참가하기");
++            var status = Label("OnlineStatus", rt, "온라인에 연결하고 있습니다…", 32, 282, 536, 95, 22, Muted);
++            var reconnect = Button("OnlineReconnect", rt, "다시 연결", 32, 398, 240, 60, false);
++            var back = Button("OnlineBack", rt, "뒤로가기", 296, 398, 272, 60, false);
++            var view = group.GetComponent<OnlineTitleMenuView>() ?? group.AddComponent<OnlineTitleMenuView>();
++            Set(view, "statusText", status); Set(view, "createButton", create); Set(view, "joinButton", join);
++            Set(view, "reconnectButton", reconnect); Set(view, "backButton", back);
++            group.SetActive(false);
++            AddSession();
++            EditorSceneManager.SaveScene(scene);
++        }
++
++        private static void RestyleButton(UnityEngine.UI.Button button, string value)
++        {
++            button.image.sprite = null;
++            button.image.color = Blue;
++            var existing = button.GetComponentsInChildren<TMP_Text>(true);
++            if (existing.Length > 0)
++            {
++                existing[0].text = value; existing[0].color = Paper; existing[0].font = font;
++                existing[0].fontSize = 28; existing[0].enableAutoSizing = false;
++                Stretch(existing[0].rectTransform);
++                existing[0].alignment = TextAlignmentOptions.Center;
++            }
++            else Label("OnlineButtonLabel", button.transform, value, 0, 0, 536, 72, 28, Paper, true, TextAlignmentOptions.Center);
++            Tint(button);
++        }
++
++        private static void BuildRoomSettings()
++        {
++            var scene = EditorSceneManager.OpenScene("Assets/Scenes/LocalLobbyScene.unity");
++            var controller = Object.FindFirstObjectByType<LobbySceneUIController>();
++            var start = Get<UnityEngine.UI.Button>(controller, "startGameButton");
++            var canvas = start.GetComponentInParent<Canvas>().transform;
++            RemoveChild(canvas, "OnlineRoomSetup");
++            var root = Panel("OnlineRoomSetup", canvas, 540, 12, 1290, 102, Paper);
++            Border(root.gameObject);
++            Label("RoomLabel", root, "방 이름", 20, 10, 100, 30, 20, Ink, true);
++            var roomName = Input("RoomName", root, "방 이름을 입력하세요", 126, 8, 580, 46, 40);
++            Label("NicknameLabel", root, "닉네임", 734, 10, 100, 30, 20, Ink, true);
++            var nickname = Input("Nickname", root, "닉네임", 840, 8, 426, 46, 20);
++            var status = Label("Status", root, "설정 완료를 누르면 온라인 대기실이 생성됩니다.", 20, 62, 1246, 30, 19, Muted);
++            var view = root.gameObject.AddComponent<OnlineRoomSettingsView>();
++            Set(view, "roomNameInput", roomName); Set(view, "nicknameInput", nickname); Set(view, "statusText", status);
++            RemoveChild(start.transform, "OnlineStartSurface");
++            var startLabel = start.GetComponentInChildren<TMP_Text>(true);
++            if (startLabel == null) throw new InvalidOperationException("기존 시작 버튼의 TMP 문구를 찾을 수 없습니다.");
++            Set(view, "startButtonLabel", startLabel);
++            var localObjects = new List<GameObject>();
++            foreach (string property in new[] { "sharedInputLeftButton", "sharedInputRightButton", "sharedInputLabel" })
++            {
++                var component = Get<Component>(controller, property);
++                if (component != null) localObjects.Add(component.gameObject);
++            }
++            var joinInput = Object.FindFirstObjectByType<LobbyControllerJoinInput>();
++            if (joinInput != null)
++            {
++                var joinSerialized = new SerializedObject(joinInput);
++                var icons = joinSerialized.FindProperty("playerControllerImages");
++                for (int i = 0; icons != null && i < icons.arraySize; i++)
++                {
++                    var icon = icons.GetArrayElementAtIndex(i).objectReferenceValue as Component;
++                    if (icon != null) localObjects.Add(icon.gameObject);
++                }
++                SetArray(view, "localOnlyBehaviours", new Object[] { joinInput });
++            }
++            SetArray(view, "localOnlyObjects", localObjects.ToArray());
++            EditorSceneManager.SaveScene(scene);
++        }
++
++        private static RectTransform NewScreen(string title, string subtitle)
++        {
++            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
++            var cameraObject = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
++            cameraObject.tag = "MainCamera";
++            var camera = cameraObject.GetComponent<Camera>();
++            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Cream;
++            camera.orthographic = true; camera.transform.position = new Vector3(0, 0, -10);
++            var go = new GameObject("Canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
++            var canvas = go.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay;
++            var scaler = go.GetComponent<CanvasScaler>();
++            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
++            scaler.referenceResolution = new Vector2(1920, 1080); scaler.matchWidthOrHeight = .5f;
++            var rt = go.GetComponent<RectTransform>();
++            var bg = Panel("Background", rt, 0, 0, 1920, 1080, Cream);
++            Stretch(bg);
++            Label("Breadcrumb", rt, "윷 아레나    /    온라인 플레이", 180, 48, 1100, 34, 23, Muted);
++            Label("PageTitle", rt, title, 180, 94, 1200, 62, 45, Ink, true);
++            Label("Subtitle", rt, subtitle, 180, 992, 1560, 42, 21, Muted);
++            var eventSystem = new GameObject("EventSystem");
++            eventSystem.SetActive(false);
++            eventSystem.AddComponent<EventSystem>();
++            var module = eventSystem.AddComponent<InputSystemUIInputModule>();
++            const string actionsPath = "Packages/com.unity.inputsystem/InputSystem/Plugins/PlayerInput/DefaultInputActions.inputactions";
++            module.actionsAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(actionsPath);
++            var references = AssetDatabase.LoadAllAssetsAtPath(actionsPath).OfType<InputActionReference>().ToArray();
++            InputActionReference Action(string action) => references.First(r => r.action.actionMap.name == "UI" && r.action.name == action);
++            module.point = Action("Point"); module.leftClick = Action("Click"); module.rightClick = Action("RightClick");
++            module.middleClick = Action("MiddleClick"); module.scrollWheel = Action("ScrollWheel");
++            module.move = Action("Navigate"); module.submit = Action("Submit"); module.cancel = Action("Cancel");
++            eventSystem.SetActive(true);
++            AddSession();
++            return rt;
++        }
++
++        private static RectTransform Card(RectTransform canvas, string title)
++        {
++            var shadow = Panel("PanelShadow", canvas, 184, 186, 1560, 770, Hex("DED7C7"));
++            var card = Panel("MainPanel", canvas, 180, 180, 1560, 770, Paper);
++            Border(card.gameObject);
++            var header = Panel("Header", card, 0, 0, 1560, 90, Navy);
++            Label("Title", header, title, 36, 20, 1200, 52, 34, Paper, true);
++            Label("LobbyHint", header, "온라인 로비", 1280, 26, 240, 38, 21, Hex("CCD5D9"), false, TextAlignmentOptions.Right);
++            Panel("HeaderRule", card, 0, 88, 1560, 2, Gold);
++            return card;
++        }
++
++        private static void BuildRoomList()
++        {
++            var canvas = NewScreen("방 참가와 온라인 대기실", "공개 방을 선택하거나, 친구에게 받은 방 코드를 입력해 참가하세요.");
++            var card = Card(canvas, "공개 방 목록");
++            var view = card.gameObject.AddComponent<OnlineRoomListView>();
++            Label("NicknameLabel", card, "닉네임", 36, 116, 100, 45, 23, Ink, true);
++            var nickname = Input("Nickname", card, "닉네임", 150, 112, 470, 54, 20);
++            var count = Label("RoomCount", card, "공개 방 0개", 700, 116, 400, 45, 23, Muted);
++            var refresh = Button("Refresh", card, "새로고침", 1284, 112, 240, 54, false);
++            var headings = Panel("ColumnHeadings", card, 36, 196, 1488, 56, Soft);
++            foreach (var column in new[] { ("방 이름", 24f, 640f), ("모드", 700f, 240f), ("대전 방식", 990f, 200f), ("인원", 1230f, 230f) })
++                Label("Heading", headings, column.Item1, column.Item2, 8, column.Item3, 40, 21, Muted, true);
++            var viewport = Panel("RoomViewport", card, 36, 254, 1488, 280, Paper);
++            viewport.gameObject.AddComponent<RectMask2D>();
++            var content = new GameObject("RoomRows", typeof(RectTransform)).GetComponent<RectTransform>();
++            content.SetParent(viewport, false); content.anchorMin = new Vector2(0, 1); content.anchorMax = Vector2.one;
++            content.pivot = new Vector2(0, 1); content.sizeDelta = new Vector2(0, 0);
++            var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
++            layout.childControlHeight = true; layout.childControlWidth = true; layout.childForceExpandHeight = false;
++            layout.spacing = 4;
++            var fitter = content.gameObject.AddComponent<ContentSizeFitter>(); fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
++            var scroll = viewport.gameObject.AddComponent<ScrollRect>(); scroll.viewport = viewport;
++            scroll.content = content; scroll.horizontal = false; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 38;
++            var row = Panel("RoomRowTemplate", content, 0, 0, 1488, 68, Paper);
++            row.gameObject.AddComponent<LayoutElement>().preferredHeight = 68;
++            var rowButton = row.gameObject.AddComponent<UnityEngine.UI.Button>(); rowButton.targetGraphic = row.GetComponent<UnityEngine.UI.Image>(); Tint(rowButton);
++            var rowView = row.gameObject.AddComponent<OnlineRoomRowView>();
++            Set(rowView, "selectButton", rowButton); Set(rowView, "background", row.GetComponent<UnityEngine.UI.Image>());
++            Set(rowView, "nameText", Label("RoomName", row, "방 이름", 24, 12, 640, 44, 25, Ink, true));
++            Set(rowView, "modeText", Label("Mode", row, "—", 700, 12, 250, 44, 23, Ink));
++            Set(rowView, "compositionText", Label("Composition", row, "—", 990, 12, 210, 44, 23, Ink));
++            Set(rowView, "countText", Label("Count", row, "0/4", 1230, 12, 250, 44, 23, Ink));
++            row.gameObject.SetActive(false);
++            var empty = Label("Empty", card, "아직 열린 방이 없습니다.\n친구의 방 코드를 입력하거나 직접 방을 만들어보세요.", 70, 300, 1420, 160, 26, Muted, false, TextAlignmentOptions.Center);
++            var selected = Button("JoinSelected", card, "선택한 방 참가", 1184, 548, 340, 58);
++            Panel("Divider", card, 36, 627, 1488, 2, Gold);
++            Label("CodeLabel", card, "방 코드", 36, 654, 120, 56, 24, Ink, true);
++            var code = Input("RoomCode", card, "공유받은 방 코드 입력", 170, 654, 924, 56, 36);
++            var joinCode = Button("JoinByCode", card, "코드로 참가", 1120, 654, 404, 56);
++            var back = Button("Back", canvas, "타이틀로", 180, 966, 230, 62, false);
++            var status = Label("Status", card, "방 목록에 연결하고 있습니다…", 36, 720, 1488, 38, 21, Muted);
++            Set(view, "roomRows", content); Set(view, "rowTemplate", rowView); Set(view, "emptyText", empty);
++            Set(view, "statusText", status); Set(view, "roomCountText", count); Set(view, "nicknameInput", nickname);
++            Set(view, "codeInput", code); Set(view, "refreshButton", refresh); Set(view, "joinSelectedButton", selected);
++            Set(view, "joinCodeButton", joinCode); Set(view, "backButton", back);
++            // Footer copy stays to the right of the back button.
++            var subtitle = canvas.Find("Subtitle").GetComponent<RectTransform>(); Place(subtitle, 450, 982, 1290, 50);
++            EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), Root + OnlineSessionController.RoomListScene + ".unity");
++        }
++
++        private static void BuildWaitingRoom()
++        {
++            var canvas = NewScreen("온라인 대기실", "방 코드를 공유해 친구를 초대하고 함께 준비해주세요.");
++            var card = Card(canvas, "온라인 대기실");
++            var view = card.gameObject.AddComponent<OnlineWaitingRoomView>();
++            var roomTitle = Label("RoomName", card, "대기실 연결 중", 36, 108, 1450, 52, 32, Ink, true);
++            Label("CodeLabel", card, "방 코드", 36, 178, 110, 42, 22, Muted, true);
++            var code = Label("RoomCode", card, "—", 160, 178, 850, 42, 26, Ink, true);
++            var copy = Button("CopyCode", card, "복사", 1040, 170, 160, 54, false);
++            Label("InviteHint", card, "복사한 코드를 친구에게 전달하세요.", 1220, 166, 304, 64, 21, Muted);
++            var modeCard = Panel("GameMode", card, 36, 252, 726, 118, Soft);
++            Label("Caption", modeCard, "게임 모드", 24, 14, 650, 35, 21, Muted);
++            var mode = Label("Value", modeCard, "—", 24, 54, 650, 50, 31, Ink, true);
++            var mapCard = Panel("Map", card, 786, 252, 738, 118, Soft);
++            Label("Caption", mapCard, "맵 선택", 24, 14, 680, 35, 21, Muted);
++            var map = Label("Value", mapCard, "—", 24, 54, 680, 50, 31, Ink, true);
++            var players = Panel("Players", card, 36, 394, 726, 248, Soft);
++            var playerCount = Label("PlayerCount", players, "플레이어  0/4", 24, 12, 670, 34, 23, Ink, true);
++            var names = new List<TMP_Text>(); var states = new List<TMP_Text>();
++            for (int i = 0; i < 4; i++)
++            {
++                var dot = Panel("SlotColor" + (i + 1), players, 26, 65 + i * 44, 12, 12,
++                    i == 0 ? Hex("AF5546") : i == 1 ? Hex("407498") : Hex("A4AA9A"));
++                names.Add(Label("Player" + (i + 1), players, "참가 대기 중", 54, 52 + i * 44, 365, 40, 23, Ink));
++                states.Add(Label("State" + (i + 1), players, "—", 436, 52 + i * 44, 266, 40, 21, Muted, false, TextAlignmentOptions.Right));
++            }
++            var settingsCard = Panel("RoomConditions", card, 786, 394, 738, 248, Soft);
++            Label("Caption", settingsCard, "대전 규칙", 24, 12, 680, 34, 23, Ink, true);
++            var settings = Label("Settings", settingsCard, "방 조건을 불러오고 있습니다.", 24, 56, 680, 182, 23, Ink);
++            var leave = Button("Leave", card, "나가기", 36, 676, 220, 60, false);
++            var teamOne = Button("TeamOne", card, "1팀", 290, 676, 170, 60, false);
++            var teamTwo = Button("TeamTwo", card, "2팀", 476, 676, 170, 60, false);
++            var ready = Button("Ready", card, "준비", 1004, 676, 520, 60);
++            var status = Label("Status", canvas, "대기실을 불러오고 있습니다…", 180, 968, 1560, 38, 22, Muted);
++            Place(canvas.Find("Subtitle").GetComponent<RectTransform>(), 180, 1018, 1560, 32);
++            Set(view, "roomNameText", roomTitle); Set(view, "codeText", code); Set(view, "modeText", mode);
++            Set(view, "mapText", map); Set(view, "settingsText", settings); Set(view, "playerCountText", playerCount);
++            SetArray(view, "playerNameTexts", names.ToArray()); SetArray(view, "playerStateTexts", states.ToArray());
++            Set(view, "statusText", status); Set(view, "readyLabel", ready.GetComponentInChildren<TMP_Text>());
++            Set(view, "readyButton", ready); Set(view, "copyCodeButton", copy); Set(view, "teamOneButton", teamOne);
++            Set(view, "teamTwoButton", teamTwo); Set(view, "leaveButton", leave);
++            EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), Root + OnlineSessionController.WaitingRoomScene + ".unity");
++        }
++
++        private static Color Hex(string hex) { ColorUtility.TryParseHtmlString("#" + hex, out var color); return color; }
++        private static void Place(RectTransform rt, float x, float y, float width, float height)
++        {
++            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0, 1);
++            rt.anchoredPosition = new Vector2(x, -y); rt.sizeDelta = new Vector2(width, height);
++            rt.localScale = Vector3.one;
++        }
++        private static void Stretch(RectTransform rt)
++        {
++            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = rt.offsetMax = Vector2.zero;
++        }
++        private static RectTransform Panel(string name, Transform parent, float x, float y, float width, float height, Color color)
++        {
++            var go = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image)); go.layer = 5;
++            var rt = go.GetComponent<RectTransform>(); rt.SetParent(parent, false); Place(rt, x, y, width, height);
++            go.GetComponent<UnityEngine.UI.Image>().color = color;
++            return rt;
++        }
++        private static void Border(GameObject go)
++        {
++            var border = go.GetComponent<Outline>() ?? go.AddComponent<Outline>();
++            border.effectColor = Gold; border.effectDistance = new Vector2(1.5f, -1.5f); border.useGraphicAlpha = true;
++        }
++        private static TMP_Text Label(string name, Transform parent, string value, float x, float y, float width,
++            float height, float size, Color color, bool bold = false, TextAlignmentOptions align = TextAlignmentOptions.MidlineLeft)
++        {
++            var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI)); go.layer = 5;
++            var rt = go.GetComponent<RectTransform>(); rt.SetParent(parent, false); Place(rt, x, y, width, height);
++            var text = go.GetComponent<TextMeshProUGUI>(); text.font = font; text.fontSize = size; text.text = value;
++            text.color = color; text.fontStyle = bold ? FontStyles.Bold : FontStyles.Normal;
++            text.alignment = align; text.raycastTarget = false; text.richText = false;
++            text.textWrappingMode = TextWrappingModes.Normal;
++            return text;
++        }
++        private static UnityEngine.UI.Button Button(string name, Transform parent, string label, float x, float y,
++            float width, float height, bool primary = true)
++        {
++            var rt = Panel(name, parent, x, y, width, height, primary ? Blue : Paper);
++            Border(rt.gameObject);
++            var button = rt.gameObject.AddComponent<UnityEngine.UI.Button>(); button.targetGraphic = rt.GetComponent<UnityEngine.UI.Image>();
++            Tint(button);
++            Label("Label", rt, label, 12, 4, width - 24, height - 8, 24, primary ? Paper : Ink, true, TextAlignmentOptions.Center);
++            return button;
++        }
++        private static void Tint(UnityEngine.UI.Button button)
++        {
++            var colors = button.colors; colors.normalColor = Color.white;
++            colors.highlightedColor = new Color(.87f, .92f, 1); colors.selectedColor = colors.highlightedColor;
++            colors.pressedColor = new Color(.7f, .78f, .86f); colors.disabledColor = new Color(.7f, .7f, .7f, .62f);
++            colors.fadeDuration = .12f; button.colors = colors;
++        }
++        private static TMP_InputField Input(string name, Transform parent, string placeholder, float x, float y,
++            float width, float height, int limit)
++        {
++            var rt = Panel(name, parent, x, y, width, height, Color.white); Border(rt.gameObject);
++            var input = rt.gameObject.AddComponent<TMP_InputField>(); input.targetGraphic = rt.GetComponent<UnityEngine.UI.Image>();
++            var area = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D)).GetComponent<RectTransform>();
++            area.SetParent(rt, false); Place(area, 14, 4, width - 28, height - 8);
++            var value = Label("Text", area, "", 0, 0, width - 28, height - 8, 23, Ink);
++            var hint = Label("Placeholder", area, placeholder, 0, 0, width - 28, height - 8, 21, Muted);
++            input.textViewport = area; input.textComponent = (TextMeshProUGUI)value; input.placeholder = hint;
++            input.characterLimit = limit; input.lineType = TMP_InputField.LineType.SingleLine; input.richText = false;
++            return input;
++        }
++        private static T Get<T>(Object owner, string name) where T : Object
++        {
++            return new SerializedObject(owner).FindProperty(name).objectReferenceValue as T;
++        }
++        private static void Set(Object owner, string name, Object value)
++        {
++            var serialized = new SerializedObject(owner); serialized.FindProperty(name).objectReferenceValue = value;
++            serialized.ApplyModifiedPropertiesWithoutUndo();
++        }
++        private static void SetArray(Object owner, string name, Object[] values)
++        {
++            var serialized = new SerializedObject(owner); var property = serialized.FindProperty(name); property.arraySize = values.Length;
++            for (int i = 0; i < values.Length; i++) property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
++            serialized.ApplyModifiedPropertiesWithoutUndo();
++        }
++        private static void RemoveChild(Transform parent, string name)
++        {
++            var child = parent.Find(name); if (child != null) Object.DestroyImmediate(child.gameObject);
++        }
++    }
++}
++#endif
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSessionController.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSessionController.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineSessionController.cs
+@@ -0,0 +1,223 @@
++using System;
++using System.Threading;
++using System.Threading.Tasks;
++using Fusion;
++using UnityEngine;
++using UnityEngine.SceneManagement;
++using YutArena.Common;
++
++namespace YutArena.Online
++{
++    // UI/application owner. The existing service and transport remain independent of scenes.
++    [DefaultExecutionOrder(-1000)]
++    public sealed class OnlineSessionController : MonoBehaviour
++    {
++        public const string RoomListScene = "OnlineRoomListScene";
++        public const string WaitingRoomScene = "OnlineWaitingRoomScene";
++        [SerializeField] private NetworkRunner runnerPrefab;
++        [SerializeField] private string region = "kr";
++        public static OnlineSessionController Instance { get; private set; }
++        public OnlineLobbyService Service { get; private set; }
++        public bool IsConfiguringRoom { get; private set; }
++        public bool Busy { get; private set; }
++        public string Status { get; private set; } = "온라인 플레이";
++        public string Nickname { get; set; } = "플레이어";
++        public string RoomName { get; set; } = "함께하는 윷 아레나";
++        public event Action Changed;
++        private PhotonFusionTransport transport;
++        private CancellationTokenSource operation;
++        private Task operationTask = Task.CompletedTask;
++        private bool leaving;
++        private bool quitting;
++
++        private void Awake()
++        {
++            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
++            Instance = this;
++            DontDestroyOnLoad(gameObject);
++            Nickname = PlayerPrefs.GetString("Online.Nickname", "플레이어");
++            transport = new PhotonFusionTransport(AcquireRunner, new OnlineOptions { Region = region });
++            transport.RunnerReleased += ReleaseRunner;
++            Service = new OnlineLobbyService(transport);
++            Service.StateChanged += OnStateChanged;
++            Service.LobbyChanged += OnLobbyChanged;
++            Service.Error += OnError;
++        }
++
++        private NetworkRunner AcquireRunner()
++        {
++            if (runnerPrefab == null) throw new InvalidOperationException("온라인 Runner 프리팹이 연결되지 않았습니다.");
++            var runner = Instantiate(runnerPrefab, transform);
++            runner.name = "OnlineLobbyRunner";
++            runner.ProvideInput = false;
++            return runner;
++        }
++
++        private void ReleaseRunner(NetworkRunner runner)
++        {
++            if (runner != null) Destroy(runner.gameObject);
++        }
++
++        public void EnterOnline() => StartOperation(ConnectDirectory, "온라인에 연결하고 있습니다…");
++
++        private async Task ConnectDirectory(CancellationToken token)
++        {
++            if (Service.State != OnlineState.BrowsingRooms) await Service.BrowseRoomsAsync(token);
++            SetStatus("온라인 연결 완료 · 방 만들기 또는 방 참가하기를 선택하세요.");
++        }
++
++        public void OpenRoomSettings()
++        {
++            if (Busy || leaving) return;
++            IsConfiguringRoom = true;
++            SetStatus("방 조건을 설정한 뒤 설정 완료를 눌러주세요.");
++            SceneManager.LoadScene("LocalLobbyScene");
++        }
++
++        public void OpenRoomList()
++        {
++            if (Busy || leaving) return;
++            IsConfiguringRoom = false;
++            SceneManager.LoadScene(RoomListScene);
++        }
++
++        public void RefreshRooms() => StartOperation(async token =>
++        {
++            await Service.BrowseRoomsAsync(token);
++            SetStatus("방 목록을 불러왔습니다. 참가할 방을 선택하세요.");
++        }, "방 목록을 불러오고 있습니다…");
++
++        public void CreateRoom(RoomSettingsData source) => StartOperation(async token =>
++        {
++            Nickname = LobbyRules.Nickname(Nickname);
++            RoomName = LobbyRules.RoomName(RoomName);
++            var settings = LobbyRules.CopySettings(source);
++            // The local Classic mode stores 0 as 'unlimited'; the lobby protocol stores a bounded preset.
++            if (settings.gameMode == (int)Common.GameMode.Classic && settings.maxTurnCount == 0)
++                settings.maxTurnCount = GameRuleDefine.DefaultMaxTurnCount;
++            transport.SetRoomListingDetails(settings);
++            await Service.CreateRoomAsync(new CreateOnlineRoom
++            {
++                RoomName = RoomName, Nickname = Nickname, Settings = settings
++            }, token);
++            token.ThrowIfCancellationRequested();
++            PlayerPrefs.SetString("Online.Nickname", Nickname);
++            IsConfiguringRoom = false;
++            SetStatus("대기실이 만들어졌습니다. 다른 플레이어를 기다리고 있습니다.");
++            SceneManager.LoadScene(WaitingRoomScene);
++        }, "방을 만들고 있습니다…");
++
++        public void JoinRoom(string code) => StartOperation(async token =>
++        {
++            Nickname = LobbyRules.Nickname(Nickname);
++            if (!Guid.TryParse(code?.Trim(), out var id))
++                throw new ArgumentException("복사한 방 코드를 입력해주세요.");
++            try
++            {
++                await Service.JoinRoomAsync(id.ToString("N"), Nickname, token);
++            }
++            catch (Exception error) when (!token.IsCancellationRequested)
++            {
++                // Joining shuts down the directory runner. Restore the live list after failure.
++                try { await Service.BrowseRoomsAsync(token); }
++                catch (Exception) when (!token.IsCancellationRequested) { }
++                throw new InvalidOperationException(FriendlyError(error), error);
++            }
++            PlayerPrefs.SetString("Online.Nickname", Nickname);
++            SetStatus("대기실에 입장했습니다.");
++            token.ThrowIfCancellationRequested();
++            SceneManager.LoadScene(WaitingRoomScene);
++        }, "선택한 방에 참가하고 있습니다…");
++
++        public void SetReady(bool ready) => Send(() => Service.SetReady(ready));
++        public void SetTeam(int team) => Send(() => Service.SetTeam(team));
++
++        private void Send(Action send)
++        {
++            if (Busy || leaving) return;
++            try { send(); }
++            catch (Exception error) { SetStatus(FriendlyError(error)); }
++        }
++
++        public void LeaveToTitle() => LeaveToScene("StartScene");
++        public void EnterLocalPlay(string sceneName) => LeaveToScene(sceneName);
++
++        private async void LeaveToScene(string sceneName)
++        {
++            if (leaving) return;
++            leaving = true;
++            Busy = true;
++            SetStatus("온라인 연결을 종료하고 있습니다…");
++            operation?.Cancel();
++            try
++            {
++                await operationTask;
++                await Service.LeaveAsync();
++            }
++            catch (Exception error) { if (!quitting) SetStatus(FriendlyError(error)); }
++            finally
++            {
++                IsConfiguringRoom = false;
++                Busy = false;
++                leaving = false;
++                if (!quitting && this != null) SceneManager.LoadScene(sceneName);
++            }
++        }
++
++        private void StartOperation(Func<CancellationToken, Task> action, string status)
++        {
++            if (Busy || leaving || quitting) return;
++            Busy = true;
++            operation = new CancellationTokenSource();
++            SetStatus(status);
++            operationTask = RunOperation(action, operation);
++        }
++
++        private async Task RunOperation(Func<CancellationToken, Task> action, CancellationTokenSource current)
++        {
++            try { await action(current.Token); }
++            catch (OperationCanceledException) { if (!leaving) SetStatus("접속이 취소되었거나 응답 시간이 초과되었습니다. 다시 시도해주세요."); }
++            catch (Exception error) { SetStatus(FriendlyError(error)); }
++            finally
++            {
++                if (operation == current) operation = null;
++                current.Dispose();
++                if (!leaving) Busy = false;
++                Changed?.Invoke();
++            }
++        }
++
++        private void OnStateChanged(OnlineState state) => Changed?.Invoke();
++        private void OnLobbyChanged(OnlineLobbySnapshot lobby) => Changed?.Invoke();
++        private void OnError(OnlineServiceException error) => SetStatus(FriendlyError(error));
++        public void SetStatus(string value) { Status = value; Changed?.Invoke(); }
++
++        private static string FriendlyError(Exception error)
++        {
++            if (error is OnlineServiceException serviceError && serviceError.Code == OnlineErrorCode.Disconnected)
++                return "온라인 연결이 종료되었습니다. 방장이 퇴장했거나 연결이 끊겼습니다.";
++            if (error is OperationCanceledException) return "접속 응답 시간이 초과되었습니다. 다시 시도해주세요.";
++            var message = error.Message;
++            if (message.Contains("GameIsFull")) return "방이 가득 찼습니다. 다른 방을 선택해주세요.";
++            if (message.Contains("GameNotFound")) return "방이 사라졌습니다. 목록을 새로고침해주세요.";
++            if (message.Contains("GameClosed")) return "이미 경기가 시작되었거나 입장이 닫힌 방입니다.";
++            if (message.Contains("ConnectionRefused")) return "방에 참가할 수 없습니다. 방 상태를 확인해주세요.";
++            return message;
++        }
++
++        private void OnApplicationQuit() { quitting = true; operation?.Cancel(); }
++        private async void OnDestroy()
++        {
++            if (Instance != this) return;
++            Instance = null;
++            quitting = true;
++            operation?.Cancel();
++            if (Service == null) return;
++            Service.StateChanged -= OnStateChanged;
++            Service.LobbyChanged -= OnLobbyChanged;
++            Service.Error -= OnError;
++            try { await operationTask; await Service.DisposeAsync(); }
++            catch (Exception) { /* Unity may already be shutting down its network objects. */ }
++        }
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineTitleMenuView.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineTitleMenuView.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineTitleMenuView.cs
+@@ -0,0 +1,45 @@
++using TMPro;
++using UnityEngine;
++using UnityEngine.UI;
++
++namespace YutArena.Online
++{
++    public sealed class OnlineTitleMenuView : MonoBehaviour
++    {
++        [SerializeField] private TMP_Text statusText;
++        [SerializeField] private Button createButton;
++        [SerializeField] private Button joinButton;
++        [SerializeField] private Button reconnectButton;
++        [SerializeField] private Button backButton;
++        private OnlineSessionController session;
++
++        private void OnEnable()
++        {
++            session = OnlineSessionController.Instance;
++            if (session == null) return;
++            session.Changed += Refresh;
++            reconnectButton.onClick.AddListener(session.EnterOnline);
++            backButton.onClick.AddListener(Close);
++            Refresh();
++        }
++
++        private void OnDisable()
++        {
++            if (session == null) return;
++            session.Changed -= Refresh;
++            reconnectButton.onClick.RemoveListener(session.EnterOnline);
++            backButton.onClick.RemoveListener(Close);
++        }
++
++        private void Close() => gameObject.SetActive(false);
++        private void Refresh()
++        {
++            statusText.text = session.Status;
++            bool available = !session.Busy;
++            createButton.interactable = available;
++            joinButton.interactable = available;
++            reconnectButton.interactable = available;
++            reconnectButton.gameObject.SetActive(session.Service.State == OnlineState.Offline);
++        }
++    }
++}
+diff --git a/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineWaitingRoomView.cs b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineWaitingRoomView.cs
+new file mode 100644
+--- /dev/null
++++ b/unity/INDIE-GO/Assets/Scripts/OnlineService/OnlineWaitingRoomView.cs
+@@ -0,0 +1,109 @@
++using System.Linq;
++using TMPro;
++using UnityEngine;
++using UnityEngine.InputSystem;
++using UnityEngine.UI;
++
++namespace YutArena.Online
++{
++    public sealed class OnlineWaitingRoomView : MonoBehaviour
++    {
++        [SerializeField] private TMP_Text roomNameText;
++        [SerializeField] private TMP_Text codeText;
++        [SerializeField] private TMP_Text modeText;
++        [SerializeField] private TMP_Text mapText;
++        [SerializeField] private TMP_Text settingsText;
++        [SerializeField] private TMP_Text playerCountText;
++        [SerializeField] private TMP_Text[] playerNameTexts;
++        [SerializeField] private TMP_Text[] playerStateTexts;
++        [SerializeField] private TMP_Text statusText;
++        [SerializeField] private TMP_Text readyLabel;
++        [SerializeField] private Button readyButton;
++        [SerializeField] private Button copyCodeButton;
++        [SerializeField] private Button teamOneButton;
++        [SerializeField] private Button teamTwoButton;
++        [SerializeField] private Button leaveButton;
++        private OnlineSessionController session;
++
++        private void Start()
++        {
++            session = OnlineSessionController.Instance;
++            if (session == null) { statusText.text = "StartScene에서 방을 만들거나 참가해주세요."; return; }
++            readyButton.onClick.AddListener(ToggleReady);
++            copyCodeButton.onClick.AddListener(CopyCode);
++            teamOneButton.onClick.AddListener(() => session.SetTeam(1));
++            teamTwoButton.onClick.AddListener(() => session.SetTeam(2));
++            leaveButton.onClick.AddListener(session.LeaveToTitle);
++            session.Changed += Refresh;
++            Refresh();
++        }
++
++        private void Update()
++        {
++            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
++                session?.LeaveToTitle();
++        }
++
++        private void ToggleReady()
++        {
++            var player = session.Service.Lobby?.players.FirstOrDefault(p => p.connectionId == session.Service.LocalPlayerId);
++            if (player != null && !player.isHost) session.SetReady(!player.isReady);
++        }
++
++        private void CopyCode()
++        {
++            var lobby = session.Service.Lobby;
++            if (lobby == null) return;
++            GUIUtility.systemCopyBuffer = lobby.sessionId;
++            session.SetStatus("방 코드를 복사했습니다. 친구에게 전달해주세요.");
++        }
++
++        private void Refresh()
++        {
++            statusText.text = session.Status;
++            var lobby = session.Service.Lobby;
++            bool connected = lobby != null && session.Service.State == OnlineState.InLobby;
++            copyCodeButton.interactable = connected && !session.Busy;
++            readyButton.interactable = connected && !session.Busy && !session.Service.IsHost;
++            teamOneButton.gameObject.SetActive(connected && lobby.settings.isTeamMode);
++            teamTwoButton.gameObject.SetActive(connected && lobby.settings.isTeamMode);
++            teamOneButton.interactable = teamTwoButton.interactable = connected && !session.Busy;
++            if (!connected)
++            {
++                roomNameText.text = "대기실 연결 종료";
++                readyLabel.text = "연결 종료";
++                codeText.text = "—";
++                playerCountText.text = "플레이어  0/0";
++                modeText.text = mapText.text = "—";
++                settingsText.text = "대기실 연결이 종료되었습니다.";
++                for (int i = 0; i < playerNameTexts.Length; i++)
++                {
++                    playerNameTexts[i].text = "—";
++                    playerStateTexts[i].text = "연결 종료";
++                }
++                return;
++            }
++            roomNameText.text = lobby.roomName;
++            codeText.text = lobby.sessionId;
++            modeText.text = OnlineLobbyLabels.Mode(lobby.settings.gameMode);
++            mapText.text = OnlineLobbyLabels.Map(lobby.settings.mapType);
++            var settings = lobby.settings;
++            settingsText.text = $"대전 방식     {OnlineLobbyLabels.Composition(settings)}\n\n플레이 인원  {lobby.capacity}명\n\n시작 말 개수 {settings.pieceCountPerPlayer}개\n\n턴 제한       {settings.turnTimeSeconds}초";
++            playerCountText.text = $"플레이어  {lobby.players.Length}/{lobby.capacity}";
++            for (int i = 0; i < playerNameTexts.Length; i++)
++            {
++                var player = lobby.players.FirstOrDefault(p => p.slot == i + 1);
++                playerNameTexts[i].text = player == null ? (i < lobby.capacity ? "참가 대기 중" : "닫힌 자리") :
++                    player.nickname + (player.connectionId == session.Service.LocalPlayerId ? "  (나)" : "");
++                playerStateTexts[i].text = player == null ? "—" :
++                    (settings.isTeamMode ? $"{player.team}팀 · " : "") +
++                    (player.isHost ? "방장" : !player.isRegistered ? "입장 중" : player.isReady ? "준비 완료" : "대기 중");
++                playerStateTexts[i].color = player != null && player.isReady ? new Color32(43, 109, 83, 255) : new Color32(108, 112, 113, 255);
++            }
++            var me = lobby.players.FirstOrDefault(p => p.connectionId == session.Service.LocalPlayerId);
++            readyLabel.text = session.Service.IsHost ? (lobby.CanStart ? "모두 준비 완료" : "플레이어 준비 대기") : me != null && me.isReady ? "준비 취소" : "준비";
++        }
++
++        private void OnDestroy() { if (session != null) session.Changed -= Refresh; }
++    }
++}

@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using YutArena.Common;
+using YutArena.Online;
 
 namespace YutArena.UI
 {
@@ -136,6 +137,7 @@ namespace YutArena.UI
         private ButtonSound startButtonSound;
         private EventSystem navigationEventSystem;
         private bool previousNavigationEvents;
+        private bool OnlineRoomSetup => OnlineSessionController.Instance != null && OnlineSessionController.Instance.IsConfiguringRoom;
 
         private GameMode SelectedGameMode
         {
@@ -162,6 +164,7 @@ namespace YutArena.UI
 
         private void Update()
         {
+            if (OnlineRoomSetup) { RefreshStartAvailability(); return; }
             LocalSelectionInput.Poll(selectedPlayerCount);
             if (sharedInputLabel != null)
                 sharedInputLabel.text = LocalSelectionInput.SharedGamepadSelected ? "Pad" : "Keyboard";
@@ -494,7 +497,8 @@ namespace YutArena.UI
 
         private bool CanStartGame()
         {
-            if (!LocalSelectionInput.SharedInputAvailable)
+            if (OnlineRoomSetup && OnlineSessionController.Instance.Busy) return false;
+            if (!OnlineRoomSetup && !LocalSelectionInput.SharedInputAvailable)
                 return false;
 
             if (SelectedGameMode == GameMode.KillTheKing)
@@ -550,6 +554,11 @@ namespace YutArena.UI
             }
 
             RoomSettingsData roomSettings = CreateRoomSettingsData();
+            if (OnlineRoomSetup)
+            {
+                OnlineSessionController.Instance.CreateRoom(roomSettings);
+                return;
+            }
             GameStartSettingsHolder.CurrentRoomSettings = roomSettings;
             GameStartSettingsHolder.Current = roomSettings.ToGameStartSettings();
 
@@ -639,6 +648,7 @@ namespace YutArena.UI
 
         private void BackToStartScene()
         {
+            if (OnlineRoomSetup) { OnlineSessionController.Instance.LeaveToTitle(); return; }
             if (string.IsNullOrWhiteSpace(startSceneName))
             {
                 Debug.LogWarning("Start scene name is empty.");
