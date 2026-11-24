@@ -26,6 +26,8 @@ namespace YutArena.UI
         private RectTransform window, body;
         private readonly List<UnityEngine.UI.Button> tabButtons = new List<UnityEngine.UI.Button>();
         [SerializeField] private UnityEngine.UI.Button optionButton;
+        [Tooltip("외부 씬 컨트롤러가 설정 버튼을 연결하면 끕니다.")]
+        [SerializeField] private bool bindOptionButton = true;
         private TMP_Text hint;
         private int tab, openedFrame, listening = -1;
         private string[] bindings;
@@ -54,9 +56,30 @@ namespace YutArena.UI
             instance = FindFirstObjectByType<InGameSettingsPanel>(FindObjectsInactive.Include);
             if (instance == null)
             {
+                var scene = SceneManager.GetActiveScene();
+                Canvas host = null;
+                foreach (var root in scene.GetRootGameObjects())
+                    foreach (var canvas in root.GetComponentsInChildren<Canvas>(true))
+                        if (canvas.isRootCanvas && canvas.renderMode != RenderMode.WorldSpace &&
+                            (host == null || canvas.sortingOrder < host.sortingOrder)) host = canvas;
+                if (host == null) throw new InvalidOperationException("InGameScene needs a screen-space Canvas for settings.");
+                var parent = host.transform.Find("Popups") as RectTransform;
+                if (parent == null)
+                {
+                    parent = new GameObject("Popups", typeof(RectTransform)).GetComponent<RectTransform>();
+                    parent.SetParent(host.transform, false);
+                    parent.anchorMin = Vector2.zero; parent.anchorMax = Vector2.one;
+                    parent.sizeDelta = Vector2.zero; parent.anchoredPosition = Vector2.zero;
+                }
+                parent.SetAsLastSibling();
                 var prefab = Resources.Load<GameObject>("UI/Settings/InGameSettingsPanelRoot");
                 if (prefab == null) throw new InvalidOperationException("InGameSettingsPanelRoot prefab is missing.");
-                instance = Instantiate(prefab).GetComponent<InGameSettingsPanel>();
+                var created = Instantiate(prefab, parent, false);
+                created.name = "InGameSettingsPanel";
+                created.SetActive(true);
+                instance = created.GetComponent<InGameSettingsPanel>();
+                var option = host.transform.Find("Toolbar/OptionBtn");
+                if (option != null) instance.optionButton = option.GetComponent<UnityEngine.UI.Button>();
             }
         }
         private void Awake()
@@ -79,6 +102,7 @@ namespace YutArena.UI
 #endif
         private void Start()
         {
+            if (!bindOptionButton) return;
             if (optionButton == null)
             {
                 Debug.LogWarning("InGameSettingsPanel: 설정 열기 버튼이 연결되지 않았습니다.", this);

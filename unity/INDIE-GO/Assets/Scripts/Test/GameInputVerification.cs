@@ -141,7 +141,7 @@ namespace YutArena.EditorTools
             Check(GameInput.Pressed(GameAction.Throw, padB), "hot-plugged gamepad is prepared before first press");
             Queue(padB, new GamepadState()); yield return null;
 
-            SettingsPanel.Show(true); yield return null;
+            SettingsPanel.Show(); yield return null;
             Queue(keyboard, new KeyboardState(Key.Space)); yield return null;
             Check(!GameInput.Pressed(GameAction.Throw), "settings blocks gameplay action");
             var live = (InputActionAsset)typeof(GameInput).GetField("runtime", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
@@ -190,7 +190,7 @@ namespace YutArena.EditorTools
             Check(GameInput.Pressed(GameAction.Throw, padA), "keyboard rebind preserves gamepad binding");
             Queue(padA, new GamepadState()); yield return null;
 
-            SettingsPanel.Show(true); panel.SelectTab(SettingsTab.Controls); Invoke("BeginBinding", 1); yield return null;
+            SettingsPanel.Show(); panel.SelectTab(SettingsTab.Controls); Invoke("BeginBinding", 1); yield return null;
             var dialog = ((GameObject)Field("modal")).transform.Find("Dialog").GetComponent<RectTransform>();
             Vector2 dialogCenter = RectTransformUtility.WorldToScreenPoint(null, dialog.TransformPoint(dialog.rect.center));
             Queue(mouse, new MouseState { position = dialogCenter }.WithButton(MouseButton.Middle)); yield return null;
@@ -206,12 +206,12 @@ namespace YutArena.EditorTools
             Check(SettingsBindings.Load()[0] == "<Keyboard>/h" && PlayerPrefs.HasKey(GameInput.OverridesKey), "legacy saved key migrates to binding override JSON");
             PlayerPrefs.SetString("SETTINGS_BINDING_0", "<Keyboard>/j"); GameInput.ReloadBindings();
             Check(SettingsBindings.Load()[0] == "<Keyboard>/h", "new JSON takes priority over retained legacy values");
-            SettingsPanel.Show(true); panel.SelectTab(SettingsTab.Controls); panel.ConfirmDefaults(); Click("DialogAction1");
+            SettingsPanel.Show(); panel.SelectTab(SettingsTab.Controls); panel.ConfirmDefaults(); Click("DialogAction1");
             Check(panel.HasChanges && panel.Draft.bindings.SequenceEqual(GameInput.DefaultPaths()) && SettingsBindings.Load()[0] == "<Keyboard>/h", "restore defaults remains unapplied");
             panel.Apply(false); GameInput.ReloadBindings();
             Check(SettingsBindings.Load().SequenceEqual(GameInput.DefaultPaths()), "applied defaults remove overrides and do not resurrect legacy keys");
             panel.CloseImmediately(); yield return null;
-            SettingsPanel.Show(true); yield return null;
+            SettingsPanel.Show(); yield return null;
             Queue(keyboard, new KeyboardState(Key.Escape)); yield return null;
             Check(!SettingsPanel.IsOpen, "UI Cancel action closes unchanged settings");
             Queue(keyboard, new KeyboardState()); yield return null;

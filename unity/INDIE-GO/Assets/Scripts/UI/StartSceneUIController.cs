@@ -178,8 +178,8 @@ namespace YutArena.UI
         private void OpenSettings()
         {
             HideAllPanels();
-            if (settingsPanel != null) settingsPanel.OpenFromTitle();
-            else SettingsPanel.Show(true);
+            if (settingsPanel != null) settingsPanel.Open();
+            else SettingsPanel.Show();
         }
 
         private void HideAllPanels()
