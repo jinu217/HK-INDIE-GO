@@ -117,6 +117,14 @@ public sealed class CHAR_002_Status : CharacterStatusBehaviour
         DoubleMoves.Remove(PlayerId);
     }
 
+    // 이 윷 결과가 축지법(이동 2배) 대상인지 (윷 결과 토큰 ×2 표시용, 읽기 전용)
+    public static bool IsDoubledResult(YutThrowData result)
+    {
+        foreach (DoubleMoveReservation reservation in DoubleMoves.Values)
+            if (ReferenceEquals(reservation.TargetResult, result)) return true;
+        return false;
+    }
+
     protected override CharacterActiveResult ExecuteActive(
         CharacterActiveRequest request,
         PlayerRuntimeData.PieceRuntimeData caster)

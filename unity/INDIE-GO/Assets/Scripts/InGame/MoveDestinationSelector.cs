@@ -29,12 +29,26 @@ namespace YutArena.InGame
         [SerializeField] private Vector2 startTileEscapeOffset = new Vector2(0.38f, -0.38f);
         private int escapeFlagCount;   // 이번에 띄운 탈출 깃발 수 (항상 1개만 띄움)
 
+        // 3D 맵으로 바뀌면서 화살표가 작아져서 추가 (11/25). 새 칸이라 씬 저장 없이 코드 기본값이 바로 적용됨.
+        // 플레이 중에 바꾸면 다음에 화살표가 뜰 때부터 반영됨
+        [Header("네비게이팅 크기 배율 (3D 맵)")]
+        [Tooltip("말 위 화살표·도착 화살표·탈출 아이콘을 (글자 포함) 한꺼번에 키우는 배율. 클릭 범위도 같이 커짐.")]
+        [SerializeField, Min(0.1f)] private float markerSizeMultiplier = 2f;
+        [Tooltip("결과 글자(도·개·걸…)만 추가로 키우는 배율 (위 배율에 곱해짐).")]
+        [SerializeField, Min(0.1f)] private float labelSizeMultiplier = 1.1f;
+
         [Header("말 선택 화살표 (1단계)")]
         [SerializeField] private Color pieceArrowColor = new Color(0.45f, 0.85f, 1f, 1f);
         [SerializeField] private Color skillArrowColor = new Color(0.55f, 1f, 0.65f, 1f);
         [SerializeField, Min(0.01f)] private float pieceArrowScale = 0.35f;
-        [Tooltip("말 원점에서 ▼ 촉까지 고정 높이 (모든 말 화살표 동일). 캐릭터 정수리 살짝 위가 되게 조정.")]
+        [Tooltip("말 원점에서 ▼ 촉까지 고정 높이 (모든 말 화살표 동일). 자동 높이를 끄거나, 말 키를 못 잴 때만 사용.")]
         [SerializeField] private float pieceArrowHeight = 1.15f;
+        // 11/25: 3D 말로 바뀌어도 다시 안 맞추게 자동 높이 추가 (새 칸이라 씬 저장 없이 코드 기본값 적용)
+        [Tooltip("켜면 판 위 말 모델 키를 재서 '제일 큰 말 머리 + 여유' 높이에 화살표를 띄움 (모든 말 같은 높이).")]
+        [SerializeField] private bool autoPieceArrowHeight = true;
+        [Tooltip("자동 높이일 때 제일 큰 말 머리 위 여유")]
+        [SerializeField, Min(0f)] private float pieceArrowHeadMargin = 0.1f;
+        private float measuredPieceTop;   // 지금까지 잰 제일 큰 말 키 (말 원점 기준, 줄어들지 않음 → 화살표 높이 안 흔들림)
 
         [Header("목적지 마커 (2단계)")]
         [SerializeField] private Color destColor = new Color(1f, 0.86f, 0.35f, 1f);
@@ -145,7 +159,8 @@ namespace YutArena.InGame
         public void ShowNavigation(IReadOnlyList<PieceHint> pieces, IReadOnlyList<DestinationHint> destinations)
         {
             ClearAll();
-            foreach (var hint in pieces) CreatePieceMarker(hint);
+            float pieceArrowY = ResolvePieceArrowHeight();
+            foreach (var hint in pieces) CreatePieceMarker(hint, pieceArrowY);
             escapeFlagCount = 0;
             var placed = new List<Vector3>();
             foreach (var destination in destinations) TryCreateDestinationMarker(destination, placed);
@@ -237,16 +252,39 @@ namespace YutArena.InGame
                    (tile >= BoardTileId.Inner01 && tile <= BoardTileId.Inner08);
         }
 
-        private void CreatePieceMarker(PieceHint hint)
+        // 말 위 화살표 높이: 자동이면 판 위 말 중 제일 큰 말 머리 + 여유 (모든 말 같은 높이). 못 재면 고정값.
+        private float ResolvePieceArrowHeight()
+        {
+            if (!autoPieceArrowHeight) return pieceArrowHeight;
+
+            float before = measuredPieceTop;
+            foreach (DebugPieceView v in FindObjectsByType<DebugPieceView>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                measuredPieceTop = Mathf.Max(measuredPieceTop, PieceModelTop(v.transform));
+
+            if (verboseLog && measuredPieceTop > before)
+                Debug.Log($"[MoveSelector] 말 키 측정 = {measuredPieceTop:0.00} → 말 위 화살표 높이 {measuredPieceTop + pieceArrowHeadMargin:0.00}", this);
+
+            return measuredPieceTop > 0.05f ? measuredPieceTop + pieceArrowHeadMargin : pieceArrowHeight;
+        }
+
+        private void CreatePieceMarker(PieceHint hint, float arrowHeight)
         {
             if (hint.View == null) return;
             var obj = new GameObject(hint.IsSkill ? "SkillPieceHint" : "MovePieceHint");
             obj.transform.SetParent(transform, false);
             var marker = obj.AddComponent<MoveMarker>();
             marker.ConfigureAsPieceSelect(hint.View.PieceId, hint.View.transform,
-                pieceArrowHeight, hint.IsSkill ? skillArrowColor : pieceArrowColor, pieceArrowScale, null);
+                arrowHeight, hint.IsSkill ? skillArrowColor : pieceArrowColor,
+                pieceArrowScale * markerSizeMultiplier, null);
             Sprite customArrow = GetDestinationArrowSprite();
             if (customArrow != null) marker.SetArrowSprite(customArrow);
+            // 화살표는 루트 원점에서 그대로 커지므로 클릭 범위도 같은 배율로
+            if (obj.TryGetComponent(out BoxCollider pieceCollider))
+            {
+                pieceCollider.center *= markerSizeMultiplier;
+                pieceCollider.size *= markerSizeMultiplier;
+            }
             pieceArrows.Add(marker);
             markerPieces.Add(marker, hint.View);
         }
@@ -328,7 +366,9 @@ namespace YutArena.InGame
                 result, selectedPieceId, tilePos, arrowLocalY, pieceOnTile,
                 tileAnchor, diagonalTile,
                 outlineTileSize, tileAngle, outlineThickness, outlineCornerRadius,
-                destColor, outlineColor, outlineHoverColor, destScale);
+                destColor, outlineColor, outlineHoverColor, destScale * markerSizeMultiplier);
+            ApplyLabelSize(obj);
+            FitDestinationCollider(obj, arrowLocalY);
             if (reachesFinish)
                 marker.SetEscapeMarker(GetEscapeFlagSprite());   // 탈출(통과) = 깃발 이미지 + 결과 글자, 멈춤은 금색 화살표로 구별
             else
@@ -340,6 +380,31 @@ namespace YutArena.InGame
             ApplyOutlineShape(marker); // 큰 칸 크기 + 위치 보정 적용
             destMarkers.Add(marker);
             return true;
+        }
+
+        // 결과 글자만 추가로 키움. 커진 만큼 살짝 올려서 화살표·탈출 아이콘에 안 겹치게
+        private void ApplyLabelSize(GameObject markerObject)
+        {
+            var label = markerObject.GetComponentInChildren<TMPro.TextMeshPro>(true);
+            if (label == null) return;
+            Transform t = label.transform;
+            t.localScale = Vector3.one * labelSizeMultiplier;
+            t.localPosition = new Vector3(t.localPosition.x,
+                LabelBaseY + LabelLiftPerScale * (labelSizeMultiplier - 1f), t.localPosition.z);
+        }
+
+        private const float LabelBaseY = 1.35f;          // MoveMarker 의 글자 기본 높이 (화살표 높이 1 기준)
+        private const float LabelLiftPerScale = 0.15f;
+
+        // 도착 칸 클릭 범위: 칸 바닥(-0.15) ~ 커진 화살표 끝까지 (원래는 기본 크기 화살표 끝까지만 잡혀 있음)
+        private void FitDestinationCollider(GameObject markerObject, float arrowLocalY)
+        {
+            if (!markerObject.TryGetComponent(out BoxCollider col)) return;
+            const float bottom = -0.15f;
+            float top = Mathf.Max(0.05f, arrowLocalY) + destScale * markerSizeMultiplier;
+            float height = Mathf.Max(col.size.y, top - bottom);
+            col.size = new Vector3(col.size.x, height, col.size.z);
+            col.center = new Vector3(col.center.x, bottom + height * 0.5f, col.center.z);
         }
 
         private bool TryResolveWorldPosition(BoardTileId tile, bool reachesFinish, out Vector3 position)
