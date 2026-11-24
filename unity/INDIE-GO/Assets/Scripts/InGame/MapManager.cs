@@ -61,10 +61,6 @@ namespace YutArena.InGame
             }
 
             ClearLoadedMap();
-            EnsureCommonBoardLayout();
-            if (!isCommonBoardLayoutCached)
-                return false;
-
             if (definition.backgroundPrefab != null)
             {
                 loadedBackgroundInstance = backgroundRoot != null
@@ -72,6 +68,13 @@ namespace YutArena.InGame
                     : Instantiate(definition.backgroundPrefab);
                 loadedBackgroundInstance.name = definition.backgroundPrefab.name;
                 loadedBackgroundInstance.transform.localPosition = Vector3.zero;
+            }
+
+            EnsureCommonBoardLayout();
+            if (!isCommonBoardLayoutCached)
+            {
+                ClearLoadedMap();
+                return false;
             }
 
             CurrentMap = definition;
@@ -219,6 +222,9 @@ namespace YutArena.InGame
                 }
 
                 commonTileAnchors.Add(anchor.TileId, anchor.transform);
+                Transform pieceAnchor = anchor.transform.Find("PieceAnchor");
+                if (pieceAnchor != null)
+                    pieceAnchors[anchor.TileId] = pieceAnchor;
             }
 
             isCommonBoardLayoutCached = true;
@@ -350,6 +356,8 @@ namespace YutArena.InGame
                 boardRuntimeState.ClearAll();
 
             tilePositions.Clear();
+            commonTileAnchors.Clear();
+            isCommonBoardLayoutCached = false;
             specialTileSettings.Clear();
             pieceAnchors.Clear();
             CurrentMap = null;

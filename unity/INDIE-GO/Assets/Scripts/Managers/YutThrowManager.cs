@@ -341,8 +341,8 @@ namespace YutArena.Test
                 edgePadding, minimumYutSpacing, modelLongAxisIsY, enableOverlapStacking,
                 stackClearance, maximumStackTilt);
             var flights = new YutFlight[count];
-            int minTurns = Mathf.Max(1, Mathf.CeilToInt(tumbleTurns.x));
-            int maxTurns = Mathf.Max(minTurns, Mathf.FloorToInt(tumbleTurns.y));
+            float minTurns = Mathf.Max(1f, tumbleTurns.x);
+            float maxTurns = Mathf.Max(minTurns, tumbleTurns.y);
             // 인접한 착지 순서 사이의 경계를 각각 무작위 선택
             // 4개 기준 1-2-3-4부터 1234까지 총 8가지 묶음 형태
             int groupBoundaries = Random.Range(0, 1 << Mathf.Max(0, count - 1));
@@ -365,15 +365,20 @@ namespace YutArena.Test
                 controlXY = Vector2.ClampMagnitude(controlXY, available);
                 Vector3 control = origin + frame * new Vector3(controlXY.x, controlXY.y,
                     (localStart.z - pose.Height) * 0.5f);
+                Vector3 spinAxis = frame * new Vector3(1f, Random.Range(-0.55f, 0.55f),
+                    Random.Range(-0.45f, 0.45f)).normalized;
+                float turns = Random.Range(minTurns, maxTurns) * (Random.value < 0.5f ? -1f : 1f);
                 flights[order] = new YutFlight
                 {
                     Pivot = yuts[i], Start = start, Target = target, Control = control,
                     Visual = visuals[i], RockAxis = shortAxis,
                     StartRotation = yuts[i].rotation, TargetRotation = rotation,
-                    SpinAxis = frame * new Vector3(Random.Range(0.75f, 1f), Random.Range(-0.3f, 0.3f), 0f).normalized,
+                    SpinAxis = spinAxis,
+                    // 소수 바퀴를 돌아도 마지막 자세가 정확히 결과 면에 닿도록 기준 자세를 역산한다.
+                    SpinEndReference = Quaternion.AngleAxis(-360f * turns, spinAxis) * rotation,
                     Duration = throwDuration + landingGroup * Mathf.Max(landingInterval, settleDuration),
                     Height = arcHeight * Random.Range(0.85f, 1.05f),
-                    Turns = Random.Range(minTurns, maxTurns + 1)
+                    Turns = turns
                 };
             }
             yield return YutThrowAnimator.Play(flights, origin, frame, settleDuration, landingBounce, landingRockAngle);

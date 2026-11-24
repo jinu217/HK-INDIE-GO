@@ -27,7 +27,7 @@ namespace YutArena.EditorTools
             var panel = UnityEngine.Object.FindFirstObjectByType<SettingsPanel>();
             try
             {
-                panel.CloseImmediately(); SettingsPanel.Show(true);
+                panel.CloseImmediately(); SettingsPanel.Show();
                 panel.SelectTab(SettingsTab.Display);
                 int modeIndex = original.mode == FullScreenMode.Windowed ? 1 : 2;
                 string modeCaption = modeIndex == 1 ? "테두리 없는 전체 화면" : "창 모드";
@@ -45,11 +45,11 @@ namespace YutArena.EditorTools
                 check(SettingsPanel.IsOpen && panel.HasChanges && Field("modal").GetValue(panel) == null, "outside confirmation continues settings");
                 Click(panel, "InputBlocker"); Click(panel, "DialogAction1");
                 check(!SettingsPanel.IsOpen && SettingsDraft.Load().SameAs(original), "outside discard preserves saved values");
-                SettingsPanel.Show(true);
+                SettingsPanel.Show();
                 // Raycast geometry is checked on the following rendered frame via the CLI.
                 Click(panel, "InputBlocker");
                 check(!SettingsPanel.IsOpen, "outside clean window closes");
-                panel.CloseImmediately(); SettingsPanel.Show(true);
+                panel.CloseImmediately(); SettingsPanel.Show();
                 check(!panel.HasChanges, "open loads saved values");
                 check(SettingsPanel.IsBlockingInput && !YutArena.Common.LocalSelectionInput.SharedInputAvailable, "modal blocks gameplay input");
                 check(!Buttons(panel).First(b => b.name == "Apply").interactable, "apply starts disabled");
@@ -69,7 +69,7 @@ namespace YutArena.EditorTools
                 panel.RequestClose(); Click(panel, "DialogAction1");
                 check(!SettingsPanel.IsOpen && SettingsDraft.Load().SameAs(original), "discard closes without saving");
 
-                SettingsPanel.Show(true); panel.Draft.speed = editedSpeed;
+                SettingsPanel.Show(); panel.Draft.speed = editedSpeed;
                 panel.Apply(false);
                 check(SettingsPanel.IsOpen && !panel.HasChanges && SettingsDraft.Load().speed == editedSpeed, "normal apply saves and keeps open");
                 panel.Draft.master = .37f;
@@ -93,14 +93,15 @@ namespace YutArena.EditorTools
                 panel.RequestClose(); Click(panel, "DialogAction2");
                 check(!SettingsPanel.IsOpen && SettingsDraft.Load().master == .37f, "apply-and-close commits and closes");
 
-                SettingsPanel.Show(true);
+                SettingsPanel.Show();
                 panel.Draft.mode = panel.Draft.mode == FullScreenMode.Windowed ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
                 panel.Apply(true); panel.KeepDisplay();
                 check(!SettingsPanel.IsOpen, "display keep completes pending close");
-                SettingsPanel.Show(false);
-                check(Buttons(panel).Count(b => b.name.StartsWith("Tab")) == 3, "ingame has three tabs");
+                SettingsPanel.Show();
+                check(Buttons(panel).Count(b => b.name.StartsWith("Tab")) == 4, "shared settings has four tabs");
                 panel.SelectTab(SettingsTab.Display);
-                check(panel.CurrentTab == SettingsTab.General, "display unavailable ingame");
+                check(panel.CurrentTab == SettingsTab.Display, "display is available in shared settings");
+                panel.SelectTab(SettingsTab.General);
                 check(!Buttons(panel).First(b => b.name == "LanguageAppearanceOnly").interactable, "language is appearance only");
                 panel.CloseImmediately();
                 bool quit = false; SettingsPanel.ConfirmQuit(() => quit = true); Escape(panel);
@@ -116,7 +117,7 @@ namespace YutArena.EditorTools
                 if (hadOverrides) PlayerPrefs.SetString(YutArena.Common.GameInput.OverridesKey, originalOverrides);
                 else PlayerPrefs.DeleteKey(YutArena.Common.GameInput.OverridesKey);
                 PlayerPrefs.Save();
-                SettingsPanel.Show(true);
+                SettingsPanel.Show();
             }
         }
         private static BindingFlags Flags => BindingFlags.Instance | BindingFlags.NonPublic;

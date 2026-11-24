@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
   mapType: 1
   backgroundPrefab: {fileID: 7916582679720015828, guid: 3be5ec62a0ce9504487e7c6b7f9fb255, type: 3}
-  startTilePrefab: {fileID: 0}
-  outerTilePrefab: {fileID: 0}
-  innerTilePrefab: {fileID: 0}
+  startTilePrefab: {fileID: 7522244609242897797, guid: f7996d340a6218f42a080d87bc3bbdda, type: 3}
+  outerTilePrefab: {fileID: 7771184377673192344, guid: 9ed98a180851ea941b5773763fdfd9c1, type: 3}
+  innerTilePrefab: {fileID: 4392859531216760846, guid: 41c66f9b6346cea44a77314b5c7a9614, type: 3}
   corner01TilePrefab: {fileID: 0}
   corner02TilePrefab: {fileID: 0}
   corner03TilePrefab: {fileID: 0}

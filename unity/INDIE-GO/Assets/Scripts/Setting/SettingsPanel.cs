@@ -6,6 +6,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using YutArena.Managers;
 using YutArena.Common;
 
@@ -24,8 +25,7 @@ namespace YutArena.UI
         public static bool IsOpen => instance != null && instance.overlay != null && instance.overlay.activeSelf;
         [SerializeField] private SettingsTheme theme;
         [SerializeField, HideInInspector] private GameObject overlay;
-        [SerializeField] private SettingsPanelView titleView;
-        [SerializeField] private SettingsPanelView menuView;
+        [SerializeField, FormerlySerializedAs("titleView")] private SettingsPanelView sharedView;
         private SettingsPanelView activeView;
         private GameObject modal, dropdown;
         private RectTransform surface, body;
@@ -34,7 +34,7 @@ namespace YutArena.UI
         private readonly List<UnityEngine.UI.Button> tabs = new List<UnityEngine.UI.Button>();
         private SettingsDraft saved, draft;
         private SettingsTab currentTab;
-        private bool titleContext, closeAfterApply, previewing;
+        private bool closeAfterApply, previewing;
         private FullScreenMode previousMode;
         private Vector2Int previousSize;
         private float deadline;
@@ -58,11 +58,8 @@ namespace YutArena.UI
             if (!Application.isPlaying) return;
             if (instance != null && instance != this) { DisposeGenerated(gameObject); return; }
             instance = this;
-            if (transform.parent != null) transform.SetParent(null, false);
-            DontDestroyOnLoad(gameObject);
             // Authored scene layout is visible in edit mode, but starts closed in the game.
-            if (titleView != null) titleView.gameObject.SetActive(false);
-            if (menuView != null) menuView.gameObject.SetActive(false);
+            if (sharedView != null) sharedView.gameObject.SetActive(false);
             if (overlay != null) overlay.SetActive(false);
         }
 
@@ -78,29 +75,41 @@ namespace YutArena.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() { instance = null; blockedThroughFrame = -1; }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Initialize()
-        {
-            EnsureInstance();
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-            SceneManager.sceneLoaded += OnSceneLoaded;
-        }
-        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            if (instance == null) return;
-            instance.CloseImmediately();
-        }
         private static void EnsureInstance()
         {
-            if (instance != null) return;
-            instance = FindFirstObjectByType<SettingsPanel>(FindObjectsInactive.Include);
-            if (instance != null) return;
+            var scene = SceneManager.GetActiveScene();
+            if (instance != null && instance.gameObject.scene == scene) return;
+            instance = null;
+            Canvas host = null;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var panel in root.GetComponentsInChildren<SettingsPanel>(true))
+                {
+                    instance = panel;
+                    return;
+                }
+                foreach (var canvas in root.GetComponentsInChildren<Canvas>(true))
+                    if (canvas.isRootCanvas && canvas.renderMode != RenderMode.WorldSpace &&
+                        (host == null || canvas.sortingOrder < host.sortingOrder)) host = canvas;
+            }
+            if (host == null) throw new InvalidOperationException("The active scene needs a screen-space Canvas for settings.");
+            var parent = host.transform.Find("Popups") as RectTransform;
+            if (parent == null)
+            {
+                parent = new GameObject("Popups", typeof(RectTransform)).GetComponent<RectTransform>();
+                parent.SetParent(host.transform, false);
+                parent.anchorMin = Vector2.zero; parent.anchorMax = Vector2.one;
+                parent.sizeDelta = Vector2.zero; parent.anchoredPosition = Vector2.zero;
+            }
+            parent.SetAsLastSibling();
             var prefab = Resources.Load<GameObject>("UI/Settings/SettingsPanelRoot");
             if (prefab == null) throw new InvalidOperationException("SettingsPanelRoot prefab is missing.");
-            instance = Instantiate(prefab).GetComponent<SettingsPanel>();
-            DontDestroyOnLoad(instance.gameObject);
+            var created = Instantiate(prefab, parent, false);
+            created.name = "SettingsPanel";
+            created.SetActive(true);
+            instance = created.GetComponent<SettingsPanel>();
         }
-        public static void Show(bool fromTitle)
+        public static void Show()
         {
             EnsureInstance();
             if (IsOpen) return;
@@ -108,7 +117,6 @@ namespace YutArena.UI
             {
                 Debug.LogError("SettingsTheme이 없습니다. Tools/Yut Arena/설정 UI 리소스 연결을 실행하세요."); return;
             }
-            instance.titleContext = fromTitle;
             GameInput.SetGameplayBlocked(true);
             instance.saved = SettingsDraft.Load(); instance.draft = instance.saved.Copy();
             instance.currentTab = SettingsTab.General;
@@ -117,7 +125,7 @@ namespace YutArena.UI
             instance.Build();
             instance.openedFrame = Time.frameCount;
         }
-        public void OpenFromTitle() => Show(true);
+        public void Open() => Show();
 
         private void BlockBackgroundNavigation()
         {
@@ -184,27 +192,23 @@ namespace YutArena.UI
             StopRebinding();
             RestoreBackgroundNavigation();
             if (previewing) GraphicsSettingsManager.PreviewDisplay(previousMode, previousSize);
-            if (instance == this) { GameInput.SetGameplayBlocked(false); instance = null; SceneManager.sceneLoaded -= OnSceneLoaded; }
+            if (instance == this) { GameInput.SetGameplayBlocked(false); instance = null; }
         }
 
-        private SettingsPanelView EnsureView(bool fromTitle)
+        private SettingsPanelView EnsureView()
         {
-            var view = fromTitle ? titleView : menuView;
-            if (view == null)
+            if (sharedView == null)
             {
-                var prefab = Resources.Load<SettingsPanelView>(fromTitle ? "UI/Settings/TitleSettingsView" : "UI/Settings/MenuSettingsView");
+                var prefab = Resources.Load<SettingsPanelView>("UI/Settings/SharedSettingsView");
                 if (prefab == null) throw new InvalidOperationException("Authored settings view is missing.");
-                view = Instantiate(prefab, transform, false);
-                view.name = fromTitle ? "TitleSettingsView" : "MenuSettingsView";
-                if (fromTitle) titleView = view; else menuView = view;
+                sharedView = Instantiate(prefab, transform, false);
+                sharedView.name = "SharedSettingsView";
             }
-            return view;
+            return sharedView;
         }
         private void Build()
         {
-            if (titleView != null) titleView.gameObject.SetActive(false);
-            if (menuView != null) menuView.gameObject.SetActive(false);
-            activeView = EnsureView(titleContext);
+            activeView = EnsureView();
             overlay = activeView.gameObject; overlay.SetActive(true);
             surface = activeView.window; surface.gameObject.SetActive(true);
             SettingsPanelView.Click(activeView.Control<UnityEngine.UI.Button>("InputBlocker"), DismissTopLayer);
@@ -215,7 +219,7 @@ namespace YutArena.UI
             SettingsPanelView.Click(apply, () => Apply(false));
             dirtyLabel = activeView.Control<TMP_Text>("DirtyStatus");
             tabs.Clear(); tabs.AddRange(activeView.tabs);
-            var visible = titleContext ? new[] { SettingsTab.General, SettingsTab.Display, SettingsTab.Sound, SettingsTab.Controls } : new[] { SettingsTab.General, SettingsTab.Sound, SettingsTab.Controls };
+            var visible = new[] { SettingsTab.General, SettingsTab.Display, SettingsTab.Sound, SettingsTab.Controls };
             for (int i = 0; i < visible.Length; i++)
             {
                 var selected = visible[i]; SettingsPanelView.Click(tabs[i], () => SelectTab(selected));
@@ -227,15 +231,14 @@ namespace YutArena.UI
         {
             if (Application.isPlaying) throw new InvalidOperationException("편집 모드에서 실행해 주세요.");
             theme = Resources.Load<SettingsTheme>("SettingsTheme");
-            titleContext = true; currentTab = SettingsTab.General;
+            currentTab = SettingsTab.General;
             saved = SettingsDraft.Load(); draft = saved.Copy(); Build();
         }
 #endif
         public void SelectTab(SettingsTab tab)
         {
-            if (!titleContext && tab == SettingsTab.Display) return;
             CloseDropdown(); currentTab = tab;
-            int page = titleContext ? (int)tab : tab == SettingsTab.General ? 0 : tab == SettingsTab.Sound ? 1 : 2;
+            int page = (int)tab;
             body = activeView.ShowPage(page);
             for (int i = 0; i < tabs.Count; i++)
             {
@@ -382,7 +385,7 @@ namespace YutArena.UI
         public static void ConfirmQuit(Action quit)
         {
             EnsureInstance(); if (IsOpen) return;
-            instance.activeView = instance.EnsureView(true);
+            instance.activeView = instance.EnsureView();
             instance.overlay = instance.activeView.gameObject; instance.overlay.SetActive(true);
             instance.activeView.window.gameObject.SetActive(false);
             GameInput.SetGameplayBlocked(true); instance.openedFrame = Time.frameCount;

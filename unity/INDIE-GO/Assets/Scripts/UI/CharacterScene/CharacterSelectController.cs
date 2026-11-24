@@ -13,6 +13,8 @@ namespace YutArena.UI.CharacterScene
     {
         private const int MaxPlayerCount = 8;
 
+        [SerializeField] private InGameSettingsPanel settingsPanel;
+
         [Header("Characters")]
         [Tooltip("캐릭터 데이터베이스")]
         [SerializeField] private CharacterDatabase characterDatabase;
@@ -127,8 +129,8 @@ namespace YutArena.UI.CharacterScene
         public void ToggleSettingPanel()
         {
             SetActive(helpPanel, false);
-            if (YutArena.UI.SettingsPanel.IsOpen) return;
-            YutArena.UI.SettingsPanel.Show(false);
+            if (InGameSettingsPanel.IsOpen) return;
+            if (settingsPanel != null) settingsPanel.Open();
         }
 
         public void ToggleHelpPanel()
@@ -140,9 +142,8 @@ namespace YutArena.UI.CharacterScene
 
         public void CloseSettingPanel()
         {
-            if (!YutArena.UI.SettingsPanel.IsOpen) return;
-            var panel = FindFirstObjectByType<YutArena.UI.SettingsPanel>();
-            if (panel != null) panel.CloseImmediately();
+            if (!InGameSettingsPanel.IsOpen) return;
+            if (settingsPanel != null) settingsPanel.Close();
         }
 
         public void CloseHelpPanel() => SetActive(helpPanel, false);

@@ -66,17 +66,23 @@ namespace YutArena.EditorTools
             pad = InputSystem.AddDevice<Gamepad>("InGameSettingsTestPad");
             InputSystem.onBeforeUpdate += BeforeInput;
             Queue(new KeyboardState()); yield return null;
-            var option = FindObjectsByType<UnityEngine.UI.Button>(FindObjectsSortMode.None).First(b => b.name == "OptionBtn");
+            var option = (UnityEngine.UI.Button)Field("optionButton");
             option.onClick.Invoke(); yield return null;
             Check(InGameSettingsPanel.IsOpen && SettingsPanel.IsBlockingInput, "OptionBtn opens separate blocking in-game panel");
             Check(!SettingsPanel.IsOpen && panel.GetComponentsInChildren<UnityEngine.UI.Button>().Count(b=>b.name.StartsWith("Tab")) == 3, "title popup remains closed; exactly three tabs");
             float time = Time.time; int frame = Time.frameCount;
             var turn = FindFirstObjectByType<TestTurnManager>();
             var remainingField = typeof(TestTurnManager).GetField("turnTimerRemainingSeconds", BindingFlags.Instance | BindingFlags.NonPublic);
-            float remaining = (float)remainingField.GetValue(turn);
+            float remaining = turn != null ? (float)remainingField.GetValue(turn) : 0f;
+            var pick = FindFirstObjectByType<YutArena.UI.CharacterScene.CharacterSelectController>();
+            var selectionField = typeof(YutArena.UI.CharacterScene.CharacterSelectController).GetField("remainingTime", BindingFlags.Instance | BindingFlags.NonPublic);
+            float selectionRemaining = pick != null ? (float)selectionField.GetValue(pick) : 0f;
             yield return new WaitForSecondsRealtime(.2f);
             Check(Time.timeScale == 1 && Time.time > time && Time.frameCount > frame, "game time advances while settings is open");
-            Check((float)remainingField.GetValue(turn) < remaining, "actual turn countdown continues behind popup");
+            if (turn != null)
+                Check((float)remainingField.GetValue(turn) < remaining, "actual turn countdown continues behind popup");
+            else
+                Check(pick != null && Mathf.Approximately((float)selectionField.GetValue(pick), selectionRemaining), "pick countdown pauses while settings blocks selection");
             Queue(new KeyboardState(Key.Space, Key.F)); QueuePad(new GamepadState(GamepadButton.South)); yield return null;
             Check(!GameInput.Pressed(GameAction.Throw) && !GameInput.Pressed(GameAction.UseSkill) && !GameInput.Pressed(GameAction.Throw, pad), "keyboard and gamepad gameplay actions are blocked");
             Check(!LocalSelectionInput.SharedInputAvailable && LocalSelectionInput.SharedDeviceAvailable, "popup blocks game input without pretending devices disconnected");
