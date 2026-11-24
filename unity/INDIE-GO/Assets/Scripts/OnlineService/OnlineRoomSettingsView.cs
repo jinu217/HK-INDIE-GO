@@ -26,6 +26,16 @@ namespace YutArena.Online
                 startButtonLabel.fontSharedMaterial = roomNameInput.textComponent.font.material;
                 startButtonLabel.text = "설정 완료";
                 startButtonLabel.ForceMeshUpdate();
+                var startButton = startButtonLabel.GetComponentInParent<UnityEngine.UI.Button>();
+                if (startButton != null)
+                {
+                    // Keep the baked-in "게임 시작" on the scene background covered while disabled.
+                    var colors = startButton.colors;
+                    var disabledColor = colors.disabledColor;
+                    disabledColor.a = 1f;
+                    colors.disabledColor = disabledColor;
+                    startButton.colors = colors;
+                }
             }
             roomNameInput.SetTextWithoutNotify(session.RoomName);
             nicknameInput.SetTextWithoutNotify(session.Nickname);
