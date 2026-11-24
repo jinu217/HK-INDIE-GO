@@ -339,6 +339,28 @@ namespace YutArena.Managers
                 k.OnTurnLimitReached();
                 Check("제한 턴: 모두 HP가 같으면 줄지 않고 바로 서든데스", ("A HP", 7, k.GetHp(A)), ("서든데스", true, k.IsSuddenDeath), ("남은 팀", 4, h.ActiveTeamCount));
             }
+            {
+                var (k, h) = NewGame();
+                h.EliminateTeam(C);
+                h.EliminateTeam(D);
+                k.SetHpForTest(A, 5);
+                k.SetHpForTest(B, 3);
+                k.AddShieldEffect(B, KtkShield.Normal);
+                k.OnTurnLimitReached();
+                Check("제한 턴 HP 감소는 방패 효과 무시하고 다 깎임 (기획 확정)",
+                    ("B 탈락", false, h.IsTeamActive(B)), ("A HP", 2, k.GetHp(A)), ("승자", A, h.Winner));
+            }
+            {
+                var settings = new GameStartSettings
+                {
+                    gameMode = GameMode.KillTheKing, matchComposition = MatchComposition.OneVsOneVsOneVsOne,
+                    playerCount = 4, maxTurnCount = 20, killTheKingStartHp = 9
+                };
+                var host = new FakeHost(settings);
+                var k = new KillTheKingManager(host) { SuppressLogs = true };
+                k.Initialize(settings, host.Active.ToList());
+                Check("대기실에서 고른 HP로 시작 (killTheKingStartHp)", ("A HP", 9, k.GetHp(A)), ("시작 HP", 9, k.StartHp));
+            }
 
             // ---- 팀전 (기획 13번): 빨강 = TeamA (1P·3P), 파랑 = TeamB (2P·4P) ----
             {
@@ -444,7 +466,7 @@ namespace YutArena.Managers
                     k.OnRoundStarted(r);
                     if (k.IsArenaHeat) heatRound = r;
                 }
-                Check("아레나의 열기: 제한 턴 20 → 11라운드 시작 때 (가정: 10라운드가 끝난 뒤)", ("시작 라운드", 11, heatRound));
+                Check("아레나의 열기: 제한 턴 20 → 11번째 턴부터 (기획 확정)", ("시작 라운드", 11, heatRound));
             }
             {
                 var (k, _) = NewGame(4, 15);
@@ -454,7 +476,7 @@ namespace YutArena.Managers
                     k.OnRoundStarted(r);
                     if (k.IsArenaHeat) heatRound = r;
                 }
-                Check("아레나의 열기: 제한 턴 15 → 8라운드 시작 때 (가정, 홀수는 기획 확인 중)", ("시작 라운드", 8, heatRound));
+                Check("아레나의 열기: 제한 턴 15 → 8번째 턴부터 (기획 확정)", ("시작 라운드", 8, heatRound));
             }
             {
                 var (k, _) = NewGame();

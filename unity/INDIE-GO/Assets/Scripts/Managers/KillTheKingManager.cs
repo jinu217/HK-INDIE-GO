@@ -117,13 +117,15 @@ namespace YutArena.Managers
             shieldPickedRound = 0;
             CurrentRound = 0;
             IsArenaHeat = false;
-            // 처음 설정한 제한 턴의 절반이 지나면 시작 (예: 20 -> 10라운드가 끝나고 11라운드 시작 때)
-            // 홀수(예: 15)일 때 7라운드 뒤인지 8라운드 뒤인지는 기획 확인 중 -> 지금은 15/2 = 7 다음인 8라운드 시작 때
+            // 처음 설정한 제한 턴의 절반이 지나면 시작 (기획 확정 11/20)
+            // 20 -> 11번째 턴부터, 15 -> 8번째 턴부터 (= 제한 턴 / 2 + 1)
             arenaHeatStartRound = settings != null && settings.maxTurnCount > 0 ? settings.maxTurnCount / 2 + 1 : int.MaxValue;
         }
 
+        // 대기실에서 고른 HP(settings.killTheKingStartHp)를 씀. 값이 없으면(InGameScene 바로 실행 등) 임시값
         private static int GetStartHp(GameStartSettings s)
         {
+            if (s != null && s.killTheKingStartHp > 0) return s.killTheKingStartHp;
             if (s == null || !s.isTeamMode) return TempSoloStartHp;
             return s.teamMode == TeamMode.TeamMode1 ? TempSharedTeamStartHp : TempTwoVsTwoStartHp;
         }
