@@ -123,6 +123,7 @@ namespace YutArena.Online
             if (runner == null) return shutdownTask;
             var current = runner;
             runner = null; // Ignore stale callbacks immediately, including OnShutdown.
+            NetworkRunner.CloudConnectionLost -= OnCloudConnectionLost;
             current.RemoveCallbacks(this);
             messageRates.Clear();
             shutdownTask = ShutdownAsync(current);
@@ -154,6 +155,10 @@ namespace YutArena.Online
             if (supplied == null || supplied.IsRunning || supplied.IsStarting || !usedRunners.Add(supplied))
                 throw new OnlineServiceException(OnlineErrorCode.InvalidState, "사용하지 않은 NetworkRunner를 외부에서 전달해주세요. 종료된 Runner는 재사용할 수 없습니다.");
             runner = supplied;
+            // Session IDs are stable UUIDs shared by the directory, join API and lobby snapshot.
+            // Fusion's default move-to-new-room recovery appends [bkp-...] and breaks that contract.
+            NetworkRunner.CloudConnectionLostCurrentMode = NetworkRunner.CloudConnectionLostMode.QuickRejoin;
+            NetworkRunner.CloudConnectionLost += OnCloudConnectionLost;
             runner.AddCallbacks(this);
             return runner;
         }
@@ -259,11 +264,17 @@ namespace YutArena.Online
         {
             if (current != runner) return;
             runner = null;
+            NetworkRunner.CloudConnectionLost -= OnCloudConnectionLost;
             current.RemoveCallbacks(this);
             messageRates.Clear();
             if (alreadyShutdown) { shutdownTask = Task.CompletedTask; Release(current); }
             else shutdownTask = ShutdownAsync(current);
             Disconnected?.Invoke(reason);
+        }
+        private void OnCloudConnectionLost(NetworkRunner current, ShutdownReason reason, bool reconnecting)
+        {
+            if (current == runner && !reconnecting)
+                ConnectionEnded(current, $"Photon 방 검색 연결을 복구하지 못했습니다: {reason}");
         }
         public void OnShutdown(NetworkRunner current, ShutdownReason reason) => ConnectionEnded(current, $"Photon 연결 종료: {reason}", true);
         public void OnDisconnectedFromServer(NetworkRunner current, NetDisconnectReason reason) => ConnectionEnded(current, $"방장 또는 서버와 연결이 끊겼습니다: {reason}");
