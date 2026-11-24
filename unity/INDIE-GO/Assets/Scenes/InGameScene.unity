@@ -1217,10 +1217,10 @@ MonoBehaviour:
   boardTileRoot: {fileID: 1900000001}
   fadedTileIds: 160000001700000018000000190000001a0000001b0000001c0000001d0000001e000000
   throwingTileAlpha: 0.2
-  boardRadius: 2.5
+  boardRadius: 3.9
   edgePadding: 1
-  startYutSpacing: 0.5
-  minimumYutSpacing: 0.65
+  startYutSpacing: 0.84
+  minimumYutSpacing: 0.85
   enableOverlapStacking: 1
   stackLayerHeight: 0.12
   stackClearance: 0.02
@@ -1228,7 +1228,7 @@ MonoBehaviour:
   maximumStackTilt: 12
   boardSurface: {fileID: 2074295564}
   throwDuration: 0.9
-  arcHeight: 0.65
+  arcHeight: 4.2
   depthHop: 0.12
   tumbleTurns: {x: 1, y: 2}
   landingInterval: 0.16
@@ -1237,7 +1237,7 @@ MonoBehaviour:
   landingRockAngle: 2.5
   modelRotationOffset: {x: 0, y: 0, z: 0}
   faceFlipRotation: {x: 180, y: 0, z: 0}
-  modelScaleMultiplier: 2.5
+  modelScaleMultiplier: 4
 --- !u!4 &100287682
 Transform:
   m_ObjectHideFlags: 0
@@ -12800,7 +12800,7 @@ Transform:
   m_GameObject: {fileID: 1910881683}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -4, z: -4}
+  m_LocalPosition: {x: 0, y: 2.8746986, z: -11}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -13741,8 +13741,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2074295563}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.34202015, y: -0, z: -0, w: 0.9396927}
-  m_LocalPosition: {x: 0, y: 0.5, z: -2.5}
+  m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
+  m_LocalPosition: {x: 0, y: 0.028, z: -1.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

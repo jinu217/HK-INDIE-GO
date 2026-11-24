@@ -9,13 +9,6 @@ namespace YutArena.Test
         public Vector2 Center, Long, Short;
         public float Angle, HalfLength, HalfWidth, HalfThickness, Height, Slope;
         public float TopAt(Vector2 p) => Height + Vector2.Dot(p - Center, Long) * Slope + HalfThickness;
-        public Vector2[] Footprint() => new[]
-        {
-            Center - Long * HalfLength - Short * HalfWidth,
-            Center + Long * HalfLength - Short * HalfWidth,
-            Center + Long * HalfLength + Short * HalfWidth,
-            Center - Long * HalfLength + Short * HalfWidth
-        };
     }
 
     // XY: 판 위 좌표, 높이: 판의 -Z 방향. 결과 배열 순서가 실제 착지 순서
@@ -24,18 +17,25 @@ namespace YutArena.Test
         public static YutLandingPose[] Solve(Vector3[] sizes, float[] radii, float radius,
             float padding, float spacing, bool longY, bool stacking, float clearance, float maxTilt)
         {
-            var placed = new List<YutLandingPose>();
-            var order = new List<int>();
-            for (int i = 0; i < sizes.Length; i++) order.Add(i);
-            for (int i = order.Count - 1; i > 0; i--)
+            var placed = new YutLandingPose[sizes.Length];
+            var order = new int[sizes.Length];
+            for (int i = 0; i < order.Length; i++) order[i] = i;
+            for (int i = order.Length - 1; i > 0; i--)
             {
                 int j = Random.Range(0, i + 1);
                 (order[i], order[j]) = (order[j], order[i]);
             }
-            foreach (int index in order)
+            // 두 사각형의 교집합은 최대 팔각형이다. 후보마다 같은 버퍼를 다시 쓴다.
+            var polygon = new List<Vector2>(8);
+            var scratch = new List<Vector2>(8);
+            var contacts = new List<(float supportHeight, float longOffset)>(8 * sizes.Length);
+            for (int placedCount = 0; placedCount < order.Length; placedCount++)
             {
+                int index = order[placedCount];
                 Vector3 size = sizes[index];
                 float available = Mathf.Max(0f, radius - Mathf.Max(padding, radii[index] + 0.04f));
+                // 두께가 있는 모델의 기울어진 끝부분까지 포함하는 보수적 외곽
+                float halfLength = Mathf.Sqrt(Mathf.Pow(longY ? size.y : size.x, 2f) + size.z * size.z) * 0.5f;
                 YutLandingPose best = default;
                 float bestScore = float.PositiveInfinity;
                 for (int attempt = 0; attempt < 80; attempt++)
@@ -47,65 +47,82 @@ namespace YutArena.Test
                     {
                         Index = index, Center = Random.insideUnitCircle * available, Angle = angle,
                         Long = axis, Short = new Vector2(-axis.y, axis.x),
-                        // 두께가 있는 모델의 기울어진 끝부분까지 포함하는 보수적 외곽
-                        HalfLength = Mathf.Sqrt(Mathf.Pow(longY ? size.y : size.x, 2f) + size.z * size.z) * 0.5f,
+                        HalfLength = halfLength,
                         HalfWidth = (longY ? size.x : size.y) * 0.5f,
                         HalfThickness = size.z * 0.5f
                     };
-                    var overlaps = new List<(YutLandingPose lower, List<Vector2> polygon)>();
+                    contacts.Clear();
+                    int overlapCount = 0;
                     float crowding = 0f;
-                    foreach (YutLandingPose lower in placed)
+                    for (int j = 0; j < placedCount; j++)
                     {
+                        YutLandingPose lower = placed[j];
                         crowding += Mathf.Max(0f, spacing - Vector2.Distance(pose.Center, lower.Center));
-                        List<Vector2> polygon = Intersect(pose.Footprint(), lower);
-                        if (polygon.Count > 0) overlaps.Add((lower, polygon));
-                    }
-                    float lowest = float.PositiveInfinity;
-                    YutLandingPose supported = pose;
-                    // 모든 접촉 꼭짓점의 높이 제약을 만족하는 가장 낮은 받침 자세
-                    for (int step = -12; step <= 12; step++)
-                    {
-                        float tilt = stacking && overlaps.Count > 0 ? maxTilt * step / 12f : 0f;
-                        float slope = Mathf.Tan(tilt * Mathf.Deg2Rad);
-                        float halfThickness = size.z * 0.5f / Mathf.Cos(tilt * Mathf.Deg2Rad);
-                        float height = halfThickness + Mathf.Abs(slope) * pose.HalfLength;
+                        Intersect(pose, lower, polygon, scratch);
+                        if (polygon.Count == 0) continue;
+                        overlapCount++;
                         if (stacking)
-                            foreach (var contact in overlaps)
-                                foreach (Vector2 point in contact.polygon)
-                                    height = Mathf.Max(height, contact.lower.TopAt(point) + clearance
-                                        + halfThickness - Vector2.Dot(point - pose.Center, pose.Long) * slope);
-                        float cost = height + Mathf.Abs(tilt) * 0.0005f;
-                        if (cost >= lowest) continue;
-                        lowest = cost;
-                        supported = pose;
-                        supported.Slope = slope;
-                        supported.Height = height;
-                        supported.HalfThickness = halfThickness;
+                            foreach (Vector2 point in polygon)
+                                contacts.Add((lower.TopAt(point) + clearance, Vector2.Dot(point - pose.Center, pose.Long)));
                     }
-                    float score = supported.Height * 2f + crowding * 2f + overlaps.Count * 0.06f;
+                    YutLandingPose supported = FindSupportedPose(pose, contacts, maxTilt);
+                    float score = supported.Height * 2f + crowding * 2f + overlapCount * 0.06f;
                     if (score >= bestScore) continue;
                     bestScore = score;
                     best = supported;
                 }
-                placed.Add(best);
+                placed[placedCount] = best;
             }
-            return placed.ToArray();
+            return placed;
         }
 
-        private static List<Vector2> Intersect(Vector2[] subject, YutLandingPose clip)
+        private static YutLandingPose FindSupportedPose(YutLandingPose pose,
+            List<(float supportHeight, float longOffset)> contacts, float maxTilt)
         {
-            var polygon = new List<Vector2>(subject);
-            Clip(ref polygon, clip.Center, clip.Long, clip.HalfLength);
-            Clip(ref polygon, clip.Center, -clip.Long, clip.HalfLength);
-            Clip(ref polygon, clip.Center, clip.Short, clip.HalfWidth);
-            Clip(ref polygon, clip.Center, -clip.Short, clip.HalfWidth);
-            return polygon;
+            pose.Height = pose.HalfThickness;
+            if (contacts.Count == 0) return pose;
+
+            YutLandingPose best = pose;
+            float lowest = float.PositiveInfinity;
+            int steps = maxTilt == 0f ? 0 : 12;
+            for (int step = -steps; step <= steps; step++)
+            {
+                float tilt = maxTilt * step / 12f;
+                float slope = Mathf.Tan(tilt * Mathf.Deg2Rad);
+                float halfThickness = pose.HalfThickness / Mathf.Cos(tilt * Mathf.Deg2Rad);
+                float height = halfThickness + Mathf.Abs(slope) * pose.HalfLength;
+                foreach (var contact in contacts)
+                    height = Mathf.Max(height, contact.supportHeight + halfThickness - contact.longOffset * slope);
+                float cost = height + Mathf.Abs(tilt) * 0.0005f;
+                if (cost >= lowest) continue;
+                lowest = cost;
+                best.Slope = slope;
+                best.Height = height;
+                best.HalfThickness = halfThickness;
+            }
+            return best;
         }
 
-        private static void Clip(ref List<Vector2> polygon, Vector2 center, Vector2 normal, float limit)
+        private static void Intersect(YutLandingPose subject, YutLandingPose clip,
+            List<Vector2> polygon, List<Vector2> scratch)
         {
+            Vector2 length = subject.Long * subject.HalfLength;
+            Vector2 width = subject.Short * subject.HalfWidth;
+            polygon.Clear();
+            polygon.Add(subject.Center - length - width);
+            polygon.Add(subject.Center + length - width);
+            polygon.Add(subject.Center + length + width);
+            polygon.Add(subject.Center - length + width);
+            Clip(polygon, scratch, clip.Center, clip.Long, clip.HalfLength);
+            Clip(scratch, polygon, clip.Center, -clip.Long, clip.HalfLength);
+            Clip(polygon, scratch, clip.Center, clip.Short, clip.HalfWidth);
+            Clip(scratch, polygon, clip.Center, -clip.Short, clip.HalfWidth);
+        }
+
+        private static void Clip(List<Vector2> polygon, List<Vector2> output, Vector2 center, Vector2 normal, float limit)
+        {
+            output.Clear();
             if (polygon.Count == 0) return;
-            var output = new List<Vector2>();
             Vector2 previous = polygon[polygon.Count - 1];
             float previousDistance = Vector2.Dot(previous - center, normal) - limit;
             foreach (Vector2 current in polygon)
@@ -117,7 +134,6 @@ namespace YutArena.Test
                 previous = current;
                 previousDistance = distance;
             }
-            polygon = output;
         }
     }
 }
