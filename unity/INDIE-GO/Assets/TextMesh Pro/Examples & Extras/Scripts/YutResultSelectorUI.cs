@@ -40,7 +40,7 @@ namespace YutArena.UI
         [Tooltip("token_do ~ token_nak 그림 13장 (이름으로 찾음). 에디터에서는 비어 있으면 윷토큰 폴더에서 자동으로 채움")]
         [SerializeField] private Sprite[] tokenSprites = new Sprite[0];
         [Tooltip("가운데에 뜰 때 토큰 크기 (캔버스 단위)")]
-        [SerializeField, Min(10f)] private float centerTokenSize = 260f;
+        [SerializeField, Min(10f)] private float centerTokenSize = 286f;   // 기획 요청(11/25): 처음(260)의 1.1배
         [Tooltip("결과 칸 토큰 사이 간격")]
         [SerializeField, Min(0f)] private float slotTokenSpacing = 6f;
         [Tooltip("가운데에서 작아졌다 커지는 시간")]
