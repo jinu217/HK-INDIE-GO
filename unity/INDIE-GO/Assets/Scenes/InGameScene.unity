@@ -8410,6 +8410,20 @@ MonoBehaviour:
   turnManager: {fileID: 1332604209}
   resultLabel: {fileID: 0}
   emptyText: 
+  tokenSprites:
+  - {fileID: 21300000, guid: f1e170ca1852bd54eaf85faa9102ff81, type: 3}
+  - {fileID: 21300000, guid: a625bf5ec311b33419026f0c29fe0186, type: 3}
+  - {fileID: 21300000, guid: e3eb2856e107c154e826752c1b7841c2, type: 3}
+  - {fileID: 21300000, guid: caed4d4beeb2e2b4db4e38ea301e4f7d, type: 3}
+  - {fileID: 21300000, guid: 72b4e809e6a16404ead5edca36c89cc5, type: 3}
+  - {fileID: 21300000, guid: 4f4eebfbd8c3f574f810df4957c37e15, type: 3}
+  - {fileID: 21300000, guid: 2ad723f7b38623c47823d0ee52ebc405, type: 3}
+  - {fileID: 21300000, guid: ede7a732c48a0fe4bb1d7be8d5dab152, type: 3}
+  - {fileID: 21300000, guid: 51957cf9f8c553e41a2a2ee6ae8f2817, type: 3}
+  - {fileID: 21300000, guid: c02f06d2a849f1e45b41cbe2f7f73eaa, type: 3}
+  - {fileID: 21300000, guid: 046cbe636bc22544d8b357a44f4865ad, type: 3}
+  - {fileID: 21300000, guid: c1ab5304bdd01644e921364401de666c, type: 3}
+  - {fileID: 21300000, guid: b7564c9ccb108f34f85ea515bbf1751a, type: 3}
 --- !u!114 &1063866275
 MonoBehaviour:
   m_ObjectHideFlags: 0
