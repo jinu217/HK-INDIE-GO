@@ -18,6 +18,8 @@ public sealed class PlayerRuntimeData
     {
         private readonly PlayerRuntimeData owner;
         private StackState stack;
+        private readonly KtkItemInventory ktkItems = new KtkItemInventory();
+        public KtkItemInventory KtkItems => Leader.ktkItems;
         public int OwnerPlayerId => owner.PlayerId;
         public int PieceId { get; private set; }
         public BoardTileId CurrentTileId { get; private set; }
@@ -71,6 +73,7 @@ public sealed class PlayerRuntimeData
 
             if (nextTileId != BoardTileId.None)
                 State = PieceState.InBoard;
+            owner.PieceEnteredTile?.Invoke(this, nextTileId);
         }
 
         public void SetGoal()
@@ -86,16 +89,23 @@ public sealed class PlayerRuntimeData
         /// Removes a captured piece from the board and records its capture CC.
         /// TurnManager later consumes Kill/Retire and decides extra throws.
         /// </summary>
-        public void SetCaptured(CcDefine captureCc)
+        public void SetCaptured(CcDefine captureCc, PieceRuntimeData captor = null)
         {
             if (captureCc != CcDefine.Kill && captureCc != CcDefine.Retire)
                 throw new ArgumentException("Capture CC must be Kill or Retire.", nameof(captureCc));
 
+            var loot = captor != null ? KtkItems.Copy() : null;
             CcEffectService.Apply(this, captureCc);
+            if (State == PieceState.Waiting && loot != null)
+            {
+                int stolen = loot.TransferTo(captor.KtkItems);
+                if (stolen > 0) captor.owner.ItemsStolen?.Invoke(captor, stolen);
+            }
         }
 
         internal void ApplyCapturedPosition()
         {
+            ktkItems.Clear();
             State = PieceState.Waiting;
             CurrentTileId = BoardTileId.None;
             PreviousTileId = BoardTileId.None;
@@ -122,6 +132,8 @@ public sealed class PlayerRuntimeData
                 leader.owner.stacks.Add(key, group);
             }
             if (ReferenceEquals(stack, group)) return;
+            // 이전 묶음의 리더가 합류할 때 소지품도 새 리더에게 한 번만 옮깁니다.
+            ktkItems.TransferTo(leader.ktkItems);
             ClearStack();
             stack = group;
             stack.Members.Add(this);
@@ -149,6 +161,7 @@ public sealed class PlayerRuntimeData
 
         public void Reset()
         {
+            ktkItems.Clear();
             CurrentTileId = BoardTileId.None;
             PreviousTileId = BoardTileId.None;
             State = PieceState.Waiting;
@@ -160,6 +173,8 @@ public sealed class PlayerRuntimeData
     public int PlayerId { get; private set; }
     public string PlayerName { get; private set; }
     public IReadOnlyList<PieceRuntimeData> Pieces => pieces;
+    public event Action<PieceRuntimeData, BoardTileId> PieceEnteredTile;
+    public event Action<PieceRuntimeData, int> ItemsStolen;
 
     private readonly List<PieceRuntimeData> pieces = new List<PieceRuntimeData>();
     private readonly Dictionary<(int group, int leader), StackState> stacks =

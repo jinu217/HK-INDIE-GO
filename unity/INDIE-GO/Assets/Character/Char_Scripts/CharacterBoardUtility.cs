@@ -380,7 +380,8 @@ public static class CcBoardEffects
                 grantsExtraThrow &&
                 decision != CharacterCaptureDecision.LimitRetireToAttackingCount;
             CcEffectService.RewardMarks(target.Piece, request);
-            Retire(target, finalExtraThrow);
+            target.Piece.SetCaptured(finalExtraThrow ? CcDefine.Kill : CcDefine.Retire,
+                CcEffectService.GetPiece(attackerPlayerId, attackerPieceId));
             QaDebugLog.Capture(request, decision, qaTargets, target.Piece.State == PieceState.Waiting);
             if (target.Piece.State != PieceState.Waiting)
                 return false;

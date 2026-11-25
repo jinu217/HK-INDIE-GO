@@ -11,7 +11,7 @@ using YutArena.Common;
 using YutArena.InGame;
 using YutArena.Managers;
 
-/// <summary>Explicit batch-only regression checks; never runs in normal play or modifies saved scenes.</summary>
+/// <summary>Explicit regression checks; never runs in normal play or modifies saved scenes.</summary>
 public static class TeamCaptureStackVerification
 {
     private static readonly List<string> results = new List<string>();
@@ -24,11 +24,23 @@ public static class TeamCaptureStackVerification
     public static void RunBatch()
     {
         if (!Application.isBatchMode) throw new InvalidOperationException("Batch verification only.");
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        RunChecks();
+        File.WriteAllLines("TeamCaptureStackVerification.log", results);
+        bool failed = results.Any(line => line.StartsWith("FAIL"));
+        Debug.Log(string.Join("\n", results));
+        EditorApplication.Exit(failed ? 1 : 0);
+    }
+
+    public static IReadOnlyList<string> RunChecks()
+    {
         results.Clear();
         try
         {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            foreach (TeamMode mode in new[] { TeamMode.TeamMode1, TeamMode.TeamMode2 })
+            CheckLobbySettings(TeamMode.TeamMode1);
+            CheckSharedCharacter();
+            // 2인 1조는 캐릭터가 두 개입니다. 소유자가 다른 아군 말 업기는 2대2에서만 발생합니다.
+            foreach (TeamMode mode in new[] { TeamMode.TeamMode2 })
             {
                 CheckLobbySettings(mode);
                 CheckCaptureThenStack(mode);
@@ -46,10 +58,7 @@ public static class TeamCaptureStackVerification
         {
             results.Add("FAIL EXCEPTION " + exception);
         }
-        File.WriteAllLines("TeamCaptureStackVerification.log", results);
-        bool failed = results.Any(line => line.StartsWith("FAIL"));
-        Debug.Log(string.Join("\n", results));
-        EditorApplication.Exit(failed ? 1 : 0);
+        return results.ToArray();
     }
 
     private static void CheckLobbySettings(TeamMode mode)
@@ -81,7 +90,8 @@ public static class TeamCaptureStackVerification
             Turns = Root.AddComponent<TestTurnManager>();
             var active = (List<PlayerController>)typeof(PlayerManager).GetField("activePlayers",
                 BindingFlags.Instance | BindingFlags.NonPublic).GetValue(Players);
-            for (int i = 1; i <= 4; i++)
+            int characterCount = team && mode == TeamMode.TeamMode1 ? 2 : 4;
+            for (int i = 1; i <= characterCount; i++)
             {
                 var host = new GameObject("P" + i);
                 host.transform.SetParent(Root.transform);
@@ -113,6 +123,23 @@ public static class TeamCaptureStackVerification
 
     private static void SetField(object instance, string name, object value) =>
         instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(instance, value);
+
+    private static void CheckSharedCharacter()
+    {
+        using (var f = new Fixture(TeamMode.TeamMode1))
+        {
+            Check("Shared team uses two characters for four people", f.Players.ActivePlayers.Count == 2 &&
+                MatchCompositionRule.GetControlledCharacter(f.Settings, PlayerSlot.Player1) == PlayerSlot.Player1 &&
+                MatchCompositionRule.GetControlledCharacter(f.Settings, PlayerSlot.Player3) == PlayerSlot.Player1);
+            f.P(1).MoveTo(BoardTileId.Outer01);
+            f.P(2).MoveTo(BoardTileId.Outer02);
+            Check("Shared character captures the opposing team's character", f.Movement.TryMovePiece(1, 0, 1) &&
+                f.P(2).State == PieceState.Waiting && f.Bonus(1) == 1);
+            f.P(1, 1).MoveTo(BoardTileId.Outer01);
+            Check("Shared character stacks its own team pieces", f.Movement.TryMovePiece(1, 1, 1) &&
+                f.P(1, 1).IsInSameStack(f.P(1)) && CcEffectService.StackMembers(f.P(1)).Count == 2);
+        }
+    }
 
     private static void CheckCaptureThenStack(TeamMode mode)
     {

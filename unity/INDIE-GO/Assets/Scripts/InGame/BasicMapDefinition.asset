@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: BasicMapDefinition
   m_EditorClassIdentifier: Assembly-CSharp::YutArena.InGame.MapDefinition
   mapType: 0
-  backgroundPrefab: {fileID: 7174949109896036635, guid: a1a0f2b53a6b3da45a97cd5676d1a0c7, type: 3}
-  startTilePrefab: {fileID: 6737640671747586201, guid: 33a4bd61c51d6244eb69410cb2f85a3a, type: 3}
-  outerTilePrefab: {fileID: 7989472725348063604, guid: c69005a8dd95ee34380f907e3f03f4c9, type: 3}
-  innerTilePrefab: {fileID: 7989472725348063604, guid: c69005a8dd95ee34380f907e3f03f4c9, type: 3}
-  corner01TilePrefab: {fileID: 1638994605248726569, guid: 43a188f4df9d69e45bbe1a322d864a71, type: 3}
-  corner02TilePrefab: {fileID: 9020107021151581112, guid: f78ced332eb6ce04d9ac9e8f82c5dd62, type: 3}
-  corner03TilePrefab: {fileID: 3972990063589902561, guid: c01237a8db770304c8b45e66ed074c52, type: 3}
-  centerTilePrefab: {fileID: 7484498047524864238, guid: 89eb839e1e48d0f49851bd44e35e3a96, type: 3}
+  backgroundPrefab: {fileID: 7916582679720015828, guid: 3be5ec62a0ce9504487e7c6b7f9fb255, type: 3}
+  startTilePrefab: {fileID: 7522244609242897797, guid: f7996d340a6218f42a080d87bc3bbdda, type: 3}
+  outerTilePrefab: {fileID: 7771184377673192344, guid: 9ed98a180851ea941b5773763fdfd9c1, type: 3}
+  innerTilePrefab: {fileID: 4392859531216760846, guid: 41c66f9b6346cea44a77314b5c7a9614, type: 3}
+  corner01TilePrefab: {fileID: 7522244609242897797, guid: f7996d340a6218f42a080d87bc3bbdda, type: 3}
+  corner02TilePrefab: {fileID: 7522244609242897797, guid: f7996d340a6218f42a080d87bc3bbdda, type: 3}
+  corner03TilePrefab: {fileID: 7522244609242897797, guid: f7996d340a6218f42a080d87bc3bbdda, type: 3}
+  centerTilePrefab: {fileID: 1519542127050869032, guid: 40dfbf5d2be211648a6c805a6024e282, type: 3}
   specialTiles:
   - tileId: 6
     tileEvent: {fileID: 0}

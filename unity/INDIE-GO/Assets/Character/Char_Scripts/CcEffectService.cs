@@ -306,6 +306,7 @@ namespace YutArena.InGame
                 piece.CurrentTileId, path, charges);
             piece.Cc.Add(state);
             Changed?.Invoke(piece, state, true);
+            if (type == CcDefine.Robot_part) piece.KtkItems.Clear();
             bool succeeded = true;
             switch (type)
             {

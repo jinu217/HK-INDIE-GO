@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using UnityEngine;
 using YutArena.InGame;
+using YutArena.Managers;
 
 // QA events only. Calls and interpolated arguments are omitted in release builds.
 public static class QaDebugLog
@@ -11,6 +12,23 @@ public static class QaDebugLog
     public static bool Enabled => Receiver != null;
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void Reset() => Receiver = null;
+
+    public static string Sword(KtkSword sword) => sword switch
+    {
+        KtkSword.Normal => "일반 검(Normal)",
+        KtkSword.Twin => "쌍검(Twin)",
+        KtkSword.Vampire => "흡혈 검(Vampire)",
+        KtkSword.Demon => "마검(Demon)",
+        _ => sword.ToString()
+    };
+
+    public static string Shield(KtkShield shield) => shield switch
+    {
+        KtkShield.Normal => "일반 방패(Normal)",
+        KtkShield.Thorn => "가시 방패(Thorn)",
+        KtkShield.Mirror => "반사의 거울(Mirror)",
+        _ => shield.ToString()
+    };
 
     [Conditional("UNITY_EDITOR"), Conditional("DEVELOPMENT_BUILD")]
     public static void Event(string message, UnityEngine.Object context = null)

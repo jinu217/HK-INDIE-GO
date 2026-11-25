@@ -359,6 +359,8 @@ public sealed class PieceMovementManager : MonoBehaviour
             ResolveTeamCaptures(settings, movingPlayerId, movingPieceId, movingPieceCount, landingTile, moveCount);
             return;
         }
+        playerManager.TryGetPlayer(movingPlayerId, out var captor);
+        captor.TryGetPieceData(movingPieceId, out var captorPiece);
         foreach (PlayerController otherPlayer in playerManager.ActivePlayers)
         {
             if (otherPlayer.PlayerId == movingPlayerId)
@@ -418,7 +420,7 @@ public sealed class PieceMovementManager : MonoBehaviour
 
                 //수정: 표식 보상 및 CC 적용은 Character 효과 처리기에 위임합니다.
                 CcEffectService.RewardMarks(targetPiece, request);
-                targetPiece.SetCaptured(captureCc);
+                targetPiece.SetCaptured(captureCc, captorPiece);
                 QaDebugLog.Capture(request, decision, qaTargets, targetPiece.State == PieceState.Waiting);
                 //수정: 실제 잡기 이후 방어자 퇴장과 공격자 잡기 완료를 알립니다.
                 CharacterSkillRegistry.NotifyCaptureCompleted(request);
@@ -455,8 +457,10 @@ public sealed class PieceMovementManager : MonoBehaviour
             }
 
             CcEffectService.RewardMarks(leader, request);
+            playerManager.TryGetPlayer(attackerId, out var captor);
+            captor.TryGetPieceData(attackingPieceId, out var captorPiece);
             leader.SetCaptured(decision == CharacterCaptureDecision.LimitRetireToAttackingCount
-                ? CcDefine.Retire : GetCaptureCc(true, moveCount));
+                ? CcDefine.Retire : GetCaptureCc(true, moveCount), captorPiece);
             QaDebugLog.Capture(request, decision, qaTargets, leader.State == PieceState.Waiting);
             CharacterSkillRegistry.NotifyCaptureCompleted(request);
         }

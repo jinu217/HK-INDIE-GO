@@ -3,6 +3,7 @@ using System.Linq;
 using UnityEngine;
 using YutArena.Common;
 using YutArena.Managers.GameProgress;
+using YutArena.InGame;
 namespace YutArena.Managers
 {
     // 완주/탈출 여부를 집계해서 승리 조건을 판정. 완주 "판정"(좌표 계산 등) 자체는 보드 쪽이 하고,
@@ -97,6 +98,11 @@ namespace YutArena.Managers
                 };
             }
             killTheKing.Initialize(settings, activeTeams);
+            var boardItems = GetComponent<KtkBoardItemController>();
+            if (settings.gameMode == GameMode.KillTheKing && boardItems == null)
+                boardItems = gameObject.AddComponent<KtkBoardItemController>();
+            if (boardItems != null)
+                boardItems.Initialize(killTheKing, settings, playerManager, FindFirstObjectByType<MapManager>());
         }
         // TurnManager가 말 이동을 처리한 직후마다 호출해주는 함수.
         // "매 득점 시 반드시 실행", 이동이 일어날 때마다 무조건 호출됨
@@ -107,7 +113,21 @@ namespace YutArena.Managers
             // 킬 더 킹: 점수 대신 공격 대상 HP를 깎음
             if (settings.gameMode == GameMode.KillTheKing)
             {
-                killTheKing.OnEscape(team, finishedCount);
+                var swords = new List<KtkSword>();
+                var shields = new List<KtkShield>();
+                if (playerManager != null)
+                    foreach (var owner in playerManager.ActivePlayers)
+                    {
+                        if (MatchCompositionRule.GetTeamSlot(settings, (PlayerSlot)owner.PlayerId) != team) continue;
+                        foreach (var piece in owner.RuntimeData.Pieces)
+                        {
+                            if (!piece.IsFinished) continue;
+                            swords.AddRange(piece.KtkItems.Swords);
+                            shields.AddRange(piece.KtkItems.Shields);
+                            piece.KtkItems.Clear();
+                        }
+                    }
+                killTheKing.OnEscape(team, finishedCount, swords, shields);
                 return;
             }
             int bonus = GetEscapeBonus(team);

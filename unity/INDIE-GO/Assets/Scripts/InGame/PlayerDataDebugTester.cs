@@ -15,6 +15,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
     [SerializeField] private TestTurnManager turnManager;
     [SerializeField] private TestWinConditionManager winManager;
     private MapManager mapManager;
+    private KtkBoardItemController boardItems;
     [Header("QA (Editor / Development Build only)")]
     [SerializeField, Min(0.25f)] private float refreshInterval = 0.5f;
     [SerializeField, InspectorName("상태 변경을 Console에도 기록 (로그 누적)")] private bool logStateChanges;
@@ -66,6 +67,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         if (turnManager == null) turnManager = FindFirstObjectByType<TestTurnManager>();
         if (winManager == null) winManager = FindFirstObjectByType<TestWinConditionManager>();
         if (mapManager == null) mapManager = FindFirstObjectByType<MapManager>();
+        if (boardItems == null && winManager != null) boardItems = winManager.GetComponent<KtkBoardItemController>();
         if (observedTurns == turnManager) return;
         if (observedTurns != null) observedTurns.OnTurnPhaseChanged -= RecordPhase;
         observedTurns = turnManager;
@@ -136,6 +138,7 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
                 $"[게임 설정] 모드={settings.gameMode}, 선택맵={settings.mapType}, 현재맵={actualMap}, 인원={settings.playerCount}, 대전방식={GetMatchModeDisplay(settings)}, " +
                 $"스킬={settings.useSkill}, 실제스킬사용={CharacterSkillRegistry.AreSkillsEnabled}, 아이템={settings.useItem}, 특수칸={settings.useSpecialTile}, 목표점수={settings.targetEscapeCount}, 최대라운드={settings.maxTurnCount}");
             AppendTurn();
+            AppendKtkBoardItems(text, settings, winManager != null ? winManager.KillTheKing : null, boardItems);
             if (playerManager.ActivePlayers.Count == 0)
                 text.AppendLine("[플레이어] 로비 설정을 전달받아 플레이어/말을 생성하는 중입니다.");
             foreach (var player in playerManager.ActivePlayers)
@@ -239,6 +242,8 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         if (characterData != null)
             text.Append($" | 액티브CD={CharacterSkillRegistry.GetRemainingActiveCooldown(player.PlayerId, characterData)}");
         text.AppendLine();
+        if (settings != null && settings.gameMode == GameMode.KillTheKing)
+            AppendKtkPlayerItems(text, winManager != null ? winManager.KillTheKing : null, team);
         foreach (var piece in player.RuntimeData.Pieces)
             if (piece.State == PieceState.InBoard) AppendPiece(player, piece, team);
         if (board == 0) text.AppendLine("  보드 위 말 없음");
@@ -262,6 +267,69 @@ public sealed class PlayerDataDebugTester : MonoBehaviour
         }
         text.AppendLine("]");
         AppendPieceDetails(text, player.RuntimeData, piece, team);
+        if ((turnManager?.Settings ?? GameStartSettingsHolder.Current)?.gameMode == GameMode.KillTheKing)
+            AppendKtkInventory(text, piece);
+    }
+
+    internal static void AppendKtkBoardItems(StringBuilder output, GameStartSettings settings,
+        KillTheKingManager rules, KtkBoardItemController boardItems)
+    {
+        if (settings == null || settings.gameMode != GameMode.KillTheKing) return;
+        output.AppendLine();
+        if (rules == null)
+        {
+            output.AppendLine("[킬더킹 아이템] 초기화 대기");
+            return;
+        }
+        output.AppendLine($"[킬더킹 아이템] 라운드={rules.CurrentRound}, 아레나의 열기={(rules.IsArenaHeat ? "ON" : "OFF")}, 서든데스={rules.IsSuddenDeath}");
+        output.Append("  보드 검: ");
+        if (rules.BoardSword.HasValue)
+            output.Append(QaDebugLog.Sword(rules.BoardSword.Value)).Append(" | 위치=")
+                .Append(ItemPosition(boardItems, boardItems != null ? boardItems.SwordTile : BoardTileId.None));
+        else
+            output.Append($"없음 | 생성 예정={rules.NextSwordSpawnRound}라운드 시작");
+        output.AppendLine();
+        output.Append("  보드 방패: ");
+        if (rules.BoardShield.HasValue)
+            output.Append(QaDebugLog.Shield(rules.BoardShield.Value)).Append(" | 위치=")
+                .Append(ItemPosition(boardItems, boardItems != null ? boardItems.ShieldTile : BoardTileId.None));
+        else
+            output.Append($"없음 | 생성 예정={rules.NextShieldSpawnRound}라운드 시작");
+        output.AppendLine();
+    }
+
+    private static string ItemPosition(KtkBoardItemController controller, BoardTileId tile) =>
+        controller == null ? "보드 연결 대기" : tile == BoardTileId.None ? "배치 대기(빈칸/앵커 확인)" : tile.ToString();
+
+    internal static void AppendKtkPlayerItems(StringBuilder output, KillTheKingManager rules, TeamSlot team)
+    {
+        if (rules == null) { output.AppendLine("    [킬더킹] 초기화 대기"); return; }
+        output.AppendLine($"    [킬더킹] HP={rules.GetHp(team)}/{rules.StartHp}, 공격 대상={rules.GetAttackTarget(team)}, 나를 노리는 팀={rules.GetAttacker(team)}");
+        output.Append("    방패 효과(소모 순서: 최근→과거)=");
+        AppendItems(output, rules.GetShieldEffects(team), QaDebugLog.Shield, reverse: true);
+        output.AppendLine($" | 원혼 구슬={rules.GetOrbs(team)}");
+    }
+
+    internal static void AppendKtkInventory(StringBuilder output, PlayerRuntimeData.PieceRuntimeData piece)
+    {
+        var leader = piece.Leader;
+        output.Append($"    소지품(묶음 공유, 보관=P{leader.OwnerPlayerId}/말{leader.PieceId + 1}) | 검=");
+        AppendItems(output, piece.KtkItems.Swords, QaDebugLog.Sword);
+        output.Append(" | 방패=");
+        AppendItems(output, piece.KtkItems.Shields, QaDebugLog.Shield);
+        output.AppendLine($" | 총={piece.KtkItems.Count}");
+    }
+
+    private static void AppendItems<T>(StringBuilder output, IReadOnlyList<T> items,
+        System.Func<T, string> name, bool reverse = false)
+    {
+        output.Append('[');
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (i > 0) output.Append(", ");
+            output.Append(name(items[reverse ? items.Count - 1 - i : i]));
+        }
+        output.Append(']');
     }
     // Additional line only: the original status, distance score, stack, cooldown and CC fields stay intact.
     internal static void AppendPieceDetails(StringBuilder output, PlayerRuntimeData owner,

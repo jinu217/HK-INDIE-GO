@@ -45,7 +45,7 @@ namespace YutArena.Managers
     //        턴 끝 HP 동시 감소 -> 1등 or 서든데스
     // 2단계: [방패 효과] 쌓기·소모, 탈출 처리 순서 10단계(가시·반사 핑퐁, 흡혈, 마검) -> KtkDamageResolver
     // 3단계(앞부분): 아이템 생성 시점·종류, [아레나의 열기], 서든데스 마검
-    //   (칸에 놓기·획득·묶음이 들고 다니기는 보드 쪽과 연결 예정, 탈락자 능력은 다음 단계)
+    //   보드 배치·획득은 KtkBoardItemController, 묶음 소지품은 PieceRuntimeData.KtkItems와 연결.
     // ===================================================================
     public class KillTheKingManager
     {
@@ -356,6 +356,12 @@ namespace YutArena.Managers
         private int shieldPickedRound;
         private int arenaHeatStartRound; // 이 라운드가 시작될 때 [아레나의 열기] 시작
 
+        // 보드에 아이템이 없을 때의 다음 생성 라운드. QA/UI가 규칙을 중복 계산하지 않도록 공개합니다.
+        public int NextSwordSpawnRound => swordPickedRound == 0 ? FirstItemRound :
+            swordPickedRound + (IsSuddenDeath ? SuddenDeathSwordRespawnGapRounds : SwordRespawnGapRounds) + 1;
+        public int NextShieldSpawnRound => shieldPickedRound == 0 ? FirstItemRound :
+            shieldPickedRound + ShieldRespawnGapRounds + 1;
+
         // ---- 보드(영서)·UI 연결용 ----
         public System.Action<KtkSword> OnSwordSpawnRequested;    // 보드: 규칙에 맞는 칸에 이 칼을 놓기
         public System.Action<KtkShield> OnShieldSpawnRequested;  // 보드: 규칙에 맞는 칸에 이 방패를 놓기
@@ -374,10 +380,9 @@ namespace YutArena.Managers
                 StartArenaHeat();
             if (round < FirstItemRound) return;
 
-            int swordGap = IsSuddenDeath ? SuddenDeathSwordRespawnGapRounds : SwordRespawnGapRounds;
-            if (BoardSword == null && (swordPickedRound == 0 || round > swordPickedRound + swordGap))
+            if (BoardSword == null && round >= NextSwordSpawnRound)
                 SpawnSword(RollSword());
-            if (BoardShield == null && (shieldPickedRound == 0 || round > shieldPickedRound + ShieldRespawnGapRounds))
+            if (BoardShield == null && round >= NextShieldSpawnRound)
                 SpawnShield(RollShield());
         }
 

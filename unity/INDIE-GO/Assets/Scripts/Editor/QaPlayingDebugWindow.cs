@@ -142,7 +142,7 @@ public sealed class QaPlayingDebugWindow : EditorWindow
             measuredWidth = width; measureDirty = false;
         }
         scroll = EditorGUILayout.BeginScrollView(scroll);
-        EditorGUILayout.LabelField("상시 STATUS — 설정 / 턴 흐름 / 플레이어별 보드 위 말", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("상시 STATUS — 설정 / 턴 흐름 / 아이템 / 플레이어별 보드 위 말", EditorStyles.boldLabel);
         foreach (var block in statusBlocks)
             EditorGUILayout.SelectableLabel(block.Text, textStyle, GUILayout.Width(width), GUILayout.Height(block.Height));
         if (showEvents)
