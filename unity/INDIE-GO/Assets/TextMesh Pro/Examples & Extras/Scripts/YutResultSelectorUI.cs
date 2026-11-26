@@ -52,6 +52,11 @@ namespace YutArena.UI
         [Tooltip("낙 토큰이 사라지는 시간")]
         [SerializeField, Min(0.01f)] private float nakFadeDuration = 0.4f;
 
+        // 윷 결과 연출(가운데 토큰)이 시작/끝날 때. 낙은 결과 묶음에 들어가지 않으므로 data 가 null.
+        // 채팅 시스템 로그가 연출 시점에 맞춰 찍히도록 사용한다.
+        public event System.Action<YutThrowData, YutResult> OnResultPresentationStarted;
+        public event System.Action<YutThrowData, YutResult> OnResultPresentationEnded;
+
         private const string TokenFolder = "Assets/Sprites/인게임창/윷토큰";
         private readonly Dictionary<string, Sprite> spriteByName = new Dictionary<string, Sprite>();
 
@@ -119,6 +124,13 @@ namespace YutArena.UI
 
             if (!tokensAvailable)
             {
+                // 토큰 연출이 없으면 새 결과가 나온 즉시 연출 시작·끝으로 알림
+                foreach (var data in latestPending)
+                {
+                    if (!queuedOrFlying.Add(data)) continue;
+                    OnResultPresentationStarted?.Invoke(data, data.result);
+                    OnResultPresentationEnded?.Invoke(data, data.result);
+                }
                 RefreshText(latestPending);
                 return;
             }
@@ -163,12 +175,15 @@ namespace YutArena.UI
                 if (!latestPending.Contains(data))
                 {
                     queuedOrFlying.Remove(data); // 날아가기 전에 이미 씀
+                    OnResultPresentationStarted?.Invoke(data, data.result);
+                    OnResultPresentationEnded?.Invoke(data, data.result);
                     continue;
                 }
 
                 Sprite sprite = GetTokenSprite(data);
                 RectTransform token = CreateCenterToken(sprite);
                 flyingToken = token.gameObject;
+                OnResultPresentationStarted?.Invoke(data, data.result);
                 yield return Pop(token);
                 if (holdDuration > 0f) yield return new WaitForSeconds(holdDuration);
 
@@ -180,6 +195,7 @@ namespace YutArena.UI
                 flyingToken = null;
                 queuedOrFlying.Remove(data);
                 if (slot != null) slot.color = Color.white;
+                OnResultPresentationEnded?.Invoke(data, data.result);
             }
             tokenRoutine = null;
         }
@@ -188,6 +204,7 @@ namespace YutArena.UI
         {
             yield return WaitForThrowLanding();
             RectTransform token = CreateCenterToken(LoadSprite("token_nak"));
+            OnResultPresentationStarted?.Invoke(null, YutResult.Nak);
             yield return Pop(token);
             if (holdDuration > 0f) yield return new WaitForSeconds(holdDuration);
 
@@ -198,6 +215,7 @@ namespace YutArena.UI
                 yield return null;
             }
             Destroy(token.gameObject);
+            OnResultPresentationEnded?.Invoke(null, YutResult.Nak);
         }
 
         // 3D 윷이 다 떨어질 때까지 기다림 (윷 던지기 연출이 없는 씬이면 바로 진행)
