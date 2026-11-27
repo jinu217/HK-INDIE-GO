@@ -41,6 +41,8 @@ namespace YutArena.UI
         [SerializeField] private Sprite[] tokenSprites = new Sprite[0];
         [Tooltip("가운데에 뜰 때 토큰 크기 (캔버스 단위)")]
         [SerializeField, Min(10f)] private float centerTokenSize = 286f;   // 기획 요청(11/25): 처음(260)의 1.1배
+        [Tooltip("결과 칸에 쌓이는 토큰 크기 (캔버스 단위). 패널 크기와 상관없이 이 값으로 고정")]
+        [SerializeField, Min(10f)] private float slotTokenSize = 200f;
         [Tooltip("결과 칸 토큰 사이 간격")]
         [SerializeField, Min(0f)] private float slotTokenSpacing = 6f;
         [Tooltip("가운데에서 작아졌다 커지는 시간")]
@@ -330,17 +332,13 @@ namespace YutArena.UI
             return image;
         }
 
-        // 결과가 많아지면 칸 안에 들어가게 작게
+        // 결과 칸 토큰은 패널 크기와 상관없이 slotTokenSize 로 고정 (Inspector 에서 조절)
         private void ResizeSlotIcons()
         {
             if (slotRow == null) return;
-            int count = slotRow.childCount;
-            if (count == 0) return;
-            float height = slotRow.rect.height;
-            float widthPerIcon = (slotRow.rect.width - slotTokenSpacing * (count - 1)) / count;
-            float size = Mathf.Max(10f, Mathf.Min(height, widthPerIcon));
+            if (slotRow.childCount == 0) return;
             foreach (RectTransform child in slotRow)
-                child.sizeDelta = new Vector2(size, size);
+                child.sizeDelta = new Vector2(slotTokenSize, slotTokenSize);
             LayoutRebuilder.ForceRebuildLayoutImmediate(slotRow);
         }
 
