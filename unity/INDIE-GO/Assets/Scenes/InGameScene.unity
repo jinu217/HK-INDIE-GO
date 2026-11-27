@@ -1285,7 +1285,7 @@ MonoBehaviour:
   boardTileRoot: {fileID: 1900000001}
   fadedTileIds: 160000001700000018000000190000001a0000001b0000001c0000001d0000001e000000
   throwingTileAlpha: 0.2
-  boardRadius: 3.9
+  boardRadius: 6.5
   edgePadding: 1
   startYutSpacing: 0.84
   minimumYutSpacing: 0.85
@@ -1295,17 +1295,17 @@ MonoBehaviour:
   modelLongAxisIsY: 1
   maximumStackTilt: 12
   boardSurface: {fileID: 2074295564}
-  throwDuration: 0.9
+  throwDuration: 0.6
   arcHeight: 4.2
   depthHop: 0.12
   tumbleTurns: {x: 1, y: 2}
-  landingInterval: 0.16
-  settleDuration: 0.14
+  landingInterval: 0.10666667
+  settleDuration: 0.09333333
   landingBounce: 0.035
   landingRockAngle: 2.5
   modelRotationOffset: {x: 0, y: 0, z: 0}
   faceFlipRotation: {x: 180, y: 0, z: 0}
-  modelScaleMultiplier: 4
+  modelScaleMultiplier: 5.5
 --- !u!4 &100287682
 Transform:
   m_ObjectHideFlags: 0
@@ -14280,7 +14280,7 @@ Transform:
   m_GameObject: {fileID: 2074295563}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0.028, z: -1.7}
+  m_LocalPosition: {x: 0, y: 0.028, z: -0.35}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

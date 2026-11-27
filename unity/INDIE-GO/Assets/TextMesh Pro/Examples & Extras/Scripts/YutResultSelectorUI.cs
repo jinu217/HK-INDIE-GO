@@ -101,10 +101,15 @@ namespace YutArena.UI
             turnManager.OnPendingResultsChanged += RefreshDisplay;
             turnManager.OnTurnStarted += HandleTurnStarted;
             turnManager.OnTurnNotice += HandleTurnNotice;
+
+            // 던진 윷은 윷 결과 토큰이 결과 칸에 들어갈 때 사라짐
+            if (throwManager == null) throwManager = FindFirstObjectByType<YutThrowManager>();
+            OnResultPresentationEnded += HideThrownYuts;
         }
 
         private void OnDisable()
         {
+            OnResultPresentationEnded -= HideThrownYuts;
             if (turnManager == null) return;
             turnManager.OnPendingResultsChanged -= RefreshDisplay;
             turnManager.OnTurnStarted -= HandleTurnStarted;
@@ -112,11 +117,22 @@ namespace YutArena.UI
             ClearTokens();
         }
 
+        // 토큰이 결과 칸에 들어가면(낙은 사라지면) 던진 윷을 숨김.
+        // 그 사이 또 던져서 다음 토큰이 남아 있으면 그 토큰이 끝날 때 숨김
+        private void HideThrownYuts(YutThrowData _, YutResult __)
+        {
+            if (tokenQueue.Count > 0) return;
+            if (throwManager != null) throwManager.HideThrownYuts();
+        }
+
         // 턴이 시작되면 pendingResults 는 비워지지만 이벤트가 오지 않으므로 여기서 비운다.
         private void HandleTurnStarted(PlayerSlot _)
         {
             SetText(string.Empty);
+            bool interrupted = tokenRoutine != null;
             ClearTokens();
+            // 토큰 연출 도중 턴이 넘어가면(시간 초과 등) 연출 종료 신호가 안 오므로 여기서 윷을 숨김
+            if (interrupted && throwManager != null) throwManager.HideThrownYuts();
         }
 
         // pendingResults 가 바뀔 때마다(던짐/소비) 아직 안 쓴 결과 목록을 갱신 표시.

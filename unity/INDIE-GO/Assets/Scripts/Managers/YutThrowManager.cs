@@ -28,8 +28,6 @@ namespace YutArena.Test
         [Header("Throw Points")]
         [Tooltip("윷 던지기 시작 위치")]
         [SerializeField] private Transform throwStartPoint;
-        [Tooltip("결과 표시 유지 시간")]
-        [SerializeField, Min(0f)] private float resultVisibleDuration = 5f;
 
         [Header("Board Tile Fade")]
         [Tooltip("말판 타일 검색 루트 및 미지정 시 현재 씬 전체 검색")]
@@ -101,7 +99,6 @@ namespace YutArena.Test
         private readonly List<YutVisual> visuals = new List<YutVisual>();
         private bool isThrowing;
         public bool IsThrowing => isThrowing;
-        private Coroutine resetCoroutine;
         private readonly Dictionary<Renderer, Material[]> originalTileMaterials = new Dictionary<Renderer, Material[]>();
         private readonly List<Material> temporaryTileMaterials = new List<Material>();
         private static readonly int BaseColorProperty = Shader.PropertyToID("_BaseColor");
@@ -137,7 +134,6 @@ namespace YutArena.Test
             StopAllCoroutines();
             RestoreBoardTileMaterials();
             isThrowing = false;
-            resetCoroutine = null;
             if (yuts.Count > 0) ResetYutsToStart(true);
         }
 
@@ -178,12 +174,6 @@ namespace YutArena.Test
         public void Throw(YutResult result)
         {
             if (isThrowing || yuts.Count == 0) return;
-
-            if (resetCoroutine != null)
-            {
-                StopCoroutine(resetCoroutine);
-                resetCoroutine = null;
-            }
 
             ResetYutsToStart(false);
             SetYutsVisible(true);
@@ -384,16 +374,16 @@ namespace YutArena.Test
             yield return YutThrowAnimator.Play(flights, origin, frame, settleDuration, landingBounce, landingRockAngle);
             isThrowing = false;
             RefreshThrowButton(turnManager != null ? turnManager.CurrentTurn : null);
-            resetCoroutine = StartCoroutine(HideAndResetAfterDelay());
+            // 착지한 윷은 그대로 두고, 윷 결과 토큰이 결과 칸에 들어갈 때 HideThrownYuts 로 숨김
         }
 
-        private IEnumerator HideAndResetAfterDelay()
+        // 던진 윷을 숨기고 시작 위치로 되돌림 (YutResultSelectorUI: 윷 결과 토큰이 결과 칸에 들어갔을 때 호출)
+        public void HideThrownYuts()
         {
-            yield return new WaitForSeconds(resultVisibleDuration);
+            if (isThrowing || yuts.Count == 0) return;
             SetYutsVisible(false);
             RestoreBoardTileMaterials();
             ResetYutsToStart(false);
-            resetCoroutine = null;
         }
 
         private static bool[] CreateFaceResults(YutResult result, int count)
@@ -469,7 +459,6 @@ namespace YutArena.Test
             stackLayerHeight = Mathf.Max(0.001f, stackLayerHeight);
             stackClearance = Mathf.Max(0f, stackClearance);
             maximumStackTilt = Mathf.Clamp(maximumStackTilt, 0f, 30f);
-            resultVisibleDuration = Mathf.Max(0f, resultVisibleDuration);
             throwDuration = Mathf.Max(0.1f, throwDuration);
             tumbleTurns.y = Mathf.Max(tumbleTurns.x, tumbleTurns.y);
         }

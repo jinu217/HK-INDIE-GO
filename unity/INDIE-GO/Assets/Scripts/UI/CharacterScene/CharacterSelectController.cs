@@ -72,6 +72,9 @@ namespace YutArena.UI.CharacterScene
         private readonly CharacterData[] randomSelections = new CharacterData[MaxPlayerCount];
         // 2인 1조(팀전1): 각 플레이어가 따라가는 팀 대표의 index. 대표 본인이거나 팀 규칙이 없으면 자기 자신.
         private readonly int[] leaderIndexes = new int[MaxPlayerCount];
+        // 2대2(팀전2): 같은 팀끼리 같은 캐릭터 선택 불가
+        private bool uniqueCharacterPerTeam;
+        private readonly TeamSlot[] personTeams = new TeamSlot[MaxPlayerCount];
         private readonly List<CharacterData> runtimeCharacters = new List<CharacterData>();
 
         private int playerCount;
@@ -253,6 +256,40 @@ namespace YutArena.UI.CharacterScene
                     }
                 }
             }
+
+            // 2대2(팀전2)는 같은 팀끼리 같은 캐릭터를 고를 수 없다. 사람마다 팀을 기억해 둔다.
+            uniqueCharacterPerTeam = settings != null && settings.isTeamMode && settings.teamMode == TeamMode.TeamMode2;
+            for (int i = 0; i < MaxPlayerCount; i++)
+                personTeams[i] = uniqueCharacterPerTeam && i < playerCount
+                    ? MatchCompositionRule.GetPersonTeamSlot(settings, (PlayerSlot)(i + 1))
+                    : TeamSlot.None;
+        }
+
+        private bool AreTeammates(int a, int b) =>
+            uniqueCharacterPerTeam && a != b && personTeams[a] != TeamSlot.None && personTeams[a] == personTeams[b];
+
+        // 선택을 확정한 플레이어의 캐릭터 (랜덤은 뽑힌 캐릭터). 아직 확정 전이거나 모르면 null
+        private CharacterData GetConfirmedCharacter(int playerIndex)
+        {
+            if (!selectedPlayers[playerIndex]) return null;
+            if (randomSelections[playerIndex] != null) return randomSelections[playerIndex];
+            int option = cursorIndexes[playerIndex];
+            if (IsRandomOption(option)) return null;
+            int index = GetCharacterIndex(option);
+            return index >= 0 && index < runtimeCharacters.Count ? runtimeCharacters[index] : null;
+        }
+
+        // 같은 팀이 이미 확정한 캐릭터 목록
+        private HashSet<CharacterData> GetTeammateCharacters(int playerIndex)
+        {
+            var result = new HashSet<CharacterData>();
+            for (int i = 0; i < playerCount; i++)
+            {
+                if (!AreTeammates(playerIndex, i)) continue;
+                CharacterData character = GetConfirmedCharacter(i);
+                if (character != null) result.Add(character);
+            }
+            return result;
         }
 
         private bool IsFollower(int playerIndex) => leaderIndexes[playerIndex] != playerIndex;
@@ -578,13 +615,13 @@ namespace YutArena.UI.CharacterScene
 
                 if (randomizeUnselectedPlayers && !selectedPlayers[playerIndex])
                 {
-                    randomSelections[playerIndex] = DrawRandomCharacter();
+                    randomSelections[playerIndex] = DrawRandomCharacter(GetTeammateCharacters(playerIndex));
                     selectedPlayers[playerIndex] = true;
                 }
 
                 CharacterData selectedCharacter = randomSelections[playerIndex];
                 if (selectedCharacter == null && IsRandomOption(cursorIndexes[playerIndex]))
-                    selectedCharacter = randomSelections[playerIndex] = DrawRandomCharacter();
+                    selectedCharacter = randomSelections[playerIndex] = DrawRandomCharacter(GetTeammateCharacters(playerIndex));
                 if (selectedCharacter == null)
                     selectedCharacter = runtimeCharacters[GetCharacterIndex(cursorIndexes[playerIndex])];
                 // 기존 구현: selectedIds[playerIndex] = runtimeCharacters[cursorIndexes[playerIndex]].char_ID;
@@ -645,9 +682,29 @@ namespace YutArena.UI.CharacterScene
 
         private CharacterData DrawRandomCharacter() => runtimeCharacters[UnityEngine.Random.Range(0, runtimeCharacters.Count)];
 
+        // excluded 에 없는 캐릭터 중에서 랜덤 (남은 게 없으면 전체에서)
+        private CharacterData DrawRandomCharacter(HashSet<CharacterData> excluded)
+        {
+            if (excluded == null || excluded.Count == 0) return DrawRandomCharacter();
+            var candidates = runtimeCharacters.FindAll(c => !excluded.Contains(c));
+            return candidates.Count > 0 ? candidates[UnityEngine.Random.Range(0, candidates.Count)] : DrawRandomCharacter();
+        }
+
         private void ConfirmSelection(int playerIndex)
         {
-            randomSelections[playerIndex] = IsRandomOption(cursorIndexes[playerIndex]) ? DrawRandomCharacter() : null;
+            HashSet<CharacterData> teammateCharacters = GetTeammateCharacters(playerIndex);
+            if (IsRandomOption(cursorIndexes[playerIndex]))
+            {
+                randomSelections[playerIndex] = DrawRandomCharacter(teammateCharacters);
+            }
+            else
+            {
+                // 2대2: 같은 팀이 이미 고른 캐릭터는 확정 불가
+                int index = GetCharacterIndex(cursorIndexes[playerIndex]);
+                if (index >= 0 && index < runtimeCharacters.Count && teammateCharacters.Contains(runtimeCharacters[index]))
+                    return;
+                randomSelections[playerIndex] = null;
+            }
             selectedPlayers[playerIndex] = true;
         }
 

@@ -21,7 +21,7 @@ namespace YutArena.UI
             {
                 modeNameText.text = entry == null ? string.Empty
                     : entry.gameMode == GameMode.Classic ? "클래식"
-                    : entry.gameMode == GameMode.Escape ? "탈출"
+                    : entry.gameMode == GameMode.Escape ? "이스케이프"
                     : entry.gameMode == GameMode.KillTheKing ? "킬 더 킹"
                     : entry.modeName;
             }

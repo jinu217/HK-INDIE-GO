@@ -466,12 +466,11 @@ namespace YutArena.UI
             SetActive(classicRules, SelectedGameMode == GameMode.Classic);
             SetActive(escapeRules, SelectedGameMode == GameMode.Escape);
             SetActive(killTheKingRules, SelectedGameMode == GameMode.KillTheKing);
-            bool isKillTheKing = SelectedGameMode == GameMode.KillTheKing;
-            SetText(maxRoundsTitle, isKillTheKing ? "최대 라운드" : "최대 턴 수");
+            SetText(maxRoundsTitle, "최대 턴 수"); // 킬 더 킹도 같은 이름 사용
             SetText(killTheKingHpTitle, isTeamMode ? "팀 HP" : "HP");
             SetText(killTheKingHpValue, SelectedKillTheKingHp.ToString());
             SetText(killTheKingPieceValue, startPieceCount.ToString());
-            SetText(killTheKingRoundsValue, killTheKingMaxRounds + "라운드");
+            SetText(killTheKingRoundsValue, killTheKingMaxRounds + "턴");
             SetActive(killTheKingHpLeftButton != null ? killTheKingHpLeftButton.gameObject : null, true);
             SetActive(killTheKingHpRightButton != null ? killTheKingHpRightButton.gameObject : null, true);
             SetInteractable(killTheKingHpLeftButton, SelectedKillTheKingHp > (isTeamMode ? 1 : 5));
